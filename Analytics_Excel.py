@@ -115,56 +115,58 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+# -------- LOGIN --------
 
-    # -------- LOGIN --------
-    l1, c1, r1 = st.columns([1.8, 1.4, 1.8])
+l1, c1, r1 = st.columns([1.8, 1.4, 1.8])
 
-    with c1:
+with c1:
 
-        st.markdown(
-            """
-            <div class="login-card">
-            <h2 style='text-align:center;
-            margin-top:0px;
-            margin-bottom:15px;'>
-            Login
-            </h2>
-            """,
-            unsafe_allow_html=True
-        )
+    st.markdown(
+        """
+        <div class="login-card">
+        <h2 style='text-align:center;
+        margin-top:0px;
+        margin-bottom:15px;'>
+        Login
+        </h2>
+        """,
+        unsafe_allow_html=True
+    )
 
-        username = st.text_input(
-            "Username",
-            placeholder="Enter Username"
-        )
+    username = st.text_input(
+        "Username",
+        placeholder="Enter Username"
+    )
 
-        password = st.text_input(
-            "Password",
-            type="password",
-            placeholder="Enter Password"
-        )
+    password = st.text_input(
+        "Password",
+        type="password",
+        placeholder="Enter Password"
+    )
 
-        submit = st.button(
-            "Submit",
-            use_container_width=True
-        )
+    submit = st.button(
+        "Submit",
+        use_container_width=True
+    )
 
-        st.markdown("</div>",
-                    unsafe_allow_html=True)
+    st.markdown(
+        "</div>",
+        unsafe_allow_html=True
+    )
 
-        if submit:
+    if submit:
 
-            if (
-                username == "admin"
-                and password == "HQR@2026"
-            ):
-                st.session_state.authenticated = True
-                st.rerun()
+        if (
+            username == "admin"
+            and password == "HQR@2026"
+        ):
+            st.session_state.authenticated = True
+            st.rerun()
 
-            else:
-                st.error(
-                    "Invalid Username or Password"
-                )
+        else:
+            st.error(
+                "Invalid Username or Password"
+            )
 
     st.stop()
 
