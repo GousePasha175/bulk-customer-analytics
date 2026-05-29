@@ -62,101 +62,132 @@ def check_password():
     """, unsafe_allow_html=True)
 
     # ==========================
-    # HEADER
-    # ==========================
+# CLEAN DESKTOP HEADER
+# ==========================
 
-    col_logo, col_title = st.columns([1, 5])
+st.markdown("""
+<style>
 
-    with col_logo:
-        st.image(
-            "assets/logo.png",
-            width=220
-        )
+/* Reduce top spacing */
+.block-container{
+    padding-top:0.5rem !important;
+    max-width:1400px !important;
+}
 
-    with col_title:
+/* Remove extra gaps */
+div[data-testid="stVerticalBlock"]{
+    gap:0rem !important;
+}
 
-        st.markdown("""
-        <div style="padding-top:20px;">
+/* Input box styling */
+input{
+    font-size:20px !important;
+    height:48px !important;
+}
 
-        <h1 style="
-            font-size:68px;
-            font-weight:700;
-            color:#2f3343;
-            line-height:1.1;
-            margin:0;
-            padding:0;
-            white-space:nowrap;
-        ">
-        Bulk Customer Business Analytics
-        </h1>
+/* Button styling */
+div.stButton > button{
+    width:100% !important;
+    height:50px !important;
+    font-size:22px !important;
+    font-weight:600 !important;
+    border-radius:10px !important;
+}
 
-        <h3 style="
-            font-size:32px;
-            font-weight:500;
-            color:#555;
-            margin-top:10px;
-        ">
-        Headquarter Region - Telangana Postal Circle
-        </h3>
+</style>
+""", unsafe_allow_html=True)
 
-        </div>
-        """, unsafe_allow_html=True)
+# HEADER
+logo_col, title_col = st.columns([1, 5])
 
-    st.markdown("<br>", unsafe_allow_html=True)
+with logo_col:
+    st.image(
+        "assets/logo.png",
+        width=170
+    )
 
-    # ==========================
-    # LOGIN
-    # ==========================
+with title_col:
 
-    left, center, right = st.columns([2.5, 1.3, 2.5])
+    st.markdown("""
+    <div style="
+        display:flex;
+        flex-direction:column;
+        justify-content:center;
+        height:160px;
+    ">
 
-    with center:
+    <h1 style="
+        font-size:54px;
+        font-weight:700;
+        color:#2f3343;
+        margin:0;
+        line-height:1.1;
+    ">
+    Bulk Customer Business Analytics
+    </h1>
 
-        st.markdown("""
-        <h1 style="
-            text-align:center;
-            font-size:56px;
-            color:#2f3343;
-            margin-bottom:20px;
-        ">
-        Login
-        </h1>
-        """, unsafe_allow_html=True)
+    <h3 style="
+        font-size:28px;
+        color:#555;
+        margin-top:10px;
+        font-weight:500;
+    ">
+    Headquarter Region - Telangana Postal Circle
+    </h3>
 
-        st.markdown("### Username")
-        username = st.text_input(
-            "",
-            placeholder="Enter Username"
-        )
+    </div>
+    """, unsafe_allow_html=True)
 
-        st.markdown("### Password")
-        password = st.text_input(
-            "",
-            type="password",
-            placeholder="Enter Password"
-        )
+# Small spacing
+st.markdown("<br>", unsafe_allow_html=True)
 
-        submit = st.button(
-            "Submit",
-            use_container_width=True
-        )
+# ==========================
+# LOGIN
+# ==========================
 
-        if submit:
+left, center, right = st.columns([2, 1.3, 2])
 
-            if (
-                username == "admin"
-                and password == "HQR@2026"
-            ):
-                st.session_state.authenticated = True
-                st.rerun()
+with center:
 
-            else:
-                st.error(
-                    "Invalid Username or Password"
-                )
+    st.markdown("""
+    <h1 style="
+        text-align:center;
+        font-size:48px;
+        margin-bottom:15px;
+        color:#2f3343;
+    ">
+    Login
+    </h1>
+    """, unsafe_allow_html=True)
 
-    st.stop()
+    st.markdown("### Username")
+    username = st.text_input(
+        "",
+        placeholder="Enter Username"
+    )
 
+    st.markdown("### Password")
+    password = st.text_input(
+        "",
+        type="password",
+        placeholder="Enter Password"
+    )
+
+    submit = st.button(
+        "Submit",
+        use_container_width=True
+    )
+
+    if submit:
+
+        if username == "admin" and password == "HQR@2026":
+            st.session_state.authenticated = True
+            st.rerun()
+
+        else:
+            st.error("Invalid Username or Password")
+
+st.stop()
 
 check_password()
 # ==================================
