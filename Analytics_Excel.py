@@ -19,34 +19,44 @@ st.set_page_config(
 st.markdown("""
 <style>
 
+/* Remove all top padding so header sits flush */
 .block-container {
-    padding-top: 0.6rem !important;
+    padding-top: 0.3rem !important;
     padding-bottom: 0rem !important;
 }
 
 header {
     visibility: hidden;
+    height: 0px !important;
 }
 
 [data-testid="stAppViewContainer"] {
-    margin-top: -20px;
+    margin-top: -50px;
 }
 
+/* Compact text inputs */
 .stTextInput input {
-    height: 50px;
-    border-radius: 10px;
-    font-size: 20px;
+    height: 42px;
+    border-radius: 8px;
+    font-size: 16px;
 }
 
+/* Remove extra space Streamlit adds above/below widgets */
+div[data-testid="stVerticalBlock"] > div {
+    gap: 0rem;
+}
+
+/* Submit button */
 div.stButton > button {
     background-color: #ff4b4b;
     color: white;
     border: none;
-    border-radius: 10px;
+    border-radius: 8px;
     width: 100%;
-    height: 55px;
-    font-size: 24px;
+    height: 46px;
+    font-size: 20px;
     font-weight: 600;
+    margin-top: 6px;
 }
 
 div.stButton > button:hover {
@@ -100,38 +110,31 @@ col1, col2 = st.columns([1.2, 5])
 
 with col1:
     if logo:
-        st.image(logo, width=200)
+        st.image(logo, width=150)
 
 with col2:
     st.markdown("""
-    <div style='padding-top:10px;'>
+    <div style='padding-top:8px;'>
     <h1 style='
-        font-size:50px;
-        margin-bottom:0px;
+        font-size:38px;
+        margin-bottom:2px;
         color:#2f3343;
         font-weight:700;
         line-height:1.1;
     '>
     Bulk Customer Business Analytics
     </h1>
+    <h3 style='
+        font-size:22px;
+        color:#555;
+        font-weight:500;
+        margin-top:4px;
+        margin-bottom:0px;
+    '>
+    Headquarter Region - Telangana Postal Circle
+    </h3>
     </div>
     """, unsafe_allow_html=True)
-
-# ==========================
-# SUBTITLE
-# ==========================
-st.markdown("""
-<div style='text-align:center; margin-top:5px;'>
-<h2 style='
-    font-size:32px;
-    color:#555;
-    font-weight:500;
-    margin-top:0px;
-'>
-Headquarter Region - Telangana Postal Circle
-</h2>
-</div>
-""", unsafe_allow_html=True)
 
 # ==========================
 # SESSION STATE INIT
@@ -149,18 +152,18 @@ if not st.session_state.authenticated:
     with center:
 
         st.markdown("""
-        <h1 style='
+        <h2 style='
             text-align:center;
-            font-size:60px;
+            font-size:36px;
             color:#2f3343;
-            margin-top:10px;
-            margin-bottom:20px;
+            margin-top:12px;
+            margin-bottom:10px;
         '>
         Login
-        </h1>
+        </h2>
         """, unsafe_allow_html=True)
 
-        st.markdown("<h3 style='font-size:22px; margin-bottom:5px;'>Username</h3>",
+        st.markdown("<p style='font-size:17px; margin-bottom:2px; font-weight:600;'>Username</p>",
                     unsafe_allow_html=True)
 
         username = st.text_input(
@@ -170,7 +173,7 @@ if not st.session_state.authenticated:
             key="username_input"
         )
 
-        st.markdown("<h3 style='font-size:22px; margin-bottom:5px;'>Password</h3>",
+        st.markdown("<p style='font-size:17px; margin-bottom:2px; font-weight:600;'>Password</p>",
                     unsafe_allow_html=True)
 
         password = st.text_input(
@@ -180,8 +183,6 @@ if not st.session_state.authenticated:
             label_visibility="collapsed",
             key="password_input"
         )
-
-        st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
 
         submit = st.button("Submit", use_container_width=True, type="primary")
 
