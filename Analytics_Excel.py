@@ -4,7 +4,41 @@ import numpy as np
 import calendar
 import os
 import io
+import streamlit as st
 
+def check_password():
+    def password_entered():
+        if (
+            st.session_state["username"] == "admin"
+            and st.session_state["password"] == "HQR@2026"
+        ):
+            st.session_state["password_correct"] = True
+        else:
+            st.session_state["password_correct"] = False
+
+    if "password_correct" not in st.session_state:
+        st.title("HQR Bulk Customer Analytics Login")
+        st.text_input("Username", key="username")
+        st.text_input(
+            "Password",
+            type="password",
+            key="password",
+            on_change=password_entered,
+        )
+        st.stop()
+
+    elif not st.session_state["password_correct"]:
+        st.error("Incorrect Username/Password")
+        st.text_input("Username", key="username")
+        st.text_input(
+            "Password",
+            type="password",
+            key="password",
+            on_change=password_entered,
+        )
+        st.stop()
+
+check_password()
 # ==================================
 # PAGE CONFIG
 # ==================================
