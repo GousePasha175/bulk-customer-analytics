@@ -266,44 +266,22 @@ if not st.session_state.authenticated:
                    margin-top:4px;margin-bottom:12px;'>Login</h2>
         """, unsafe_allow_html=True)
 
-    with st.form("login_form"):
-        st.markdown(
-            "<p style='font-size:16px;margin-bottom:2px;font-weight:600;'>Username</p>",
-            unsafe_allow_html=True
-        )
-    
-        username = st.text_input(
-            "",
-            placeholder="Enter Username",
-            label_visibility="collapsed",
-            key="usr"
-        )
-    
-        st.markdown(
-            "<p style='font-size:16px;margin-bottom:2px;font-weight:600;'>Password</p>",
-            unsafe_allow_html=True
-        )
-    
-        password = st.text_input(
-            "",
-            type="password",
-            placeholder="Enter Password",
-            label_visibility="collapsed",
-            key="pwd"
-        )
-    
-        submit = st.form_submit_button(
-            "Submit",
-            use_container_width=True,
-            type="primary"
-        )
-    
-    if submit:
-        if username == "admin" and password == "HQR@2026":
-            st.session_state.authenticated = True
-            st.rerun()
-        else:
-            st.error("Invalid Username or Password")
+    st.markdown("<p style='font-size:16px;margin-bottom:2px;font-weight:600;'>Username</p>",
+            unsafe_allow_html=True)
+username = st.text_input("", placeholder="Enter Username",
+                         label_visibility="collapsed", key="usr")
+
+st.markdown("<p style='font-size:16px;margin-bottom:2px;font-weight:600;'>Password</p>",
+            unsafe_allow_html=True)
+password = st.text_input("", type="password", placeholder="Enter Password",
+                         label_visibility="collapsed", key="pwd")
+
+if st.button("Submit", use_container_width=True, type="primary"):
+    if username == "admin" and password == "HQR@2026":
+        st.session_state.authenticated = True
+        st.rerun()
+    else:
+        st.error("Invalid Username or Password")
     st.stop()
 
 # ==========================
