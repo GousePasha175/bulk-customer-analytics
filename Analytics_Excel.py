@@ -61,75 +61,73 @@ def check_password():
     </style>
     """, unsafe_allow_html=True)
 
-    # ==========================
-# CLEAN DESKTOP HEADER
+# ==========================
+# COMPACT DESKTOP LOGIN PAGE
 # ==========================
 
 st.markdown("""
 <style>
 
-/* Reduce top spacing */
-.block-container{
-    padding-top:0.5rem !important;
-    max-width:1400px !important;
+/* Remove excessive spacing */
+.block-container {
+    padding-top: 0.8rem !important;
+    max-width: 1400px !important;
 }
 
-/* Remove extra gaps */
-div[data-testid="stVerticalBlock"]{
-    gap:0rem !important;
+/* Remove streamlit gaps */
+div[data-testid="stVerticalBlock"] {
+    gap: 0rem !important;
 }
 
-/* Input box styling */
-input{
-    font-size:20px !important;
-    height:48px !important;
+/* Input size */
+.stTextInput input {
+    height: 45px !important;
+    font-size: 18px !important;
 }
 
-/* Button styling */
-div.stButton > button{
-    width:100% !important;
-    height:50px !important;
-    font-size:22px !important;
-    font-weight:600 !important;
-    border-radius:10px !important;
+/* Submit button */
+div.stButton > button {
+    width: 100% !important;
+    height: 45px !important;
+    font-size: 20px !important;
+    border-radius: 8px !important;
 }
 
 </style>
 """, unsafe_allow_html=True)
 
+# ==================================
 # HEADER
-logo_col, title_col = st.columns([1, 5])
+# ==================================
 
-with logo_col:
+left, right = st.columns([1, 4])
+
+with left:
     st.image(
         "assets/logo.png",
-        width=170
+        width=180,
+        use_container_width=False
     )
 
-with title_col:
+with right:
 
     st.markdown("""
-    <div style="
-        display:flex;
-        flex-direction:column;
-        justify-content:center;
-        height:160px;
-    ">
+    <div style="padding-top:20px;">
 
     <h1 style="
-        font-size:54px;
-        font-weight:700;
-        color:#2f3343;
+        font-size:58px;
         margin:0;
+        color:#2f3343;
+        font-weight:700;
         line-height:1.1;
     ">
     Bulk Customer Business Analytics
     </h1>
 
     <h3 style="
-        font-size:28px;
+        margin-top:8px;
+        font-size:30px;
         color:#555;
-        margin-top:10px;
         font-weight:500;
     ">
     Headquarter Region - Telangana Postal Circle
@@ -138,39 +136,41 @@ with title_col:
     </div>
     """, unsafe_allow_html=True)
 
-# Small spacing
+# small spacing
 st.markdown("<br>", unsafe_allow_html=True)
 
-# ==========================
+# ==================================
 # LOGIN
-# ==========================
+# ==================================
 
-left, center, right = st.columns([2, 1.3, 2])
+c1, c2, c3 = st.columns([2.3, 1.4, 2.3])
 
-with center:
+with c2:
 
     st.markdown("""
     <h1 style="
         text-align:center;
-        font-size:48px;
-        margin-bottom:15px;
+        font-size:42px;
+        margin-bottom:20px;
         color:#2f3343;
     ">
     Login
     </h1>
     """, unsafe_allow_html=True)
 
-    st.markdown("### Username")
+    st.write("**Username**")
     username = st.text_input(
         "",
-        placeholder="Enter Username"
+        placeholder="Enter Username",
+        label_visibility="collapsed"
     )
 
-    st.markdown("### Password")
+    st.write("**Password**")
     password = st.text_input(
         "",
         type="password",
-        placeholder="Enter Password"
+        placeholder="Enter Password",
+        label_visibility="collapsed"
     )
 
     submit = st.button(
