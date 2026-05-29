@@ -39,6 +39,92 @@ def check_password():
         )
         st.stop()
 
+import streamlit as st
+from PIL import Image
+
+# ---------- PAGE CONFIG ----------
+st.set_page_config(
+    page_title="Bulk Customer Analytics",
+    layout="wide"
+)
+
+# ---------- LOAD LOGO ----------
+logo = Image.open("assets/logo.png")
+
+
+# ---------- LOGIN FUNCTION ----------
+def check_password():
+
+    # already logged in
+    if st.session_state.get("authenticated"):
+        return True
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Logo center
+    col1, col2, col3 = st.columns([2, 2, 2])
+
+    with col2:
+        st.image(logo, width=180)
+
+    # Title
+    st.markdown(
+        """
+        <h1 style='text-align:center; margin-bottom:0px;'>
+        Bulk Customer Business Analytics
+        </h1>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        """
+        <h3 style='text-align:center;
+                   color:#444;
+                   margin-top:0px;'>
+        Headquarter Region - Telangana Postal Circle
+        </h3>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Login Box Center
+    left, center, right = st.columns([1, 2, 1])
+
+    with center:
+
+        st.markdown("### Login")
+
+        username = st.text_input("Username")
+        password = st.text_input(
+            "Password",
+            type="password"
+        )
+
+        login = st.button(
+            "Submit",
+            use_container_width=True
+        )
+
+        if login:
+
+            if (
+                username == "admin"
+                and password == "HQR@2026"
+            ):
+                st.session_state.authenticated = True
+                st.rerun()
+
+            else:
+                st.error(
+                    "Invalid Username or Password"
+                )
+
+    st.stop()
+
+
 check_password()
 # ==================================
 # PAGE CONFIG
@@ -51,29 +137,44 @@ st.set_page_config(
 
 logo = Image.open("assets/logo.png")
 
-col1, col2 = st.columns([1, 7])
+# ---------- HEADER ----------
 
-with col1:
-    st.image(logo, width=100)
+left, center, right = st.columns([1,2,1])
 
-with col2:
-    st.markdown("""
-    <h1 style='margin-bottom:0px;'>
-    📊 Bulk Customer Business Analytics
-    </h1>
-    """, unsafe_allow_html=True)
+with center:
 
-    st.markdown("""
-    <h3 style='margin-top:0px; color:#444;'>
-    Headquarter Region - Telangana Postal Circle
-    </h3>
-    """, unsafe_allow_html=True)
-st.subheader(
-    "Headquarter Region - Telangana Postal Circle"
-)
+    st.image(
+        logo,
+        width=180
+    )
+
+    st.markdown(
+        """
+        <h1 style='
+        text-align:center;
+        margin-top:-15px;
+        margin-bottom:0px;
+        font-size:48px;
+        font-weight:700;'>
+        📊 Bulk Customer Business Analytics
+        </h1>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.markdown(
+        """
+        <h3 style='
+        text-align:center;
+        color:#444;
+        margin-top:0px;'>
+        Headquarter Region - Telangana Postal Circle
+        </h3>
+        """,
+        unsafe_allow_html=True
+    )
 
 st.markdown("---")
-
 # ==================================
 # SAVE PATH
 # ==================================
