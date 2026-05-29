@@ -24,88 +24,102 @@ def check_password():
     if st.session_state.get("authenticated"):
         return True
 
-    # ---------- PAGE STYLE ----------
+    # ---------- CSS ----------
     st.markdown("""
     <style>
 
     .block-container{
-        max-width: 1400px;
-        padding-top: 0.3rem;
+        max-width: 1450px;
+        padding-top: 1rem;
         padding-bottom: 0rem;
     }
 
-    /* Remove extra whitespace */
-    div[data-testid="stVerticalBlock"] > div {
-        gap: 0.3rem;
+    /* Remove extra vertical gaps */
+    div[data-testid="stVerticalBlock"] > div{
+        gap:0.3rem;
     }
 
-    h1, h2, h3 {
-        margin: 0 !important;
-        padding: 0 !important;
+    /* Label size */
+    label {
+        font-size:22px !important;
+        font-weight:600 !important;
+        color:#2f3343 !important;
     }
 
-    /* Login button */
-    div.stButton > button {
-        width: 100%;
-        height: 48px;
-        font-size: 18px;
-        border-radius: 8px;
-        font-weight: 600;
+    /* Input box */
+    div[data-baseweb="input"] > div{
+        height:58px;
+        border-radius:10px;
+        font-size:20px;
+    }
+
+    /* Button styling */
+    div.stButton > button{
+        width:100%;
+        height:55px;
+        font-size:22px;
+        font-weight:700;
+        border-radius:10px;
+        background-color:#f5f5f5;
     }
 
     </style>
     """, unsafe_allow_html=True)
 
     # ---------- HEADER ----------
-    row1_col1, row1_col2 = st.columns([1, 4])
+    col1, col2 = st.columns([1.2, 4])
 
-    with row1_col1:
+    with col1:
+        st.markdown("<br>", unsafe_allow_html=True)
+
         st.image(
             "assets/logo.png",
-            width=240
+            width=200
         )
 
-    with row1_col2:
+    with col2:
 
         st.markdown("""
         <div style="
-            height:240px;
+            height:220px;
             display:flex;
             flex-direction:column;
             justify-content:center;
         ">
+
         <h1 style="
-            font-size:58px;
+            font-size:64px;
             font-weight:700;
             color:#2f3343;
-            white-space:nowrap;
-            margin-bottom:10px;
+            margin-bottom:5px;
+            line-height:1.0;
         ">
         Bulk Customer Business Analytics
         </h1>
 
         <h3 style="
+            font-size:30px;
             color:#555;
-            font-size:28px;
             font-weight:500;
+            margin-top:0px;
         ">
         Headquarter Region - Telangana Postal Circle
         </h3>
+
         </div>
         """, unsafe_allow_html=True)
 
     # ---------- LOGIN ----------
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    left, center, right = st.columns([2.5, 1.2, 2.5])
+    left, center, right = st.columns([2.4, 1.3, 2.4])
 
     with center:
 
         st.markdown("""
         <h1 style="
-        text-align:center;
-        color:#2f3343;
-        margin-bottom:10px;
+            text-align:center;
+            color:#2f3343;
+            margin-bottom:10px;
+            font-size:58px;
         ">
         Login
         </h1>
