@@ -266,8 +266,7 @@ if not st.session_state.authenticated:
                    margin-top:4px;margin-bottom:12px;'>Login</h2>
         """, unsafe_allow_html=True)
 
-        with st.form("login_form"):
-
+    with st.form("login_form"):
     st.markdown(
         "<p style='font-size:16px;margin-bottom:2px;font-weight:600;'>Username</p>",
         unsafe_allow_html=True
