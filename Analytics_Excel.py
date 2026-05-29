@@ -101,29 +101,50 @@ div.stButton > button {
 # ==================================
 
 # ==================================
-# HEADER (FINAL POLISHED VERSION)
+# HEADER
 # ==================================
 
 logo_col, text_col = st.columns([1, 5])
 
 with logo_col:
+    st.image(
+        "assets/logo.png",
+        width=220
+    )
+
+with text_col:
+
     st.markdown("""
-<div style="
-display:flex;
-justify-content:center;
-align-items:center;
-height:170px;
-overflow:visible;
-padding-top:10px;
-">
-    <img src="app/static/assets/logo.png"
-         style="
-         max-height:140px;
-         width:auto;
-         object-fit:contain;
-         ">
-</div>
-""", unsafe_allow_html=True)
+    <div style="
+        padding-top:15px;
+        min-height:150px;
+    ">
+
+    <h1 style="
+        font-size:52px;
+        margin:0;
+        color:#2f3343;
+        font-weight:700;
+        line-height:1.1;
+    ">
+    Bulk Customer Business Analytics
+    </h1>
+
+    <div style="
+        text-align:center;
+        margin-top:18px;
+    ">
+        <span style="
+            font-size:28px;
+            color:#555;
+            font-weight:500;
+        ">
+        Headquarter Region - Telangana Postal Circle
+        </span>
+    </div>
+
+    </div>
+    """, unsafe_allow_html=True)
 
 with text_col:
 
