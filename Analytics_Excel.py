@@ -4,214 +4,157 @@ import numpy as np
 import calendar
 import os
 import io
+import streamlit as st
 from PIL import Image
 
-# ==================================
+# ==========================================
 # PAGE CONFIG
-# ==================================
+# ==========================================
 st.set_page_config(
     page_title="Bulk Customer Analytics",
+    page_icon="📊",
     layout="wide"
 )
 
-logo = Image.open("assets/logo.png")
-
-# ==================================
-# LOGIN
-# ==================================
-def check_password():
-
-    if st.session_state.get("authenticated"):
-        return True
-
-    st.markdown("""
-    <style>
-
-    /* Main page */
-    .block-container {
-        padding-top: 0.5rem !important;
-        max-width: 1500px !important;
-    }
-
-    /* Remove excess vertical spacing */
-    div[data-testid="stVerticalBlock"] {
-        gap: 0rem !important;
-    }
-
-    /* Bigger labels */
-    p {
-        font-size: 22px !important;
-    }
-
-    /* Bigger input fields */
-    input {
-        font-size: 22px !important;
-        height: 55px !important;
-    }
-
-    /* Bigger submit button */
-    div.stButton > button {
-        width: 100% !important;
-        height: 55px !important;
-        font-size: 22px !important;
-        font-weight: 700 !important;
-        border-radius: 10px !important;
-    }
-
-    </style>
-    """, unsafe_allow_html=True)
-
-# ==========================
-# COMPACT DESKTOP LOGIN PAGE
-# ==========================
-
+# ==========================================
+# CUSTOM CSS
+# ==========================================
 st.markdown("""
 <style>
 
-/* Remove excessive spacing */
-.block-container {
+/* Reduce top white space */
+.block-container{
     padding-top: 0.8rem !important;
-    max-width: 1400px !important;
 }
 
-/* Remove streamlit gaps */
-div[data-testid="stVerticalBlock"] {
+/* Remove Streamlit extra spacing */
+div[data-testid="stVerticalBlock"]{
     gap: 0rem !important;
 }
 
-/* Input size */
+/* Login inputs */
 .stTextInput input {
-    height: 45px !important;
-    font-size: 18px !important;
+    border-radius: 10px;
+    height: 48px;
+    font-size: 18px;
 }
 
 /* Submit button */
 div.stButton > button {
-    width: 100% !important;
-    height: 45px !important;
-    font-size: 20px !important;
-    border-radius: 8px !important;
+    background-color: #ff4b4b;
+    color: white;
+    border: none;
+    border-radius: 12px;
+    height: 52px;
+    width: 100%;
+    font-size: 22px;
+    font-weight: 600;
+}
+
+div.stButton > button:hover {
+    background-color: #e63f3f;
+    color: white;
 }
 
 </style>
 """, unsafe_allow_html=True)
 
-# ==================================
-# HEADER
-# ==================================
+# ==========================================
+# LOAD LOGO
+# ==========================================
+logo = Image.open("assets/logo.png")
 
-# ==================================
+# ==========================================
 # HEADER
-# ==================================
+# ==========================================
 
-logo_col, text_col = st.columns([1, 5])
+left_space, logo_col, title_col, right_space = st.columns([0.3, 1.2, 5.5, 0.3])
 
 with logo_col:
-    st.image(
-        "assets/logo.png",
-        width=220
-    )
+    st.image(logo, width=170)
 
-with text_col:
+with title_col:
 
     st.markdown("""
-    <div style="
-        padding-top:15px;
-        min-height:150px;
-    ">
+    <div style="padding-top:20px;">
 
-    <h1 style="
-        font-size:52px;
-        margin:0;
-        color:#2f3343;
-        font-weight:700;
-        line-height:1.1;
-    ">
-    Bulk Customer Business Analytics
-    </h1>
-
-    <div style="
-        text-align:center;
-        margin-top:18px;
-    ">
-        <span style="
-            font-size:28px;
-            color:#555;
-            font-weight:500;
+        <h1 style="
+            font-size:58px;
+            margin:0;
+            color:#2f3343;
+            font-weight:700;
+            line-height:1.1;
+            white-space:nowrap;
         ">
-        Headquarter Region - Telangana Postal Circle
-        </span>
-    </div>
+        Bulk Customer Business Analytics
+        </h1>
 
     </div>
     """, unsafe_allow_html=True)
 
-with text_col:
-
-    st.markdown("""
-        <div style="
-        height:190px;
-        padding-top:18px;
-        display:flex;
-        flex-direction:column;
-        justify-content:center;
+# Subtitle perfectly centered under title
+st.markdown("""
+<div style="text-align:center; margin-top:10px;">
+    <span style="
+        font-size:32px;
+        color:#555;
+        font-weight:500;
     ">
+    Headquarter Region - Telangana Postal Circle
+    </span>
+</div>
+""", unsafe_allow_html=True)
 
-    <h1 style="
-        font-size:52px;
-        margin:0;
-        color:#2f3343;
-        font-weight:700;
-        line-height:1.05;
-    ">
-    Bulk Customer Business Analytics
-    </h1>
-
-    <div style="
-        width:100%;
-        text-align:center;
-        margin-top:14px;
-    ">
-        <span style="
-            font-size:30px;
-            color:#555;
-            font-weight:500;
-        ">
-        Headquarter Region - Telangana Postal Circle
-        </span>
-    </div>
-
-    </div>
-    """, unsafe_allow_html=True)
+# ==========================================
+# LOGIN SECTION
+# ==========================================
 
 st.markdown("<br>", unsafe_allow_html=True)
-# ==================================
-# LOGIN
-# ==================================
 
-c1, c2, c3 = st.columns([2.3, 1.4, 2.3])
+left, center, right = st.columns([2.2, 1.4, 2.2])
 
-with c2:
+with center:
 
     st.markdown("""
     <h1 style="
         text-align:center;
-        font-size:42px;
-        margin-bottom:20px;
         color:#2f3343;
+        font-size:62px;
+        margin-bottom:20px;
     ">
     Login
     </h1>
     """, unsafe_allow_html=True)
 
-    st.write("**Username**")
+    st.markdown("""
+    <div style="
+        font-size:20px;
+        font-weight:600;
+        margin-bottom:8px;
+        color:#333;
+    ">
+    Username
+    </div>
+    """, unsafe_allow_html=True)
+
     username = st.text_input(
         "",
         placeholder="Enter Username",
         label_visibility="collapsed"
     )
 
-    st.write("**Password**")
+    st.markdown("""
+    <div style="
+        font-size:20px;
+        font-weight:600;
+        margin-top:12px;
+        margin-bottom:8px;
+        color:#333;
+    ">
+    Password
+    </div>
+    """, unsafe_allow_html=True)
+
     password = st.text_input(
         "",
         type="password",
@@ -219,22 +162,21 @@ with c2:
         label_visibility="collapsed"
     )
 
-    st.markdown("<div style='height:22px'></div>", unsafe_allow_html=True)
+    # Space between password and submit
+    st.markdown("<div style='height:15px'></div>", unsafe_allow_html=True)
 
-    submit = st.button(
-        "Submit",
-        use_container_width=True,
-        type="primary"
-    )
+    submit = st.button("Submit")
 
-    if submit:
+# ==========================================
+# LOGIN CHECK
+# ==========================================
 
-        if username == "admin" and password == "HQR@2026":
-            st.session_state.authenticated = True
-            st.rerun()
+if submit:
 
-        else:
-            st.error("Invalid Username or Password")
+    if username == "admin" and password == "admin123":
+        st.success("Login Successful")
+    else:
+        st.error("Invalid Username or Password")
 
 st.stop()
 
