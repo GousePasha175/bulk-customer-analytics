@@ -27,38 +27,56 @@ def check_password():
     st.markdown("""
     <style>
 
+    /* Wider desktop page */
     .block-container{
-        padding-top: 1rem;
-        max-width: 1200px;
+        padding-top: 0.5rem;
+        max-width: 1400px;
     }
 
+    /* Remove excess spacing */
+    div[data-testid="stTextInput"]{
+        margin-bottom: -5px;
+    }
+
+    /* Prevent title wrapping */
     .main-title{
         text-align:center;
-        font-size:48px;
+        font-size:42px;
         font-weight:700;
-        color:#2f3343;
+        white-space: nowrap;
+        margin-top:-15px;
         margin-bottom:0px;
+        color:#2f3343;
     }
 
     .sub-title{
         text-align:center;
-        font-size:22px;
+        font-size:20px;
         color:#555;
         margin-top:0px;
-        margin-bottom:30px;
+        margin-bottom:18px;
+    }
+
+    /* Login card */
+    .login-card{
+        background:#ffffff;
+        padding:20px;
+        border-radius:12px;
+        box-shadow:0px 1px 8px rgba(0,0,0,0.08);
     }
 
     </style>
     """, unsafe_allow_html=True)
 
-    # HEADER
-    left, center, right = st.columns([1,2,1])
+    # -------- HEADER --------
+    left, center, right = st.columns([1.2, 2.5, 1.2])
 
     with center:
 
         st.image(
-            logo,
-            width=220
+            "assets/logo.png",
+            width=260,
+            use_container_width=False
         )
 
         st.markdown(
@@ -79,29 +97,41 @@ def check_password():
             unsafe_allow_html=True
         )
 
-    # LOGIN BOX
-    l1, c1, r1 = st.columns([1.5,1,1.5])
+    # -------- LOGIN --------
+    l1, c1, r1 = st.columns([2.2, 1.2, 2.2])
 
     with c1:
 
         st.markdown(
-            "<h2 style='text-align:center;'>Login</h2>",
+            """
+            <div class="login-card">
+            <h2 style='text-align:center;
+            margin-top:0px;
+            margin-bottom:15px;'>
+            Login
+            </h2>
+            """,
             unsafe_allow_html=True
         )
 
         username = st.text_input(
-            "Username"
+            "Username",
+            placeholder="Enter Username"
         )
 
         password = st.text_input(
             "Password",
-            type="password"
+            type="password",
+            placeholder="Enter Password"
         )
 
         submit = st.button(
             "Submit",
             use_container_width=True
         )
+
+        st.markdown("</div>",
+                    unsafe_allow_html=True)
 
         if submit:
 
@@ -121,7 +151,6 @@ def check_password():
 
 
 check_password()
-
 # ==================================
 # HEADER AFTER LOGIN
 # ==================================
