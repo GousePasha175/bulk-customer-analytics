@@ -226,51 +226,112 @@ if "authenticated" not in st.session_state:
 # ==========================
 if not st.session_state.authenticated:
 
-    h_l, h_c, h_r = st.columns([1, 3, 1])
-    with h_c:
-        c_l, c_r = st.columns([1, 4])
-        with c_l:
+    # Hide sidebar before login
+    st.markdown("""
+    <style>
+    section[data-testid="stSidebar"] {
+        display: none;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # ---------- Header ----------
+    left, center, right = st.columns([0.8, 4.5, 0.5])
+
+    with center:
+        col1, col2 = st.columns([1, 5])
+
+        with col1:
             if logo:
-                st.image(logo, width=100)
-        with c_r:
+                st.image(logo, width=120)
+
+        with col2:
             st.markdown("""
-            <div style='padding-top:4px;'>
-            <h1 style='font-size:26px;margin-bottom:2px;color:#2f3343;font-weight:700;line-height:1.2;'>
-            Bulk Customer Business Analytics
-            </h1>
-            <p style='font-size:15px;color:#555;margin-top:2px;margin-bottom:0;'>
-            Headquarter Region - Telangana Postal Circle
-            </p>
+            <div style="padding-top:10px;">
+                <h1 style="
+                    font-size:26px;
+                    margin-bottom:0px;
+                    color:#2f3343;
+                    font-weight:700;
+                    line-height:1.2;">
+                    Bulk Customer Business Analytics
+                </h1>
+
+                <p style="
+                    font-size:17px;
+                    color:#555;
+                    margin-top:6px;
+                    text-align:center;">
+                    Headquarter Region - Telangana Postal Circle
+                </p>
             </div>
             """, unsafe_allow_html=True)
 
-    st.markdown("<hr style='margin:10px 0 8px 0;border-color:#ddd;'>", unsafe_allow_html=True)
+    st.markdown("<hr>", unsafe_allow_html=True)
 
-    l, c, r = st.columns([2.2, 1.4, 2.2])
+    # ---------- Login Box ----------
+    l, c, r = st.columns([2.2, 1.5, 2.2])
+
     with c:
+
         st.markdown("""
-        <h2 style='text-align:center;font-size:32px;color:#2f3343;
-                   margin-top:4px;margin-bottom:12px;'>Login</h2>
+        <h2 style='
+            text-align:center;
+            font-size:42px;
+            color:#2f3343;
+            margin-bottom:25px;'>
+            Login
+        </h2>
         """, unsafe_allow_html=True)
 
-    st.markdown("<p style='font-size:16px;margin-bottom:2px;font-weight:600;'>Username</p>",
-            unsafe_allow_html=True)
-username = st.text_input("", placeholder="Enter Username",
-                         label_visibility="collapsed", key="usr")
+        # ENTER key login support
+        with st.form("login_form"):
 
-st.markdown("<p style='font-size:16px;margin-bottom:2px;font-weight:600;'>Password</p>",
-            unsafe_allow_html=True)
-password = st.text_input("", type="password", placeholder="Enter Password",
-                         label_visibility="collapsed", key="pwd")
+            st.markdown(
+                "<p style='font-size:16px;font-weight:600;margin-bottom:4px;'>Username</p>",
+                unsafe_allow_html=True
+            )
 
-if st.button("Submit", use_container_width=True, type="primary"):
-    if username == "admin" and password == "HQR@2026":
-        st.session_state.authenticated = True
-        st.rerun()
-    else:
-        st.error("Invalid Username or Password")
+            username = st.text_input(
+                "",
+                placeholder="Enter Username",
+                label_visibility="collapsed"
+            )
+
+            st.markdown(
+                "<p style='font-size:16px;font-weight:600;margin-bottom:4px;'>Password</p>",
+                unsafe_allow_html=True
+            )
+
+            password = st.text_input(
+                "",
+                type="password",
+                placeholder="Enter Password",
+                label_visibility="collapsed"
+            )
+
+            st.markdown("<div style='height:10px;'></div>",
+                        unsafe_allow_html=True)
+
+            submit = st.form_submit_button(
+                "Submit",
+                use_container_width=True
+            )
+
+        # Login validation
+        if submit:
+            if username == "admin" and password == "HQR@2026":
+                st.session_state.authenticated = True
+                st.rerun()
+            else:
+                st.error("Invalid Username or Password")
+
     st.stop()
 
+
+# ==========================
+# MAIN APP — POST LOGIN
+# ==========================
 # ==========================
 # MAIN APP — POST LOGIN
 # ==========================
