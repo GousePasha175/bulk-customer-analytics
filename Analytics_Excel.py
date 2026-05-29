@@ -12,69 +12,85 @@ def check_password():
     if st.session_state.get("authenticated"):
         return True
 
-    # ---------- CSS ----------
+    # ---------- PAGE CSS ----------
     st.markdown("""
     <style>
 
     .block-container{
-        padding-top:1rem;
-        max-width:1200px;
+        padding-top: 1rem;
+        max-width: 1200px;
     }
 
-    .login-box{
-        background:white;
-        padding:30px;
-        border-radius:15px;
-        box-shadow:0 2px 12px rgba(0,0,0,0.08);
+    div[data-testid="stTextInput"] {
+        margin-bottom: 10px;
+    }
+
+    .title-text{
+        text-align:center;
+        font-size:58px;
+        font-weight:700;
+        margin-top:0px;
+        margin-bottom:0px;
+        color:#2f3343;
+    }
+
+    .subtitle-text{
+        text-align:center;
+        font-size:26px;
+        color:#555;
+        margin-top:5px;
+        margin-bottom:35px;
+    }
+
+    .login-title{
+        text-align:center;
+        font-size:34px;
+        font-weight:700;
+        margin-bottom:10px;
     }
 
     </style>
     """, unsafe_allow_html=True)
 
-    # ---------- LOGO ----------
+    # ---------- HEADER ----------
     c1, c2, c3 = st.columns([1,2,1])
 
     with c2:
+
         st.image(
             "assets/logo.png",
-            width=220
+            width=170
         )
 
-        st.markdown("""
-        <h1 style="
-        text-align:center;
-        font-size:56px;
-        margin-top:-15px;
-        margin-bottom:0px;
-        font-weight:700;
-        white-space: nowrap;
-        ">
-        Bulk Customer Business Analytics
-        </h1>
-        """, unsafe_allow_html=True)
+        st.markdown(
+            """
+            <div class="title-text">
+            Bulk Customer Business Analytics
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
-        st.markdown("""
-        <h3 style="
-        text-align:center;
-        color:#555;
-        margin-top:5px;
-        margin-bottom:35px;
-        ">
-        Headquarter Region - Telangana Postal Circle
-        </h3>
-        """, unsafe_allow_html=True)
+        st.markdown(
+            """
+            <div class="subtitle-text">
+            Headquarter Region - Telangana Postal Circle
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
-    # ---------- LOGIN BOX ----------
-    left, center, right = st.columns([1.3,1.2,1.3])
+    # ---------- LOGIN ----------
+    left, center, right = st.columns([1.3,1,1.3])
 
     with center:
 
-        st.markdown("""
-        <div class='login-box'>
-        """, unsafe_allow_html=True)
-
         st.markdown(
-            "<h2 style='text-align:center;'>Login</h2>",
+            """
+            <div class="login-title">
+            Login
+            </div>
+            """,
             unsafe_allow_html=True
         )
 
@@ -95,9 +111,6 @@ def check_password():
             "Submit",
             use_container_width=True
         )
-
-        st.markdown("</div>",
-                    unsafe_allow_html=True)
 
         if login:
 
@@ -140,7 +153,7 @@ def check_password():
     col1, col2, col3 = st.columns([2, 2, 2])
 
     with col2:
-        st.image(logo, width=180)
+        
 
     # Title
     st.markdown(
