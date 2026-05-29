@@ -12,8 +12,7 @@ from PIL import Image
 # ==========================
 st.set_page_config(
     page_title="Bulk Customer Analytics",
-    page_icon="📊",
-    layout="wide"
+        layout="wide"
 )
 
 # ==========================
@@ -76,14 +75,14 @@ div.stButton > button:hover{
 col1, col2 = st.columns([1.2, 5])
 
 with col1:
-    st.image(logo, width=220)
+    st.image(logo, width=200)
 
 with col2:
     st.markdown("""
     <div style='padding-top:10px;'>
 
     <h1 style='
-    font-size:64px;
+    font-size:50px;
     margin-bottom:0px;
     color:#2f3343;
     font-weight:700;
@@ -102,7 +101,7 @@ st.markdown("""
 <div style='text-align:center; margin-top:5px;'>
 
 <h2 style='
-font-size:34px;
+font-size:32px;
 color:#555;
 font-weight:500;
 margin-top:0px;
@@ -161,7 +160,10 @@ with center:
     st.markdown("<div style='height:20px'></div>",
                 unsafe_allow_html=True)
 
-    submit = st.button("Submit")
+    submit = st.button("Submit",
+     use_container_width=True,
+    type="primary"
+)
 
 # ==========================
 # LOGIN VALIDATION
