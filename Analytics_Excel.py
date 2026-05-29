@@ -106,6 +106,11 @@ div.stButton > button {
 
 logo_col, text_col = st.columns([1, 5])
 
+st.image(
+    "assets/logo.png",
+    width=230,
+    use_container_width=False
+)
 with logo_col:
     st.markdown("""
 <div style="
