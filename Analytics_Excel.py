@@ -12,35 +12,62 @@ def check_password():
     if st.session_state.get("authenticated"):
         return True
 
-    # ---------- LOGO ----------
-    left, center, right = st.columns([1,2,1])
+    # ---------- PAGE STYLE ----------
+    st.markdown("""
+    <style>
+    .block-container {
+        padding-top: 1rem;
+        padding-bottom: 1rem;
+    }
 
-    with center:
-        st.image("assets/logo.png", width=140)
+    div[data-testid="stTextInput"]{
+        margin-bottom: -10px;
+    }
+
+    .login-box {
+        background-color: white;
+        padding: 30px;
+        border-radius: 15px;
+        box-shadow: 0px 2px 10px rgba(0,0,0,0.08);
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # ---------- HEADER ----------
+    col1, col2, col3 = st.columns([1,2,1])
+
+    with col2:
+
+        st.image(
+            "assets/logo.png",
+            width=120
+        )
 
         st.markdown("""
-        <h1 style='text-align:center;
+        <h1 style="
+        text-align:center;
         margin-top:-10px;
         margin-bottom:0px;
         font-size:42px;
-        font-weight:700;'>
-        Bulk Customer Business Analytics
+        font-weight:700;">
+        📊 Bulk Customer Business Analytics
         </h1>
         """, unsafe_allow_html=True)
 
         st.markdown("""
-        <h3 style='text-align:center;
+        <h4 style="
+        text-align:center;
         color:#444;
         margin-top:0px;
-        margin-bottom:20px;'>
+        margin-bottom:25px;">
         Headquarter Region - Telangana Postal Circle
-        </h3>
+        </h4>
         """, unsafe_allow_html=True)
 
-    # ---------- LOGIN BOX ----------
-    col1, col2, col3 = st.columns([1.2, 2, 1.2])
+    # ---------- LOGIN CENTER ----------
+    left, center, right = st.columns([1.5,1.2,1.5])
 
-    with col2:
+    with center:
 
         st.markdown(
             "<h2 style='text-align:center;'>Login</h2>",
@@ -66,12 +93,14 @@ def check_password():
         )
 
         if login:
+
             if (
                 username == "admin"
                 and password == "HQR@2026"
             ):
                 st.session_state.authenticated = True
                 st.rerun()
+
             else:
                 st.error(
                     "Invalid Username or Password"
