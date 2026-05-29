@@ -4,15 +4,26 @@ import numpy as np
 import calendar
 import os
 import io
-import streamlit as st
 from PIL import Image
 
+# ==================================
+# PAGE CONFIG
+# ==================================
+st.set_page_config(
+    page_title="Bulk Customer Analytics",
+    layout="wide"
+)
+
+logo = Image.open("assets/logo.png")
+
+# ==================================
+# LOGIN
+# ==================================
 def check_password():
 
     if st.session_state.get("authenticated"):
         return True
 
-    # ---------- PAGE CSS ----------
     st.markdown("""
     <style>
 
@@ -21,50 +32,38 @@ def check_password():
         max-width: 1200px;
     }
 
-    div[data-testid="stTextInput"] {
-        margin-bottom: 10px;
-    }
-
-    .title-text{
+    .main-title{
         text-align:center;
-        font-size:58px;
+        font-size:48px;
         font-weight:700;
-        margin-top:0px;
-        margin-bottom:0px;
         color:#2f3343;
+        margin-bottom:0px;
     }
 
-    .subtitle-text{
+    .sub-title{
         text-align:center;
-        font-size:26px;
+        font-size:22px;
         color:#555;
-        margin-top:5px;
-        margin-bottom:35px;
-    }
-
-    .login-title{
-        text-align:center;
-        font-size:34px;
-        font-weight:700;
-        margin-bottom:10px;
+        margin-top:0px;
+        margin-bottom:30px;
     }
 
     </style>
     """, unsafe_allow_html=True)
 
-    # ---------- HEADER ----------
-    c1, c2, c3 = st.columns([1,2,1])
+    # HEADER
+    left, center, right = st.columns([1,2,1])
 
-    with c2:
+    with center:
 
         st.image(
-            "assets/logo.png",
-            width=170
+            logo,
+            width=220
         )
 
         st.markdown(
             """
-            <div class="title-text">
+            <div class="main-title">
             Bulk Customer Business Analytics
             </div>
             """,
@@ -73,130 +72,38 @@ def check_password():
 
         st.markdown(
             """
-            <div class="subtitle-text">
+            <div class="sub-title">
             Headquarter Region - Telangana Postal Circle
             </div>
             """,
             unsafe_allow_html=True
         )
 
-    # ---------- LOGIN ----------
-    left, center, right = st.columns([1.3,1,1.3])
+    # LOGIN BOX
+    l1, c1, r1 = st.columns([1.5,1,1.5])
 
-    with center:
+    with c1:
 
         st.markdown(
-            """
-            <div class="login-title">
-            Login
-            </div>
-            """,
+            "<h2 style='text-align:center;'>Login</h2>",
             unsafe_allow_html=True
         )
 
         username = st.text_input(
-            "Username",
-            placeholder="Enter Username"
+            "Username"
         )
 
-        password = st.text_input(
-            "Password",
-            type="password",
-            placeholder="Enter Password"
-        )
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        login = st.button(
-            "Submit",
-            use_container_width=True
-        )
-
-        if login:
-
-            if (
-                username == "admin"
-                and password == "HQR@2026"
-            ):
-                st.session_state.authenticated = True
-                st.rerun()
-
-            else:
-                st.error(
-                    "Invalid Username or Password"
-                )
-
-    st.stop()
-
-
-check_password()
-# ---------- PAGE CONFIG ----------
-st.set_page_config(
-    page_title="Bulk Customer Analytics",
-    layout="wide"
-)
-
-# ---------- LOAD LOGO ----------
-logo = Image.open("assets/logo.png")
-
-
-# ---------- LOGIN FUNCTION ----------
-def check_password():
-
-    # already logged in
-    if st.session_state.get("authenticated"):
-        return True
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # Logo center
-    col1, col2, col3 = st.columns([2, 2, 2])
-
-    with col2:
-        
-
-    # Title
-    st.markdown(
-        """
-        <h1 style='text-align:center; margin-bottom:0px;'>
-        Bulk Customer Business Analytics
-        </h1>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.markdown(
-        """
-        <h3 style='text-align:center;
-                   color:#444;
-                   margin-top:0px;'>
-        Headquarter Region - Telangana Postal Circle
-        </h3>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # Login Box Center
-    left, center, right = st.columns([1, 2, 1])
-
-    with center:
-
-        st.markdown("### Login")
-
-        username = st.text_input("Username")
         password = st.text_input(
             "Password",
             type="password"
         )
 
-        login = st.button(
+        submit = st.button(
             "Submit",
             use_container_width=True
         )
 
-        if login:
+        if submit:
 
             if (
                 username == "admin"
@@ -214,37 +121,24 @@ def check_password():
 
 
 check_password()
+
 # ==================================
-# PAGE CONFIG
+# HEADER AFTER LOGIN
 # ==================================
-st.set_page_config(
-    page_title="Bulk Customer Analytics",
-    page_icon="📊",
-    layout="wide"
-)
-
-logo = Image.open("assets/logo.png")
-
-# ---------- HEADER ----------
-
 left, center, right = st.columns([1,2,1])
 
 with center:
 
     st.image(
         logo,
-        width=180
+        width=160
     )
 
     st.markdown(
         """
-        <h1 style='
-        text-align:center;
-        margin-top:-15px;
-        margin-bottom:0px;
-        font-size:48px;
-        font-weight:700;'>
-        📊 Bulk Customer Business Analytics
+        <h1 style='text-align:center;
+        margin-bottom:0px;'>
+        Bulk Customer Business Analytics
         </h1>
         """,
         unsafe_allow_html=True
@@ -252,8 +146,7 @@ with center:
 
     st.markdown(
         """
-        <h3 style='
-        text-align:center;
+        <h3 style='text-align:center;
         color:#444;
         margin-top:0px;'>
         Headquarter Region - Telangana Postal Circle
