@@ -108,22 +108,24 @@ logo_col, text_col = st.columns([1, 5])
 
 with logo_col:
     st.image(
-        "assets/logo.png",
-        width=200
-    )
+    "assets/logo.png",
+    width=230,
+    use_container_width=False
+)
 
 with text_col:
 
     st.markdown("""
-    <div style="
-        height:170px;
+        <div style="
+        height:190px;
+        padding-top:18px;
         display:flex;
         flex-direction:column;
         justify-content:center;
     ">
 
     <h1 style="
-        font-size:58px;
+        font-size:52px;
         margin:0;
         color:#2f3343;
         font-weight:700;
@@ -184,7 +186,7 @@ with c2:
         label_visibility="collapsed"
     )
 
-    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height:22px'></div>", unsafe_allow_html=True)
 
     submit = st.button(
         "Submit",
