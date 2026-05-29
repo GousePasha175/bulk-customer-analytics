@@ -6,3 +6,4 @@ xlsxwriter
 plotly
 matplotlib
 scikit-learn
+pillow
