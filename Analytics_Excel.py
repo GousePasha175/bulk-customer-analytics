@@ -5,6 +5,13 @@ import calendar
 import io
 import os
 from PIL import Image
+import streamlit as st
+
+st.title("Sidebar Test")
+
+st.sidebar.file_uploader("Upload something")
+
+st.stop()
 
 # ==========================
 # PAGE CONFIG
