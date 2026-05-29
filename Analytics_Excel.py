@@ -118,7 +118,7 @@ if not st.session_state.authenticated:
             Bulk Customer Business Analytics
             </h1>
             <p style='font-size:16px;color:#555;margin-top:2px;margin-bottom:0;'>
-            Headquarter Region - Telangana Postal Circle
+            Headquarters Region - Telangana Postal Circle
             </p>
             </div>
             """, unsafe_allow_html=True)
