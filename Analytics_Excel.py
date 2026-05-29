@@ -53,143 +53,157 @@ def color_status(val):
     }
     return colors.get(val, "")
 
-def load_master_excel(file):
+def parse_master_excel(file):
     """
-    Load all sheets from the master Excel, detect Customer ID, Traffic and Revenue
-    columns per month, and return a unified DataFrame with columns:
-    CLEAN_ID, CUSTOMER_NAME, YEAR, MONTH, TRAFFIC, REVENUE
+    Read all sheets from the master Excel.
+    Each sheet has 2 header rows:
+      row 0 : month dates (datetime) in columns, paired as TRAFFIC | REVENUE
+      row 1 : 'TRAFFIC' / 'REVENUE' sub-labels  (or single header row for some sheets)
+    Data rows start after the last header row.
+
+    Returns a flat DataFrame with one row per customer:
+      CUSTOMER ID  |  CUSTOMER NAME  |  YYYY-MM TRAFFIC  |  YYYY-MM REVENUE  | ...
     """
     xl = pd.ExcelFile(file)
-    all_records = []
+    # Collect per-customer monthly data across all sheets
+    # key = clean customer id, value = dict of {col_name: value}
+    master = {}
 
     for sheet in xl.sheet_names:
         raw = pd.read_excel(file, sheet_name=sheet, header=None)
 
-        # Find header row: row that contains 'Customer ID' or 'Cust ID' (case-insensitive)
-        header_row = None
-        id_col = None
-        name_col = None
+        # ---- locate customer-id column and data-start row ----
+        id_col_idx   = None
+        name_col_idx = None
+        data_start   = None
 
-        for ridx in range(min(5, len(raw))):
-            for cidx, val in enumerate(raw.iloc[ridx]):
+        # PBC Autonagar has a single header row (row 0) with text month labels
+        # All others have row 0 = dates, row 1 = TRAFFIC/REVENUE sub-labels
+        # Detect by checking if row 1 contains 'TRAFFIC'
+        has_sub_header = any(
+            str(v).strip().upper() == 'TRAFFIC'
+            for v in raw.iloc[1].tolist()
+        )
+
+        if has_sub_header:
+            header_row  = 1   # sub-header row
+            data_start  = 2
+        else:
+            header_row  = 0
+            data_start  = 1
+
+        # Find CUSTOMER ID and CUSTOMER NAME columns in any of the first 3 rows
+        for scan in range(min(3, len(raw))):
+            for cidx, val in enumerate(raw.iloc[scan]):
                 s = str(val).strip().lower()
-                if "customer id" in s or "cust id" in s:
-                    header_row = ridx
-                    id_col = cidx
-                    break
-            if header_row is not None:
-                break
+                if ('customer id' in s or 'cust id' in s) and id_col_idx is None:
+                    id_col_idx = cidx
+                if ('customer name' in s or 'cutomer name' in s) and name_col_idx is None:
+                    name_col_idx = cidx
 
-        if header_row is None:
-            continue  # skip sheet if no customer ID column found
+        if id_col_idx is None:
+            continue  # can't use this sheet
 
-        # Find customer name column in same header row
-        for cidx, val in enumerate(raw.iloc[header_row]):
-            s = str(val).strip().lower()
-            if "customer name" in s or "cutomer name" in s or "name" in s:
-                name_col = cidx
-                break
+        # ---- build month → (traffic_col, revenue_col) mapping ----
+        # For sheets with datetime row 0 + sub-header row 1:
+        #   row 0 has datetime at col c, next sub-header says TRAFFIC at c, REVENUE at c+1
+        # For PBC Autonagar (single header row 0 with text like 'Apr-25 Traf'):
+        #   parse directly from column name text
 
-        # Find month columns: rows 0..header_row contain datetime objects for months
-        # and row header_row+1 (sub-header) has TRAFFIC/REVENUE labels
-        # Build mapping: month -> (traffic_col_idx, revenue_col_idx)
-        month_cols = {}  # key: (year, month) -> {'traffic': col, 'revenue': col}
+        month_map = {}  # (year, month) -> {'t': col_idx, 'r': col_idx}
 
-        # Scan row 0 (or any row before header) for datetime objects
-        for scan_row in range(header_row):
-            for cidx, val in enumerate(raw.iloc[scan_row]):
-                if isinstance(val, pd.Timestamp) or (
-                    hasattr(val, 'year') and hasattr(val, 'month') and not isinstance(val, str)
-                ):
-                    try:
-                        yr = val.year
-                        mo = val.month
-                        key = (yr, mo)
-                        if key not in month_cols:
-                            month_cols[key] = {'traffic': None, 'revenue': None}
-                        # Now look in sub-header row (header_row or header_row-1 or header_row+1)
-                        # for TRAFFIC / REVENUE at cidx and cidx+1
-                        for sub_row in range(header_row + 1):
-                            t = str(raw.iloc[sub_row].get(cidx, '')).strip().lower()
-                            t1 = str(raw.iloc[sub_row].get(cidx + 1, '')).strip().lower()
-                            if 'traffic' in t:
-                                month_cols[key]['traffic'] = cidx
-                            if 'revenue' in t or 'rev' in t:
-                                month_cols[key]['revenue'] = cidx
-                            if 'traffic' in t1:
-                                month_cols[key]['traffic'] = cidx + 1
-                            if 'revenue' in t1 or 'rev' in t1:
-                                month_cols[key]['revenue'] = cidx + 1
-                    except Exception:
-                        pass
-
-        # If no month_cols found via datetime, try sub-header approach for sheets
-        # like BNPL Hyderabad where row 0 has datetime and row 1 has Traffic/Revenue
-        if not month_cols:
-            for scan_row in range(min(3, len(raw))):
-                for cidx, val in enumerate(raw.iloc[scan_row]):
-                    try:
-                        if isinstance(val, pd.Timestamp):
-                            yr = val.year
-                            mo = val.month
+        if has_sub_header:
+            # row 0 has dates, row 1 has TRAFFIC/REVENUE
+            date_row = raw.iloc[0]
+            sub_row  = raw.iloc[1]
+            current_date = None
+            for cidx in range(len(date_row)):
+                val = date_row.iloc[cidx]
+                if hasattr(val, 'year'):          # it's a datetime
+                    current_date = (val.year, val.month)
+                    month_map[current_date] = {'t': None, 'r': None}
+                if current_date is not None:
+                    sub = str(sub_row.iloc[cidx]).strip().upper()
+                    if sub == 'TRAFFIC':
+                        month_map[current_date]['t'] = cidx
+                    elif sub == 'REVENUE' or sub == 'REV':
+                        month_map[current_date]['r'] = cidx
+        else:
+            # PBC Autonagar: single header row with text labels like 'Apr-25 Traf', 'Apr-25 Rev'
+            month_abbr = {
+                'apr': 4, 'may': 5, 'jun': 6, 'jul': 7, 'aug': 8, 'sep': 9,
+                'oct': 10,'nov': 11,'dec': 12,'jan': 1, 'feb': 2, 'mar': 3
+            }
+            header_vals = raw.iloc[0].tolist()
+            for cidx, val in enumerate(header_vals):
+                s = str(val).strip().lower()
+                # extract month abbreviation
+                for abbr, mo in month_abbr.items():
+                    if abbr in s:
+                        # extract year: look for 2-digit year like '25' -> 2025
+                        import re
+                        yr_match = re.search(r'(\d{2})', s)
+                        if yr_match:
+                            yr_2 = int(yr_match.group(1))
+                            yr = 2000 + yr_2
                             key = (yr, mo)
-                            month_cols[key] = {'traffic': cidx, 'revenue': cidx + 1}
-                    except Exception:
-                        pass
+                            if key not in month_map:
+                                month_map[key] = {'t': None, 'r': None}
+                            if 'traf' in s or 'trf' in s:
+                                month_map[key]['t'] = cidx
+                            elif 'rev' in s:
+                                month_map[key]['r'] = cidx
+                        break
 
-        if not month_cols:
+        if not month_map:
             continue
 
-        # Data starts from header_row + 2 (skip both header rows)
-        data_start = header_row + 2
-
+        # ---- read data rows ----
         for ridx in range(data_start, len(raw)):
             row = raw.iloc[ridx]
+            cid_val = row.iloc[id_col_idx]
 
-            # Skip totally empty rows or summary rows
-            cid_val = row.iloc[id_col] if id_col < len(row) else None
-            if pd.isna(cid_val) or str(cid_val).strip().lower() in ('', 'nan', 'total', 'grand total'):
+            # skip empty / summary rows
+            if pd.isna(cid_val):
+                continue
+            s = str(cid_val).strip().lower()
+            if s in ('', 'nan', 'total', 'grand total', 'sl no', 'sno'):
                 continue
 
             clean_id = str(cid_val).replace('.0', '').strip()
 
             cname = ''
-            if name_col is not None and name_col < len(row):
-                cname = str(row.iloc[name_col]).strip()
+            if name_col_idx is not None and name_col_idx < len(row):
+                cname = str(row.iloc[name_col_idx]).strip()
+                if cname.lower() in ('nan', ''):
+                    cname = ''
 
-            for (yr, mo), cols in month_cols.items():
-                t_col = cols.get('traffic')
-                r_col = cols.get('revenue')
+            if clean_id not in master:
+                master[clean_id] = {'CUSTOMER ID': clean_id, 'CUSTOMER NAME': cname}
 
-                traffic = 0
-                revenue = 0
+            for (yr, mo), cols in month_map.items():
+                t_key = f"{yr}-{mo:02d} TRAFFIC"
+                r_key = f"{yr}-{mo:02d} REVENUE"
 
-                if t_col is not None and t_col < len(row):
-                    traffic = pd.to_numeric(row.iloc[t_col], errors='coerce')
-                    if pd.isna(traffic):
-                        traffic = 0
+                t_val = 0
+                r_val = 0
 
-                if r_col is not None and r_col < len(row):
-                    revenue = pd.to_numeric(row.iloc[r_col], errors='coerce')
-                    if pd.isna(revenue):
-                        revenue = 0
+                if cols['t'] is not None and cols['t'] < len(row):
+                    t_val = pd.to_numeric(row.iloc[cols['t']], errors='coerce')
+                    t_val = 0 if pd.isna(t_val) else t_val
 
-                all_records.append({
-                    'CLEAN_ID':      clean_id,
-                    'CUSTOMER_NAME': cname,
-                    'YEAR':          yr,
-                    'MONTH':         mo,
-                    'TRAFFIC':       traffic,
-                    'REVENUE':       revenue,
-                })
+                if cols['r'] is not None and cols['r'] < len(row):
+                    r_val = pd.to_numeric(row.iloc[cols['r']], errors='coerce')
+                    r_val = 0 if pd.isna(r_val) else r_val
 
-    if not all_records:
+                # Sum across sheets if customer appears in multiple
+                master[clean_id][t_key] = master[clean_id].get(t_key, 0) + t_val
+                master[clean_id][r_key] = master[clean_id].get(r_key, 0) + r_val
+
+    if not master:
         return pd.DataFrame()
 
-    df = pd.DataFrame(all_records)
-    # Deduplicate — same customer can appear in multiple sheets; sum them
-    df = df.groupby(['CLEAN_ID', 'CUSTOMER_NAME', 'YEAR', 'MONTH'], as_index=False).sum()
-    return df
+    return pd.DataFrame(list(master.values()))
 
 # ==========================
 # LOAD LOGO
@@ -208,7 +222,6 @@ if "authenticated" not in st.session_state:
 # ==========================
 if not st.session_state.authenticated:
 
-    # Header — centered
     h_l, h_c, h_r = st.columns([1, 3, 1])
     with h_c:
         c_l, c_r = st.columns([1, 4])
@@ -227,16 +240,13 @@ if not st.session_state.authenticated:
             </div>
             """, unsafe_allow_html=True)
 
-    st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
-    st.markdown("<hr style='margin:0 0 10px 0;border-color:#ddd;'>", unsafe_allow_html=True)
+    st.markdown("<hr style='margin:10px 0 8px 0;border-color:#ddd;'>", unsafe_allow_html=True)
 
-    # Login form — centered
     l, c, r = st.columns([2.2, 1.4, 2.2])
     with c:
         st.markdown("""
-        <h2 style='text-align:center;font-size:32px;color:#2f3343;margin-top:4px;margin-bottom:12px;'>
-        Login
-        </h2>
+        <h2 style='text-align:center;font-size:32px;color:#2f3343;
+                   margin-top:4px;margin-bottom:12px;'>Login</h2>
         """, unsafe_allow_html=True)
 
         st.markdown("<p style='font-size:16px;margin-bottom:2px;font-weight:600;'>Username</p>",
@@ -262,35 +272,33 @@ if not st.session_state.authenticated:
 # MAIN APP — POST LOGIN
 # ==========================
 
-# ---- Top Header ----
-h_l, h_c, h_r = st.columns([1, 6, 1])
+# ---- Header ----
+h_l, h_c, h_r = st.columns([1, 8, 1])
 with h_l:
     if logo:
-        st.image(logo, width=100)
+        st.image(logo, width=90)
 with h_c:
     st.markdown("""
-    <div style='padding-top:4px;'>
-    <h1 style='font-size:30px;margin-bottom:2px;color:#2f3343;font-weight:700;'>
+    <h1 style='font-size:28px;margin-bottom:2px;color:#2f3343;font-weight:700;padding-top:4px;'>
     Bulk Customer Business Analytics
     </h1>
-    <p style='font-size:16px;color:#555;margin-top:2px;margin-bottom:0;'>
+    <p style='font-size:15px;color:#555;margin-top:0;'>
     Headquarter Region - Telangana Postal Circle
     </p>
-    </div>
     """, unsafe_allow_html=True)
 
-st.markdown("<hr style='margin:6px 0 10px 0;border-color:#ddd;'>", unsafe_allow_html=True)
+st.markdown("<hr style='margin:4px 0 10px 0;border-color:#ddd;'>", unsafe_allow_html=True)
 
 # ---- Sidebar ----
 st.sidebar.header("Upload Files")
 
 daily_file = st.sidebar.file_uploader(
-    "Upload Daily / Period File",
-    type=["csv", "xlsx", "xls"]
+    "Upload Daily / Period File (CSV)",
+    type=["csv"]
 )
 
 master_file = st.sidebar.file_uploader(
-    "Upload Master Data File (Historical)",
+    "Upload Master Data File",
     type=["xlsx", "xls", "csv"]
 )
 
@@ -305,24 +313,19 @@ show_mode = st.sidebar.radio(
 # ---- Main Process ----
 if daily_file and master_file:
 
-    # Read daily file
-    if daily_file.name.endswith(".csv"):
-        daily_df = pd.read_csv(daily_file)
-    else:
-        daily_df = pd.read_excel(daily_file)
+    # Read daily CSV
+    daily_df = pd.read_csv(daily_file)
 
-    # Read master file
-    with st.spinner("Loading master data..."):
+    # Read & flatten master Excel into the format the original logic expects:
+    # one row per customer, columns: CUSTOMER ID | 2024-05 TRAFFIC | 2024-05 REVENUE ...
+    with st.spinner("Reading master data..."):
         if master_file.name.endswith(".csv"):
             historical_df = pd.read_csv(master_file)
-            # Convert to long format expected by load_master_excel
-            # (assume CSV already has CLEAN_ID, YEAR, MONTH, TRAFFIC, REVENUE)
-            historical_long = historical_df
         else:
-            historical_long = load_master_excel(master_file)
+            historical_df = parse_master_excel(master_file)
 
-    if historical_long.empty:
-        st.error("Could not read master data. Please check the file format.")
+    if historical_df.empty:
+        st.error("Could not read master data. Please check the file.")
         st.stop()
 
     # ---- Column Detection — Daily File ----
@@ -349,9 +352,12 @@ if daily_file and master_file:
             end_date_col = col
 
     missing = [n for n, v in [
-        ("Customer ID", customer_id_col), ("Customer Name", customer_name_col),
-        ("Revenue", revenue_col), ("Traffic", traffic_col),
-        ("Start Date", start_date_col), ("End Date", end_date_col)
+        ("Customer ID", customer_id_col),
+        ("Customer Name", customer_name_col),
+        ("Revenue", revenue_col),
+        ("Traffic", traffic_col),
+        ("Start Date", start_date_col),
+        ("End Date", end_date_col),
     ] if v is None]
 
     if missing:
@@ -368,14 +374,44 @@ if daily_file and master_file:
 
     # ---- Date Validation Banner ----
     st.markdown(f"""
-    <div style='background:#f0f7ff;border-left:4px solid #1a73e8;padding:10px 16px;
-                border-radius:6px;margin-bottom:14px;'>
-    <b>Period Detected:</b> {upload_start.strftime('%d %b %Y')} → {upload_end.strftime('%d %b %Y')}
-    &nbsp;|&nbsp; <b>Days:</b> {uploaded_days}
-    &nbsp;|&nbsp; <b>Comparing Against:</b> {calendar.month_name[upload_month]} {previous_year}
+    <div style='background:#f0f7ff;border-left:4px solid #1a73e8;padding:8px 16px;
+                border-radius:6px;margin-bottom:12px;font-size:15px;'>
+    <b>Period:</b> {upload_start.strftime('%d %b %Y')} → {upload_end.strftime('%d %b %Y')}
+    &nbsp;|&nbsp; <b>Days uploaded:</b> {uploaded_days}
+    &nbsp;|&nbsp; <b>Comparing against:</b> {calendar.month_name[upload_month]} {previous_year}
     &nbsp;|&nbsp; <b>Days in that month:</b> {days_in_month}
     </div>
     """, unsafe_allow_html=True)
+
+    # ---- Historical Column Detection (original logic, exact match) ----
+    hist_customer_id_col = None
+    revenue_col_hist     = None
+    traffic_col_hist     = None
+
+    for col in historical_df.columns:
+        c = str(col).upper()
+        if "CUSTOMER ID" in c:
+            hist_customer_id_col = col
+        if (str(previous_year) in c
+                and f"{upload_month:02d}" in c
+                and "REVENUE" in c):
+            revenue_col_hist = col
+        if (str(previous_year) in c
+                and f"{upload_month:02d}" in c
+                and "TRAFFIC" in c):
+            traffic_col_hist = col
+
+    if hist_customer_id_col is None:
+        st.error("Could not find CUSTOMER ID column in master data.")
+        st.stop()
+
+    # ---- Clean Customer ID ----
+    historical_df["CLEAN_ID"] = (
+        historical_df[hist_customer_id_col]
+        .astype(str)
+        .str.replace(".0", "", regex=False)
+        .str.strip()
+    )
 
     # ---- KPI Metrics ----
     total_revenue   = pd.to_numeric(daily_df[revenue_col],  errors="coerce").sum()
@@ -387,96 +423,92 @@ if daily_file and master_file:
     c2.metric("Total Traffic",   f"{round(total_traffic):,}")
     c3.metric("Total Customers", total_customers)
 
-    st.markdown("<hr style='margin:10px 0;border-color:#eee;'>", unsafe_allow_html=True)
+    st.markdown("<hr style='margin:8px 0;border-color:#eee;'>", unsafe_allow_html=True)
 
-    # ---- Filter historical to the relevant month ----
-    hist_month = historical_long[
-        (historical_long['YEAR']  == previous_year) &
-        (historical_long['MONTH'] == upload_month)
-    ].copy()
-
-    hist_month['CLEAN_ID'] = (
-        hist_month['CLEAN_ID'].astype(str)
-        .str.replace('.0', '', regex=False).str.strip()
-    )
-
-    # ---- Analytics Loop ----
+    # ---- Customer Analytics Loop (original logic preserved) ----
     results = []
 
     for _, row in daily_df.iterrows():
-        customer_id   = str(row[customer_id_col]).replace('.0', '').strip()
-        customer_name = str(row[customer_name_col]).strip()
-        current_rev   = pd.to_numeric(row[revenue_col], errors='coerce')
-        current_trf   = pd.to_numeric(row[traffic_col], errors='coerce')
 
-        match = hist_month[hist_month['CLEAN_ID'] == customer_id]
+        customer_id   = str(row[customer_id_col]).replace(".0", "").strip()
+        customer_name = row[customer_name_col]
+        current_revenue = pd.to_numeric(row[revenue_col], errors="coerce")
+        current_traffic = pd.to_numeric(row[traffic_col], errors="coerce")
 
-        if match.empty:
-            if show_mode == "Only customers in Master Data":
-                continue  # skip unmatched
+        historical_match = historical_df[historical_df["CLEAN_ID"] == customer_id]
 
+        # Apply show_mode filter
+        if historical_match.empty and show_mode == "Only customers in Master Data":
+            continue
+
+        # No historical data
+        if (historical_match.empty
+                or revenue_col_hist is None
+                or traffic_col_hist is None):
             results.append({
-                "Customer ID":        customer_id,
-                "Customer Name":      customer_name,
-                "Actual Revenue":     round(current_rev) if not pd.isna(current_rev) else 0,
-                "Actual Traffic":     round(current_trf) if not pd.isna(current_trf) else 0,
-                "Hist Monthly Rev":   "",
-                "Hist Avg Rev":       "",
-                "Revenue Variance %": "",
-                "Revenue Status":     "No Historical Data",
-                "Hist Monthly Trf":   "",
-                "Hist Avg Trf":       "",
-                "Traffic Variance %": "",
-                "Traffic Status":     "No Historical Data",
+                "Customer ID":               customer_id,
+                "Customer Name":             customer_name,
+                "Actual Revenue":            round(current_revenue) if not pd.isna(current_revenue) else 0,
+                "Actual Traffic":            round(current_traffic) if not pd.isna(current_traffic) else 0,
+                "Revenue Variance %":        "",
+                "Revenue Status":            "No Historical Data",
+                "Traffic Variance %":        "",
+                "Traffic Status":            "No Historical Data",
             })
             continue
 
-        monthly_rev = float(match['REVENUE'].iloc[0])
-        monthly_trf = float(match['TRAFFIC'].iloc[0])
+        # Historical values
+        monthly_revenue = pd.to_numeric(
+            historical_match[revenue_col_hist].iloc[0], errors="coerce")
+        monthly_traffic = pd.to_numeric(
+            historical_match[traffic_col_hist].iloc[0], errors="coerce")
 
-        expected_rev = (monthly_rev / days_in_month) * uploaded_days
-        expected_trf = (monthly_trf / days_in_month) * uploaded_days
+        if pd.isna(monthly_revenue): monthly_revenue = 0
+        if pd.isna(monthly_traffic): monthly_traffic = 0
 
-        rev_var = (
-            ((current_rev - expected_rev) / expected_rev) * 100
-            if expected_rev > 0 else np.nan
+        expected_revenue = (monthly_revenue / days_in_month) * uploaded_days
+        expected_traffic = (monthly_traffic / days_in_month) * uploaded_days
+
+        revenue_var = (
+            ((current_revenue - expected_revenue) / expected_revenue) * 100
+            if expected_revenue > 0 else np.nan
         )
-        trf_var = (
-            ((current_trf - expected_trf) / expected_trf) * 100
-            if expected_trf > 0 else np.nan
+        traffic_var = (
+            ((current_traffic - expected_traffic) / expected_traffic) * 100
+            if expected_traffic > 0 else np.nan
         )
 
         results.append({
-            "Customer ID":        customer_id,
-            "Customer Name":      customer_name,
-            "Actual Revenue":     round(current_rev),
-            "Hist Monthly Rev":   round(monthly_rev),
-            "Hist Avg Rev":       round(expected_rev),
-            "Revenue Variance %": round(rev_var) if not pd.isna(rev_var) else "",
-            "Revenue Status":     classify(rev_var, sd_percent),
-            "Actual Traffic":     round(current_trf),
-            "Hist Monthly Trf":   round(monthly_trf),
-            "Hist Avg Trf":       round(expected_trf),
-            "Traffic Variance %": round(trf_var) if not pd.isna(trf_var) else "",
-            "Traffic Status":     classify(trf_var, sd_percent),
+            "Customer ID":                  customer_id,
+            "Customer Name":                customer_name,
+            "Actual Revenue":               round(current_revenue),
+            "Historical Monthly Revenue":   round(monthly_revenue),
+            "Historical Avg Revenue":       round(expected_revenue),
+            "Revenue Variance %":           round(revenue_var) if not pd.isna(revenue_var) else "",
+            "Revenue Status":               classify(revenue_var, sd_percent),
+            "Actual Traffic":               round(current_traffic),
+            "Historical Monthly Traffic":   round(monthly_traffic),
+            "Historical Avg Traffic":       round(expected_traffic),
+            "Traffic Variance %":           round(traffic_var) if not pd.isna(traffic_var) else "",
+            "Traffic Status":               classify(traffic_var, sd_percent),
         })
 
     result_df = pd.DataFrame(results)
 
     if result_df.empty:
-        st.warning("No matching records found.")
+        st.warning("No records to display.")
         st.stop()
 
-    # Convert numeric cols cleanly
-    num_cols = [
-        "Actual Revenue", "Hist Monthly Rev", "Hist Avg Rev",
-        "Actual Traffic", "Hist Monthly Trf", "Hist Avg Trf",
-        "Revenue Variance %", "Traffic Variance %"
+    # Remove decimals
+    number_cols = [
+        "Actual Revenue", "Historical Monthly Revenue", "Historical Avg Revenue",
+        "Actual Traffic", "Historical Monthly Traffic", "Historical Avg Traffic",
+        "Revenue Variance %", "Traffic Variance %",
     ]
-    for col in num_cols:
+    for col in number_cols:
         if col in result_df.columns:
             result_df[col] = (
-                pd.to_numeric(result_df[col], errors='coerce')
+                pd.to_numeric(result_df[col], errors="coerce")
                 .fillna(0).round(0).astype(int)
             )
 
@@ -486,51 +518,40 @@ if daily_file and master_file:
     status_order = ["Excellent", "Normal", "Warning", "Critical", "No Historical Data"]
 
     for status in status_order:
-        grp = result_df[result_df["Revenue Status"] == status]
-        if not grp.empty:
-            color_map = {
-                "Excellent": "#e6f4ea", "Normal": "#fffde7",
-                "Warning": "#fff3e0",  "Critical": "#fce8e6",
-                "No Historical Data": "#f5f5f5"
-            }
-            bg = color_map.get(status, "#fff")
-            st.markdown(
-                f"<div style='background:{bg};padding:6px 12px;border-radius:6px;"
-                f"margin-bottom:4px;font-weight:600;font-size:16px;'>"
-                f"{status} — {len(grp)} customer(s)</div>",
-                unsafe_allow_html=True
-            )
-            styled = grp.style.map(color_status, subset=["Revenue Status", "Traffic Status"])
-            st.dataframe(styled, use_container_width=True, hide_index=True)
+        group_df = result_df[result_df["Revenue Status"] == status]
+        if not group_df.empty:
+            st.markdown(f"### {status} ({len(group_df)})")
+            styled_df = group_df.style.map(
+                color_status, subset=["Revenue Status", "Traffic Status"])
+            st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
     # ---- Excel Download ----
-    st.markdown("<br>", unsafe_allow_html=True)
     output = io.BytesIO()
 
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
         result_df.to_excel(writer, index=False, sheet_name="Analytics")
-        wb  = writer.book
-        ws  = writer.sheets["Analytics"]
+        workbook  = writer.book
+        worksheet = writer.sheets["Analytics"]
 
-        fmt_map = {
-            "Excellent":          wb.add_format({"bg_color": "#90EE90"}),
-            "Normal":             wb.add_format({"bg_color": "#FFFACD"}),
-            "Warning":            wb.add_format({"bg_color": "#FFD580"}),
-            "Critical":           wb.add_format({"bg_color": "#FF7F7F"}),
-            "No Historical Data": wb.add_format({"bg_color": "#D3D3D3"}),
+        formats = {
+            "Excellent":          workbook.add_format({"bg_color": "#90EE90"}),
+            "Normal":             workbook.add_format({"bg_color": "#FFFACD"}),
+            "Warning":            workbook.add_format({"bg_color": "#FFD580"}),
+            "Critical":           workbook.add_format({"bg_color": "#FF7F7F"}),
+            "No Historical Data": workbook.add_format({"bg_color": "#D3D3D3"}),
         }
 
         rev_col_idx = result_df.columns.get_loc("Revenue Status")
         trf_col_idx = result_df.columns.get_loc("Traffic Status")
 
-        for i in range(len(result_df)):
-            rs = result_df.iloc[i]["Revenue Status"]
-            ts = result_df.iloc[i]["Traffic Status"]
-            ws.write(i + 1, rev_col_idx, rs, fmt_map.get(rs, wb.add_format()))
-            ws.write(i + 1, trf_col_idx, ts, fmt_map.get(ts, wb.add_format()))
+        for row_num in range(len(result_df)):
+            rs = result_df.iloc[row_num]["Revenue Status"]
+            ts = result_df.iloc[row_num]["Traffic Status"]
+            worksheet.write(row_num + 1, rev_col_idx, rs, formats[rs])
+            worksheet.write(row_num + 1, trf_col_idx, ts, formats[ts])
 
         for i, col in enumerate(result_df.columns):
-            ws.set_column(i, i, 22)
+            worksheet.set_column(i, i, 22)
 
     st.download_button(
         "⬇ Download Excel Report",
@@ -540,8 +561,8 @@ if daily_file and master_file:
     )
 
 elif daily_file and not master_file:
-    st.info("Please upload the Master Data (Historical) file in the sidebar.")
+    st.info("Please also upload the Master Data file in the sidebar.")
 elif master_file and not daily_file:
-    st.info("Please upload the Daily / Period file in the sidebar.")
+    st.info("Please also upload the Daily / Period CSV file in the sidebar.")
 else:
     st.info("Please upload both files in the sidebar to begin.")
