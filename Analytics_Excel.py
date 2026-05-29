@@ -186,11 +186,11 @@ with c2:
 
     st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
 
-submit = st.button(
-    "Submit",
-    use_container_width=True,
-    type="primary"
-)
+    submit = st.button(
+        "Submit",
+        use_container_width=True,
+        type="primary"
+    )
 
     if submit:
 
