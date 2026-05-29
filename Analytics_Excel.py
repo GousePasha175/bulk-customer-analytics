@@ -14,7 +14,7 @@ st.set_page_config(page_title="Bulk Customer Analytics", layout="wide", initial_
 # ==========================
 # CUSTOM CSS
 # ==========================
-#st.markdown("""
+st.markdown("""
 <style>
 .block-container { padding-top: 1.2rem !important; padding-bottom: 0rem !important; }
 header { visibility: hidden; height: 0px !important; }
@@ -27,7 +27,7 @@ div.stButton > button {
 div.stButton > button:hover { background-color: #e23d3d; color: white; }
 </style>
 """, unsafe_allow_html=True)
-#
+
 # ==========================
 # HELPER FUNCTIONS
 # ==========================
