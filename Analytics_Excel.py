@@ -69,36 +69,55 @@ def check_password():
     """, unsafe_allow_html=True)
 
     # -------- HEADER --------
-    left, center, right = st.columns([1.2, 2.5, 1.2])
+    # -------- HEADER --------
 
-    with center:
+st.markdown(
+    """
+    <div style='text-align:center; margin-top:-10px;'>
+    """,
+    unsafe_allow_html=True
+)
 
-        st.image(
-            "assets/logo.png",
-            width=260,
-            use_container_width=False
-        )
+st.image(
+    "assets/logo.png",
+    width=320
+)
 
-        st.markdown(
-            """
-            <div class="main-title">
-            Bulk Customer Business Analytics
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+st.markdown(
+    """
+    <div class="main-title"
+    style="
+    text-align:center;
+    font-size:52px;
+    font-weight:700;
+    color:#2f3343;
+    white-space:nowrap;
+    margin-top:-10px;
+    ">
+    Bulk Customer Business Analytics
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
-        st.markdown(
-            """
-            <div class="sub-title">
-            Headquarter Region - Telangana Postal Circle
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+st.markdown(
+    """
+    <div class="sub-title"
+    style="
+    text-align:center;
+    font-size:24px;
+    color:#555;
+    margin-top:5px;
+    margin-bottom:15px;
+    ">
+    Headquarter Region - Telangana Postal Circle
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
     # -------- LOGIN --------
-    l1, c1, r1 = st.columns([2.2, 1.2, 2.2])
+    l1, c1, r1 = st.columns([1.8, 1.4, 1.8])
 
     with c1:
 
