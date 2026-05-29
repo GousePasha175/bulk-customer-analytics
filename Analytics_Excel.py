@@ -294,7 +294,7 @@ st.sidebar.header("Upload Files")
 
 daily_file = st.sidebar.file_uploader(
     "Upload Daily / Period File (CSV)",
-    type=["csv"]
+    type=["xlsx", "xls", "csv"]
 )
 
 master_file = st.sidebar.file_uploader(
@@ -302,7 +302,7 @@ master_file = st.sidebar.file_uploader(
     type=["xlsx", "xls", "csv"]
 )
 
-sd_percent = st.sidebar.slider("Deviation %", min_value=1, max_value=50, value=10)
+sd_percent = st.sidebar.slider("Deviation %", min_value=1, max_value=100, value=10)
 
 show_mode = st.sidebar.radio(
     "Filter Records",
@@ -567,10 +567,9 @@ if daily_file and master_file:
         file_name="analytics_report.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-
-elif daily_file and not master_file:
-    st.info("Please also upload the Master Data file in the sidebar.")
 elif master_file and not daily_file:
     st.info("Please also upload the Daily / Period CSV file in the sidebar.")
+elif daily_file and not master_file:
+    st.info("Please also upload the Master Data file in the sidebar.")
 else:
     st.info("Please upload both files in the sidebar to begin.")
