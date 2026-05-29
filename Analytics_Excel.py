@@ -9,7 +9,7 @@ from PIL import Image
 # ==========================
 # PAGE CONFIG
 # ==========================
-st.set_page_config(page_title="Bulk Customer Analytics", layout="wide")
+st.set_page_config(page_title="Bulk Customer Analytics", layout="wide", initial_sidebar_state="expanded")
 
 # ==========================
 # CUSTOM CSS
