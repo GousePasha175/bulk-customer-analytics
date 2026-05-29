@@ -24,84 +24,77 @@ def check_password():
     if st.session_state.get("authenticated"):
         return True
 
-    # ---------- CSS ----------
     st.markdown("""
     <style>
 
-    .block-container{
-        max-width: 1450px;
-        padding-top: 1rem;
-        padding-bottom: 0rem;
+    /* Main page */
+    .block-container {
+        padding-top: 0.5rem !important;
+        max-width: 1500px !important;
     }
 
-    /* Remove extra vertical gaps */
-    div[data-testid="stVerticalBlock"] > div{
-        gap:0.3rem;
+    /* Remove excess vertical spacing */
+    div[data-testid="stVerticalBlock"] {
+        gap: 0rem !important;
     }
 
-    /* Label size */
-    label {
-        font-size:22px !important;
-        font-weight:600 !important;
-        color:#2f3343 !important;
+    /* Bigger labels */
+    p {
+        font-size: 22px !important;
     }
 
-    /* Input box */
-    div[data-baseweb="input"] > div{
-        height:58px;
-        border-radius:10px;
-        font-size:20px;
+    /* Bigger input fields */
+    input {
+        font-size: 22px !important;
+        height: 55px !important;
     }
 
-    /* Button styling */
-    div.stButton > button{
-        width:100%;
-        height:55px;
-        font-size:22px;
-        font-weight:700;
-        border-radius:10px;
-        background-color:#f5f5f5;
+    /* Bigger submit button */
+    div.stButton > button {
+        width: 100% !important;
+        height: 55px !important;
+        font-size: 22px !important;
+        font-weight: 700 !important;
+        border-radius: 10px !important;
     }
 
     </style>
     """, unsafe_allow_html=True)
 
-    # ---------- HEADER ----------
-    col1, col2 = st.columns([1.2, 4])
+    # ==========================
+    # HEADER
+    # ==========================
 
-    with col1:
-        st.markdown("<br>", unsafe_allow_html=True)
+    col_logo, col_title = st.columns([1, 5])
 
+    with col_logo:
         st.image(
             "assets/logo.png",
-            width=200
+            width=220
         )
 
-    with col2:
+    with col_title:
 
         st.markdown("""
-        <div style="
-            height:220px;
-            display:flex;
-            flex-direction:column;
-            justify-content:center;
-        ">
+        <div style="padding-top:20px;">
 
         <h1 style="
-            font-size:64px;
+            font-size:68px;
             font-weight:700;
             color:#2f3343;
-            margin-bottom:5px;
-            line-height:1.0;
+            line-height:1.1;
+            margin:0;
+            padding:0;
+            white-space:nowrap;
         ">
         Bulk Customer Business Analytics
         </h1>
 
         <h3 style="
-            font-size:30px;
-            color:#555;
+            font-size:32px;
             font-weight:500;
-            margin-top:0px;
+            color:#555;
+            margin-top:10px;
         ">
         Headquarter Region - Telangana Postal Circle
         </h3>
@@ -109,34 +102,44 @@ def check_password():
         </div>
         """, unsafe_allow_html=True)
 
-    # ---------- LOGIN ----------
-    left, center, right = st.columns([2.4, 1.3, 2.4])
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ==========================
+    # LOGIN
+    # ==========================
+
+    left, center, right = st.columns([2.5, 1.3, 2.5])
 
     with center:
 
         st.markdown("""
         <h1 style="
             text-align:center;
+            font-size:56px;
             color:#2f3343;
-            margin-bottom:10px;
-            font-size:58px;
+            margin-bottom:20px;
         ">
         Login
         </h1>
         """, unsafe_allow_html=True)
 
+        st.markdown("### Username")
         username = st.text_input(
-            "Username",
+            "",
             placeholder="Enter Username"
         )
 
+        st.markdown("### Password")
         password = st.text_input(
-            "Password",
+            "",
             type="password",
             placeholder="Enter Password"
         )
 
-        submit = st.button("Submit")
+        submit = st.button(
+            "Submit",
+            use_container_width=True
+        )
 
         if submit:
 
