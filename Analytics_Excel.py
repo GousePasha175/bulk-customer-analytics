@@ -19,9 +19,8 @@ st.set_page_config(
 st.markdown("""
 <style>
 
-/* Remove all top padding so header sits flush */
 .block-container {
-    padding-top: 0.3rem !important;
+    padding-top: 0rem !important;
     padding-bottom: 0rem !important;
 }
 
@@ -30,20 +29,20 @@ header {
     height: 0px !important;
 }
 
-[data-testid="stAppViewContainer"] {
-    margin-top: -50px;
+/* Center everything vertically with small top margin */
+[data-testid="stAppViewContainer"] > section:first-child {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 100vh;
+    padding-top: 2rem !important;
 }
 
 /* Compact text inputs */
 .stTextInput input {
-    height: 42px;
+    height: 44px;
     border-radius: 8px;
     font-size: 16px;
-}
-
-/* Remove extra space Streamlit adds above/below widgets */
-div[data-testid="stVerticalBlock"] > div {
-    gap: 0rem;
 }
 
 /* Submit button */
@@ -53,10 +52,10 @@ div.stButton > button {
     border: none;
     border-radius: 8px;
     width: 100%;
-    height: 46px;
+    height: 48px;
     font-size: 20px;
     font-weight: 600;
-    margin-top: 6px;
+    margin-top: 8px;
 }
 
 div.stButton > button:hover {
@@ -104,39 +103,6 @@ logo_path = "assets/logo.png"
 logo = Image.open(logo_path) if os.path.exists(logo_path) else None
 
 # ==========================
-# HEADER
-# ==========================
-col1, col2 = st.columns([1.2, 5])
-
-with col1:
-    if logo:
-        st.image(logo, width=150)
-
-with col2:
-    st.markdown("""
-    <div style='padding-top:8px;'>
-    <h1 style='
-        font-size:38px;
-        margin-bottom:2px;
-        color:#2f3343;
-        font-weight:700;
-        line-height:1.1;
-    '>
-    Bulk Customer Business Analytics
-    </h1>
-    <h3 style='
-        font-size:22px;
-        color:#555;
-        font-weight:500;
-        margin-top:4px;
-        margin-bottom:0px;
-    '>
-    Headquarter Region - Telangana Postal Circle
-    </h3>
-    </div>
-    """, unsafe_allow_html=True)
-
-# ==========================
 # SESSION STATE INIT
 # ==========================
 if "authenticated" not in st.session_state:
@@ -147,6 +113,40 @@ if "authenticated" not in st.session_state:
 # ==========================
 if not st.session_state.authenticated:
 
+    # ---- Centered wrapper with top margin ----
+    st.markdown("""
+    <div style='
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+        justify-content:center;
+        min-height:90vh;
+        padding-top:2rem;
+    '>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Header row — logo + title, centered
+    h1, h2, h3 = st.columns([1, 3, 1])
+    with h2:
+        inner_l, inner_r = st.columns([1, 3])
+        with inner_l:
+            if logo:
+                st.image(logo, width=110)
+        with inner_r:
+            st.markdown("""
+            <div style='padding-top:6px;'>
+            <h1 style='font-size:28px;margin-bottom:2px;color:#2f3343;font-weight:700;line-height:1.2;'>
+            Bulk Customer Business Analytics
+            </h1>
+            <p style='font-size:16px;color:#555;margin-top:2px;margin-bottom:0;'>
+            Headquarter Region - Telangana Postal Circle
+            </p>
+            </div>
+            """, unsafe_allow_html=True)
+
+    st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
+
     left, center, right = st.columns([2.2, 1.4, 2.2])
 
     with center:
@@ -154,9 +154,9 @@ if not st.session_state.authenticated:
         st.markdown("""
         <h2 style='
             text-align:center;
-            font-size:36px;
+            font-size:34px;
             color:#2f3343;
-            margin-top:12px;
+            margin-top:0px;
             margin-bottom:10px;
         '>
         Login
