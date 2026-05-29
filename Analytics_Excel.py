@@ -24,149 +24,119 @@ def check_password():
     if st.session_state.get("authenticated"):
         return True
 
+    # ---------- PAGE STYLE ----------
     st.markdown("""
     <style>
 
-    /* Wider desktop page */
     .block-container{
-        padding-top: 0.5rem;
         max-width: 1400px;
+        padding-top: 0.3rem;
+        padding-bottom: 0rem;
     }
 
-    /* Remove excess spacing */
-    div[data-testid="stTextInput"]{
-        margin-bottom: -5px;
+    /* Remove extra whitespace */
+    div[data-testid="stVerticalBlock"] > div {
+        gap: 0.3rem;
     }
 
-    /* Prevent title wrapping */
-    .main-title{
-        text-align:center;
-        font-size:42px;
-        font-weight:700;
-        white-space: nowrap;
-        margin-top:-15px;
-        margin-bottom:0px;
-        color:#2f3343;
+    h1, h2, h3 {
+        margin: 0 !important;
+        padding: 0 !important;
     }
 
-    .sub-title{
-        text-align:center;
-        font-size:20px;
-        color:#555;
-        margin-top:0px;
-        margin-bottom:18px;
-    }
-
-    /* Login card */
-    .login-card{
-        background:#ffffff;
-        padding:20px;
-        border-radius:12px;
-        box-shadow:0px 1px 8px rgba(0,0,0,0.08);
+    /* Login button */
+    div.stButton > button {
+        width: 100%;
+        height: 48px;
+        font-size: 18px;
+        border-radius: 8px;
+        font-weight: 600;
     }
 
     </style>
     """, unsafe_allow_html=True)
 
-    # -------- HEADER --------
-    # -------- HEADER --------
+    # ---------- HEADER ----------
+    row1_col1, row1_col2 = st.columns([1, 4])
 
-st.markdown(
-    """
-    <div style='text-align:center; margin-top:-10px;'>
-    """,
-    unsafe_allow_html=True
-)
+    with row1_col1:
+        st.image(
+            "assets/logo.png",
+            width=240
+        )
 
-st.image(
-    "assets/logo.png",
-    width=320
-)
+    with row1_col2:
 
-st.markdown(
-    """
-    <div class="main-title"
-    style="
-    text-align:center;
-    font-size:52px;
-    font-weight:700;
-    color:#2f3343;
-    white-space:nowrap;
-    margin-top:-10px;
-    ">
-    Bulk Customer Business Analytics
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+        st.markdown("""
+        <div style="
+            height:240px;
+            display:flex;
+            flex-direction:column;
+            justify-content:center;
+        ">
+        <h1 style="
+            font-size:58px;
+            font-weight:700;
+            color:#2f3343;
+            white-space:nowrap;
+            margin-bottom:10px;
+        ">
+        Bulk Customer Business Analytics
+        </h1>
 
-st.markdown(
-    """
-    <div class="sub-title"
-    style="
-    text-align:center;
-    font-size:24px;
-    color:#555;
-    margin-top:5px;
-    margin-bottom:15px;
-    ">
-    Headquarter Region - Telangana Postal Circle
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-# -------- LOGIN --------
+        <h3 style="
+            color:#555;
+            font-size:28px;
+            font-weight:500;
+        ">
+        Headquarter Region - Telangana Postal Circle
+        </h3>
+        </div>
+        """, unsafe_allow_html=True)
 
-l1, c1, r1 = st.columns([1.8, 1.4, 1.8])
+    # ---------- LOGIN ----------
+    st.markdown("<br>", unsafe_allow_html=True)
 
-with c1:
+    left, center, right = st.columns([2.5, 1.2, 2.5])
 
-    st.markdown(
-        """
-        <div class="login-card">
-        <h2 style='text-align:center;
-        margin-top:0px;
-        margin-bottom:15px;'>
+    with center:
+
+        st.markdown("""
+        <h1 style="
+        text-align:center;
+        color:#2f3343;
+        margin-bottom:10px;
+        ">
         Login
-        </h2>
-        """,
-        unsafe_allow_html=True
-    )
+        </h1>
+        """, unsafe_allow_html=True)
 
-    username = st.text_input(
-        "Username",
-        placeholder="Enter Username"
-    )
+        username = st.text_input(
+            "Username",
+            placeholder="Enter Username"
+        )
 
-    password = st.text_input(
-        "Password",
-        type="password",
-        placeholder="Enter Password"
-    )
+        password = st.text_input(
+            "Password",
+            type="password",
+            placeholder="Enter Password"
+        )
 
-    submit = st.button(
-        "Submit",
-        use_container_width=True
-    )
+        submit = st.button("Submit")
 
-    st.markdown(
-        "</div>",
-        unsafe_allow_html=True
-    )
+        if submit:
 
-    if submit:
+            if (
+                username == "admin"
+                and password == "HQR@2026"
+            ):
+                st.session_state.authenticated = True
+                st.rerun()
 
-        if (
-            username == "admin"
-            and password == "HQR@2026"
-        ):
-            st.session_state.authenticated = True
-            st.rerun()
-
-        else:
-            st.error(
-                "Invalid Username or Password"
-            )
+            else:
+                st.error(
+                    "Invalid Username or Password"
+                )
 
     st.stop()
 
