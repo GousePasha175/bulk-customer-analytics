@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pkl
+*.exe
+*.msix
+
+Backup/
+Reports/
+Saved_Data/
+Uploads/
+Database/
+Historical_Data/
+Software/
