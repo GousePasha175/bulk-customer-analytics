@@ -175,157 +175,95 @@ check_password()
 # ==================================
 # HEADER AFTER LOGIN
 # ==================================
-left, center, right = st.columns([1,2,1])
+# -------- HEADER --------
+
+col1, col2 = st.columns([1, 4])
+
+with col1:
+    st.image(
+        "assets/logo.png",
+        width=230
+    )
+
+with col2:
+
+    st.markdown("""
+    <div style="
+        display:flex;
+        flex-direction:column;
+        justify-content:center;
+        height:220px;
+    ">
+    <h1 style="
+        font-size:54px;
+        font-weight:700;
+        color:#2f3343;
+        margin-bottom:5px;
+        white-space:nowrap;
+    ">
+    Bulk Customer Business Analytics
+    </h1>
+
+    <h3 style="
+        color:#555;
+        font-size:28px;
+        margin-top:0px;
+    ">
+    Headquarter Region - Telangana Postal Circle
+    </h3>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# -------- LOGIN --------
+
+left, center, right = st.columns([2.2, 1.2, 2.2])
 
 with center:
 
-    st.image(
-        logo,
-        width=160
+    st.markdown("""
+    <h1 style="
+        text-align:center;
+        margin-top:-15px;
+        margin-bottom:15px;
+        color:#2f3343;
+    ">
+    Login
+    </h1>
+    """, unsafe_allow_html=True)
+
+    username = st.text_input(
+        "Username",
+        placeholder="Enter Username"
     )
 
-    st.markdown(
-        """
-        <h1 style='text-align:center;
-        margin-bottom:0px;'>
-        Bulk Customer Business Analytics
-        </h1>
-        """,
-        unsafe_allow_html=True
+    password = st.text_input(
+        "Password",
+        type="password",
+        placeholder="Enter Password"
     )
 
-    st.markdown(
-        """
-        <h3 style='text-align:center;
-        color:#444;
-        margin-top:0px;'>
-        Headquarter Region - Telangana Postal Circle
-        </h3>
-        """,
-        unsafe_allow_html=True
+    submit = st.button(
+        "Submit",
+        use_container_width=True
     )
 
-st.markdown("---")
-# ==================================
-# SAVE PATH
-# ==================================
-SAVE_PATH = (
-    r"D:\BulkCustomerAnalytics"
-    r"\Saved_Data"
-    r"\historical_master.pkl"
-)
+    if submit:
 
-# ==================================
-# STATUS LOGIC
-# ==================================
-def classify(var, sd):
+        if (
+            username == "admin"
+            and password == "HQR@2026"
+        ):
+            st.session_state.authenticated = True
+            st.rerun()
 
-    if pd.isna(var):
-        return "No Historical Data"
+        else:
+            st.error(
+                "Invalid Username or Password"
+            )
 
-    if var > sd:
-        return "Excellent"
-
-    elif -sd <= var <= sd:
-        return "Normal"
-
-    elif -30 <= var < -sd:
-        return "Warning"
-
-    else:
-        return "Critical"
-
-
-# ==================================
-# COLOR LOGIC
-# ==================================
-def color_status(value):
-
-    colors = {
-        "Excellent": "#90EE90",
-        "Normal": "#FFFACD",
-        "Warning": "#FFD580",
-        "Critical": "#FF7F7F",
-        "No Historical Data": "#D3D3D3"
-    }
-
-    return (
-        f"background-color: "
-        f"{colors.get(value, '')}"
-    )
-
-
-# ==================================
-# HISTORICAL DATABASE
-# ==================================
-st.sidebar.header(
-    "Historical Database"
-)
-
-historical_upload = (
-    st.sidebar.file_uploader(
-        "Upload / Replace Historical File",
-        type=["xlsx"]
-    )
-)
-
-# Save historical permanently
-if historical_upload is not None:
-
-    historical_df = pd.read_excel(
-        historical_upload,
-        header=[0, 1]
-    )
-
-    cols = []
-
-    for c1, c2 in (
-        historical_df.columns
-    ):
-
-        c1 = str(c1).strip()
-        c2 = str(c2).strip()
-
-        cols.append(
-            f"{c1}_{c2}"
-        )
-
-    historical_df.columns = cols
-
-    historical_df.to_pickle(
-        SAVE_PATH
-    )
-
-    st.sidebar.success(
-        "Historical Database Saved"
-    )
-
-# ==================================
-# LOAD SAVED DATABASE
-# ==================================
-if os.path.exists(
-    SAVE_PATH
-):
-
-    historical_df = (
-        pd.read_pickle(
-            SAVE_PATH
-        )
-    )
-
-    st.sidebar.success(
-        "Historical Database Loaded"
-    )
-
-else:
-
-    st.warning(
-        "Please upload "
-        "historical database once."
-    )
-
-    st.stop()
-
+st.stop()
 # ==================================
 # DAILY FILE
 # ==================================
