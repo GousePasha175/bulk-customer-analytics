@@ -100,45 +100,56 @@ div.stButton > button {
 # HEADER
 # ==================================
 
-left, right = st.columns([1, 4])
+# ==================================
+# HEADER (FINAL POLISHED VERSION)
+# ==================================
 
-with left:
+logo_col, text_col = st.columns([1, 5])
+
+with logo_col:
     st.image(
         "assets/logo.png",
-        width=180,
-        use_container_width=False
+        width=200
     )
 
-with right:
+with text_col:
 
     st.markdown("""
-    <div style="padding-top:20px;">
+    <div style="
+        height:170px;
+        display:flex;
+        flex-direction:column;
+        justify-content:center;
+    ">
 
     <h1 style="
         font-size:58px;
         margin:0;
         color:#2f3343;
         font-weight:700;
-        line-height:1.1;
+        line-height:1.05;
     ">
     Bulk Customer Business Analytics
     </h1>
 
-    <h3 style="
-        margin-top:8px;
-        font-size:30px;
-        color:#555;
-        font-weight:500;
+    <div style="
+        width:100%;
+        text-align:center;
+        margin-top:14px;
     ">
-    Headquarter Region - Telangana Postal Circle
-    </h3>
+        <span style="
+            font-size:30px;
+            color:#555;
+            font-weight:500;
+        ">
+        Headquarter Region - Telangana Postal Circle
+        </span>
+    </div>
 
     </div>
     """, unsafe_allow_html=True)
 
-# small spacing
 st.markdown("<br>", unsafe_allow_html=True)
-
 # ==================================
 # LOGIN
 # ==================================
@@ -173,10 +184,13 @@ with c2:
         label_visibility="collapsed"
     )
 
-    submit = st.button(
-        "Submit",
-        use_container_width=True
-    )
+    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+
+submit = st.button(
+    "Submit",
+    use_container_width=True,
+    type="primary"
+)
 
     if submit:
 
