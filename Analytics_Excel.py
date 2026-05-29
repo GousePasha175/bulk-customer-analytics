@@ -107,11 +107,23 @@ div.stButton > button {
 logo_col, text_col = st.columns([1, 5])
 
 with logo_col:
-    st.image(
-    "assets/logo.png",
-    width=230,
-    use_container_width=False
-)
+    st.markdown("""
+<div style="
+display:flex;
+justify-content:center;
+align-items:center;
+height:170px;
+overflow:visible;
+padding-top:10px;
+">
+    <img src="app/static/assets/logo.png"
+         style="
+         max-height:140px;
+         width:auto;
+         object-fit:contain;
+         ">
+</div>
+""", unsafe_allow_html=True)
 
 with text_col:
 
