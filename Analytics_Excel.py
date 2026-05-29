@@ -12,62 +12,66 @@ def check_password():
     if st.session_state.get("authenticated"):
         return True
 
-    # ---------- PAGE STYLE ----------
+    # ---------- CSS ----------
     st.markdown("""
     <style>
-    .block-container {
-        padding-top: 1rem;
-        padding-bottom: 1rem;
+
+    .block-container{
+        padding-top:1rem;
+        max-width:1200px;
     }
 
-    div[data-testid="stTextInput"]{
-        margin-bottom: -10px;
+    .login-box{
+        background:white;
+        padding:30px;
+        border-radius:15px;
+        box-shadow:0 2px 12px rgba(0,0,0,0.08);
     }
 
-    .login-box {
-        background-color: white;
-        padding: 30px;
-        border-radius: 15px;
-        box-shadow: 0px 2px 10px rgba(0,0,0,0.08);
-    }
     </style>
     """, unsafe_allow_html=True)
 
-    # ---------- HEADER ----------
-    col1, col2, col3 = st.columns([1,2,1])
+    # ---------- LOGO ----------
+    c1, c2, c3 = st.columns([1,2,1])
 
-    with col2:
-
+    with c2:
         st.image(
             "assets/logo.png",
-            width=120
+            width=220
         )
 
         st.markdown("""
         <h1 style="
         text-align:center;
-        margin-top:-10px;
+        font-size:56px;
+        margin-top:-15px;
         margin-bottom:0px;
-        font-size:42px;
-        font-weight:700;">
-        📊 Bulk Customer Business Analytics
+        font-weight:700;
+        white-space: nowrap;
+        ">
+        Bulk Customer Business Analytics
         </h1>
         """, unsafe_allow_html=True)
 
         st.markdown("""
-        <h4 style="
+        <h3 style="
         text-align:center;
-        color:#444;
-        margin-top:0px;
-        margin-bottom:25px;">
+        color:#555;
+        margin-top:5px;
+        margin-bottom:35px;
+        ">
         Headquarter Region - Telangana Postal Circle
-        </h4>
+        </h3>
         """, unsafe_allow_html=True)
 
-    # ---------- LOGIN CENTER ----------
-    left, center, right = st.columns([1.5,1.2,1.5])
+    # ---------- LOGIN BOX ----------
+    left, center, right = st.columns([1.3,1.2,1.3])
 
     with center:
+
+        st.markdown("""
+        <div class='login-box'>
+        """, unsafe_allow_html=True)
 
         st.markdown(
             "<h2 style='text-align:center;'>Login</h2>",
@@ -91,6 +95,9 @@ def check_password():
             "Submit",
             use_container_width=True
         )
+
+        st.markdown("</div>",
+                    unsafe_allow_html=True)
 
         if login:
 
