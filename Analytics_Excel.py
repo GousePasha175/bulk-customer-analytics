@@ -20,22 +20,13 @@ st.markdown("""
 <style>
 
 .block-container {
-    padding-top: 0rem !important;
+    padding-top: 3rem !important;
     padding-bottom: 0rem !important;
 }
 
 header {
     visibility: hidden;
     height: 0px !important;
-}
-
-/* Center everything vertically with small top margin */
-[data-testid="stAppViewContainer"] > section:first-child {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    min-height: 100vh;
-    padding-top: 2rem !important;
 }
 
 /* Compact text inputs */
@@ -112,19 +103,6 @@ if "authenticated" not in st.session_state:
 # LOGIN SECTION
 # ==========================
 if not st.session_state.authenticated:
-
-    # ---- Centered wrapper with top margin ----
-    st.markdown("""
-    <div style='
-        display:flex;
-        flex-direction:column;
-        align-items:center;
-        justify-content:center;
-        min-height:90vh;
-        padding-top:2rem;
-    '>
-    </div>
-    """, unsafe_allow_html=True)
 
     # Header row — logo + title, centered
     h1, h2, h3 = st.columns([1, 3, 1])
