@@ -305,9 +305,17 @@ master_file = st.sidebar.file_uploader(
 sd_percent = st.sidebar.slider("Deviation %", min_value=1, max_value=50, value=10)
 
 show_mode = st.sidebar.radio(
-    "Display Records",
-    ["All customers (include unmatched)", "Only customers in Master Data"],
-    index=0
+    "Filter Records",
+    [
+        "All records (mark unmatched as 'No Historical Data')",
+        "Only records present in Master Data"
+    ],
+    index=0,
+    help=(
+        "The daily file may cover a larger region. "
+        "Select 'Only records present in Master Data' to limit output "
+        "to customers your division has master data for."
+    )
 )
 
 # ---- Main Process ----
@@ -438,7 +446,7 @@ if daily_file and master_file:
         historical_match = historical_df[historical_df["CLEAN_ID"] == customer_id]
 
         # Apply show_mode filter
-        if historical_match.empty and show_mode == "Only customers in Master Data":
+        if historical_match.empty and show_mode == "Only records present in Master Data":
             continue
 
         # No historical data
