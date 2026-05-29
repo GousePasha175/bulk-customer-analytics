@@ -8,40 +8,79 @@ import streamlit as st
 from PIL import Image
 
 def check_password():
-    def password_entered():
-        if (
-            st.session_state["username"] == "admin"
-            and st.session_state["password"] == "HQR@2026"
-        ):
-            st.session_state["password_correct"] = True
-        else:
-            st.session_state["password_correct"] = False
 
-    if "password_correct" not in st.session_state:
-        st.title("HQR Bulk Customer Analytics Login")
-        st.text_input("Username", key="username")
-        st.text_input(
+    if st.session_state.get("authenticated"):
+        return True
+
+    # ---------- LOGO ----------
+    left, center, right = st.columns([1,2,1])
+
+    with center:
+        st.image("assets/logo.png", width=140)
+
+        st.markdown("""
+        <h1 style='text-align:center;
+        margin-top:-10px;
+        margin-bottom:0px;
+        font-size:42px;
+        font-weight:700;'>
+        Bulk Customer Business Analytics
+        </h1>
+        """, unsafe_allow_html=True)
+
+        st.markdown("""
+        <h3 style='text-align:center;
+        color:#444;
+        margin-top:0px;
+        margin-bottom:20px;'>
+        Headquarter Region - Telangana Postal Circle
+        </h3>
+        """, unsafe_allow_html=True)
+
+    # ---------- LOGIN BOX ----------
+    col1, col2, col3 = st.columns([1.2, 2, 1.2])
+
+    with col2:
+
+        st.markdown(
+            "<h2 style='text-align:center;'>Login</h2>",
+            unsafe_allow_html=True
+        )
+
+        username = st.text_input(
+            "Username",
+            placeholder="Enter Username"
+        )
+
+        password = st.text_input(
             "Password",
             type="password",
-            key="password",
-            on_change=password_entered,
+            placeholder="Enter Password"
         )
-        st.stop()
 
-    elif not st.session_state["password_correct"]:
-        st.error("Incorrect Username/Password")
-        st.text_input("Username", key="username")
-        st.text_input(
-            "Password",
-            type="password",
-            key="password",
-            on_change=password_entered,
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        login = st.button(
+            "Submit",
+            use_container_width=True
         )
-        st.stop()
 
-import streamlit as st
-from PIL import Image
+        if login:
+            if (
+                username == "admin"
+                and password == "HQR@2026"
+            ):
+                st.session_state.authenticated = True
+                st.rerun()
+            else:
+                st.error(
+                    "Invalid Username or Password"
+                )
 
+    st.stop()
+
+
+check_password()
 # ---------- PAGE CONFIG ----------
 st.set_page_config(
     page_title="Bulk Customer Analytics",
