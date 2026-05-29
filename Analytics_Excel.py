@@ -5,6 +5,7 @@ import calendar
 import os
 import io
 import streamlit as st
+from PIL import Image
 
 def check_password():
     def password_entered():
@@ -48,10 +49,25 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title(
-    "📊 Bulk Customer Business Analytics"
-)
+logo = Image.open("assets/logo.png")
 
+col1, col2 = st.columns([1, 7])
+
+with col1:
+    st.image(logo, width=100)
+
+with col2:
+    st.markdown("""
+    <h1 style='margin-bottom:0px;'>
+    📊 Bulk Customer Business Analytics
+    </h1>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <h3 style='margin-top:0px; color:#444;'>
+    Headquarter Region - Telangana Postal Circle
+    </h3>
+    """, unsafe_allow_html=True)
 st.subheader(
     "Headquarter Region - Telangana Postal Circle"
 )
