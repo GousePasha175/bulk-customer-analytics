@@ -10,7 +10,7 @@ from PIL import Image
 # PAGE CONFIG
 # ==========================
 st.set_page_config(
-    page_title="Bulk Customer Analytics",
+    page_title="Analytics (Business and Operations)",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -225,6 +225,14 @@ if "authenticated" not in st.session_state:
 # LOGIN PAGE
 # ==========================
 if not st.session_state.authenticated:
+    # Hide sidebar completely on login page
+    st.markdown("""
+    <style>
+    [data-testid="stSidebar"] { display: none !important; }
+    [data-testid="collapsedControl"] { display: none !important; }
+    </style>
+    """, unsafe_allow_html=True)
+
 
     h_l, h_c, h_r = st.columns([1, 3, 1])
     with h_c:
@@ -236,7 +244,7 @@ if not st.session_state.authenticated:
             st.markdown("""
             <div style='padding-top:4px;'>
             <h1 style='font-size:26px;margin-bottom:2px;color:#2f3343;font-weight:700;line-height:1.2;'>
-            Bulk Customer Business Analytics
+            Analytics (Business and Operations)
             </h1>
             <p style='font-size:15px;color:#555;margin-top:2px;margin-bottom:0;'>
             Headquarter Region - Telangana Postal Circle
