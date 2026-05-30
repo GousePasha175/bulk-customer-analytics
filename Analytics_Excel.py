@@ -253,17 +253,21 @@ if not st.session_state.authenticated:
                    margin-top:4px;margin-bottom:12px;'>Login</h2>
         """, unsafe_allow_html=True)
 
-        st.markdown("<p style='font-size:16px;margin-bottom:2px;font-weight:600;'>Username</p>",
-                    unsafe_allow_html=True)
-        username = st.text_input("", placeholder="Enter Username",
-                                 label_visibility="collapsed", key="usr")
+        with st.form("login_form"):
+            st.markdown("<p style='font-size:16px;margin-bottom:2px;font-weight:600;'>Username</p>",
+                        unsafe_allow_html=True)
+            username = st.text_input("", placeholder="Enter Username",
+                                     label_visibility="collapsed", key="usr")
 
-        st.markdown("<p style='font-size:16px;margin-bottom:2px;font-weight:600;'>Password</p>",
-                    unsafe_allow_html=True)
-        password = st.text_input("", type="password", placeholder="Enter Password",
-                                 label_visibility="collapsed", key="pwd")
+            st.markdown("<p style='font-size:16px;margin-bottom:2px;font-weight:600;'>Password</p>",
+                        unsafe_allow_html=True)
+            password = st.text_input("", type="password", placeholder="Enter Password",
+                                     label_visibility="collapsed", key="pwd")
 
-        if st.button("Submit", use_container_width=True, type="primary"):
+            submitted = st.form_submit_button("Submit", use_container_width=True,
+                                              type="primary")
+
+        if submitted:
             if username == "admin" and password == "HQR@2026":
                 st.session_state.authenticated = True
                 st.rerun()
@@ -307,7 +311,10 @@ master_file = st.sidebar.file_uploader(
 )
 
 # Show which master is active
-DEFAULT_MASTER = "data/master.xlsx"
+# Support both Master.xlsx and master.xlsx (case insensitive)
+import glob as _glob
+_master_candidates = _glob.glob("data/[Mm]aster.xlsx") + _glob.glob("data/[Mm]aster.xls")
+DEFAULT_MASTER = _master_candidates[0] if _master_candidates else "data/master.xlsx"
 if master_file:
     st.sidebar.success("✅ Using uploaded master data")
 elif os.path.exists(DEFAULT_MASTER):
