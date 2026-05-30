@@ -9,7 +9,11 @@ from PIL import Image
 # ==========================
 # PAGE CONFIG
 # ==========================
-st.set_page_config(page_title="Bulk Customer Analytics", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(
+    page_title="Bulk Customer Analytics",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
 # ==========================
 # CUSTOM CSS
@@ -294,15 +298,24 @@ st.sidebar.header("Upload Files")
 
 daily_file = st.sidebar.file_uploader(
     "Upload Daily / Period File (CSV)",
-    type=["xlsx", "xls", "csv"]
+    type=["csv"]
 )
 
 master_file = st.sidebar.file_uploader(
-    "Upload Master Data File",
+    "Upload Master Data File (optional — overrides default)",
     type=["xlsx", "xls", "csv"]
 )
 
-sd_percent = st.sidebar.slider("Deviation %", min_value=1, max_value=100, value=10)
+# Show which master is active
+DEFAULT_MASTER = "data/master.xlsx"
+if master_file:
+    st.sidebar.success("✅ Using uploaded master data")
+elif os.path.exists(DEFAULT_MASTER):
+    st.sidebar.info("📂 Using default master from repository")
+else:
+    st.sidebar.warning("⚠️ No master data found. Please upload one.")
+
+sd_percent = st.sidebar.slider("Deviation %", min_value=1, max_value=50, value=10)
 
 show_mode = st.sidebar.radio(
     "Filter Records",
@@ -319,18 +332,25 @@ show_mode = st.sidebar.radio(
 )
 
 # ---- Main Process ----
-if daily_file and master_file:
+if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
 
     # Read daily CSV
     daily_df = pd.read_csv(daily_file)
 
-    # Read & flatten master Excel into the format the original logic expects:
-    # one row per customer, columns: CUSTOMER ID | 2024-05 TRAFFIC | 2024-05 REVENUE ...
-    with st.spinner("Reading master data..."):
-        if master_file.name.endswith(".csv"):
-            historical_df = pd.read_csv(master_file)
+    # Load master — uploaded file takes priority, else use frozen repo copy
+    with st.spinner("Loading master data..."):
+        active_master = master_file if master_file else (DEFAULT_MASTER if os.path.exists(DEFAULT_MASTER) else None)
+        if active_master is None:
+            st.error("No master data available. Please upload a master file.")
+            st.stop()
+        if hasattr(active_master, "name"):
+            src_name = active_master.name
         else:
-            historical_df = parse_master_excel(master_file)
+            src_name = str(active_master)
+        if src_name.endswith(".csv"):
+            historical_df = pd.read_csv(active_master)
+        else:
+            historical_df = parse_master_excel(active_master)
 
     if historical_df.empty:
         st.error("Could not read master data. Please check the file.")
@@ -567,9 +587,10 @@ if daily_file and master_file:
         file_name="analytics_report.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-elif master_file and not daily_file:
-    st.info("Please also upload the Daily / Period CSV file in the sidebar.")
-elif daily_file and not master_file:
+
+elif daily_file and not master_file and not os.path.exists(DEFAULT_MASTER):
     st.info("Please also upload the Master Data file in the sidebar.")
+elif (master_file or os.path.exists(DEFAULT_MASTER)) and not daily_file:
+    st.info("Please also upload the Daily / Period CSV file in the sidebar.")
 else:
     st.info("Please upload both files in the sidebar to begin.")
