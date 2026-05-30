@@ -1,13 +1,13 @@
 import streamlit as st
 import pandas as pd
 import io, os, re
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 from PIL import Image
 
-st.set_page_config(
-    page_title="Digital Transactions",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="Digital Transactions", layout="wide", initial_sidebar_state="expanded")
 
 if "authenticated" not in st.session_state or not st.session_state.authenticated:
     st.warning("Please login from the main page.")
@@ -59,76 +59,96 @@ REGION_MAP = {
     30530016:"Headquarters Region", 30530017:"Headquarters Region",
     30600002:"Headquarters Region",
 }
+REGION_ORDER = ["Headquarters Region", "Hyderabad Region", "Other"]
 
 # ========== HELPERS ==========
-def strip_division(name):
-    """Remove trailing ' Division' (case-insensitive)"""
+def strip_div(name):
     return re.sub(r'\s*Division\s*$', '', str(name), flags=re.IGNORECASE).strip()
 
 def indian_num(val):
-    """Format number in Indian numbering system: 1,00,00,000"""
-    try:
-        v = int(round(float(val)))
-    except:
-        return str(val)
-    if v < 0:
-        return '-' + indian_num(-v)
+    try: v = int(round(float(val)))
+    except: return str(val)
+    if v < 0: return '-' + indian_num(-v)
     s = str(abs(v))
-    if len(s) <= 3:
-        return s
-    # last 3 digits, then groups of 2
-    result = s[-3:]
-    s = s[:-3]
-    while s:
-        result = s[-2:] + ',' + result
-        s = s[:-2]
+    if len(s) <= 3: return s
+    result = s[-3:]; s = s[:-3]
+    while s: result = s[-2:] + ',' + result; s = s[:-2]
     return result
 
 def indian_amt(val):
-    try:
-        v = float(val)
-    except:
-        return str(val)
-    # Format with Indian grouping, 0 decimal places
-    integer_part = int(round(v))
-    return '₹' + indian_num(integer_part)
+    try: v = float(val)
+    except: return str(val)
+    return '₹' + indian_num(int(round(v)))
 
 def n(row, col):
     v = pd.to_numeric(row.get(col, 0), errors='coerce')
     return 0 if pd.isna(v) else v
 
-def clr(pct, use_color=True):
-    if not use_color:
-        return "#ffffff"
+def clr_dig(pct, use_color=True):
+    if not use_color: return "#ffffff"
     p = float(pct)
     if p >= 60: return "#90EE90"
     if p >= 40: return "#FFFACD"
     return "#FF9999"
 
-# ========== PROCESS ==========
-def process(df_raw):
+def clr_cod(pct, use_color=True):
+    if not use_color: return "#ffffff"
+    p = float(pct)
+    if p >= 50: return "#90EE90"
+    if p >= 30: return "#FFFACD"
+    return "#FF9999"
+
+def th(label, cs=1, rs=1, cls=""):
+    a = f' colspan="{cs}"' if cs > 1 else ''
+    b = f' rowspan="{rs}"' if rs > 1 else ''
+    c = f' class="{cls}"' if cls else ''
+    return f'<th{a}{b}{c}>{label}</th>'
+
+def gv(d, k):
+    return d.get(k, 0) if isinstance(d, dict) else getattr(d, k, 0)
+
+def rsum(rdf):
+    num_cols = [c for c in rdf.columns if pd.api.types.is_numeric_dtype(rdf[c])]
+    s = {k: float(rdf[k].sum()) for k in num_cols}
+    tc = s.get('tot_c', 0); dc = s.get('dig_c', 0)
+    s['pct'] = round(dc / tc * 100, 2) if tc > 0 else 0.0
+    return s
+
+def region_rows(df, col_region, col_sort):
+    for region in REGION_ORDER:
+        sub = df[df[col_region] == region]
+        if not sub.empty:
+            yield region, sub.sort_values(col_sort, ascending=False)
+
+# ========== PROCESS BOOKING ==========
+def process_booking(df_raw):
     rows = []
     for _, r in df_raw.iterrows():
         oid = r.get("Office ID")
         if pd.isna(oid): continue
-        oid_i  = int(float(str(oid)))
+        oid_i = int(float(str(oid)))
         region = REGION_MAP.get(oid_i, "Other")
-        name   = strip_division(str(r.get("Office Name","")))
+        # Always use Office Name string — guard against numeric leakage
+        raw_name = str(r.get("Office Name", "")).strip()
+        try:
+            float(raw_name); raw_name = f"Office {oid_i}"
+        except: pass
+        name = strip_div(raw_name)
 
-        cash_c = n(r,"Cash (Cnt)");              cash_a = n(r,"Cash (Amt)")
-        dqr_c  = n(r,"DQR Scan (Cnt)");          dqr_a  = n(r,"DQR Scan (Amt)")
-        pc_c   = n(r,"SBIPOS-CARD (Cnt)");       pc_a   = n(r,"SBIPOS-CARD (Amt)")
-        pb_c   = n(r,"SBIPOS BHARATQR (Cnt)");   pb_a   = n(r,"SBIPOS BHARATQR (Amt)")
-        eb_c   = n(r,"SBIEPAY BHARATQR (Cnt)");  eb_a   = n(r,"SBIEPAY BHARATQR (Amt)")
+        cash_c = n(r,"Cash (Cnt)");               cash_a = n(r,"Cash (Amt)")
+        dqr_c  = n(r,"DQR Scan (Cnt)");           dqr_a  = n(r,"DQR Scan (Amt)")
+        pc_c   = n(r,"SBIPOS-CARD (Cnt)");        pc_a   = n(r,"SBIPOS-CARD (Amt)")
+        pb_c   = n(r,"SBIPOS BHARATQR (Cnt)");    pb_a   = n(r,"SBIPOS BHARATQR (Amt)")
+        eb_c   = n(r,"SBIEPAY BHARATQR (Cnt)");   eb_a   = n(r,"SBIEPAY BHARATQR (Amt)")
         eu_c   = n(r,"SBIEPAY UPI (Cnt)");        eu_a   = n(r,"SBIEPAY UPI (Amt)")
-        ec_c   = n(r,"SBIEPAY Credit Card (Cnt)");ec_a  = n(r,"SBIEPAY Credit Card (Amt)")
+        ec_c   = n(r,"SBIEPAY Credit Card (Cnt)");ec_a   = n(r,"SBIEPAY Credit Card (Amt)")
         ed_c   = n(r,"SBIEPAY Debit Card (Cnt)"); ed_a   = n(r,"SBIEPAY Debit Card (Amt)")
 
-        pos_c = pc_c+pb_c;           pos_a = pc_a+pb_a
-        pay_c = eb_c+eu_c+ec_c+ed_c; pay_a = eb_a+eu_a+ec_a+ed_a
-        dig_c = dqr_c+pos_c+pay_c;   dig_a = dqr_a+pos_a+pay_a
-        tot_c = cash_c+dig_c;         tot_a = cash_a+dig_a
-        pct   = round(dig_c/tot_c*100,2) if tot_c>0 else 0.0
+        pos_c = pc_c+pb_c;            pos_a = pc_a+pb_a
+        pay_c = eb_c+eu_c+ec_c+ed_c;  pay_a = eb_a+eu_a+ec_a+ed_a
+        dig_c = dqr_c+pos_c+pay_c;    dig_a = dqr_a+pos_a+pay_a
+        tot_c = cash_c+dig_c;          tot_a = cash_a+dig_a
+        pct   = round(dig_c/tot_c*100,2) if tot_c > 0 else 0.0
 
         rows.append(dict(
             oid=oid_i, region=region, name=name,
@@ -144,577 +164,595 @@ def process(df_raw):
         ))
     return pd.DataFrame(rows)
 
-def rsum(rdf):
-    s = {k: rdf[k].sum() for k in rdf.columns if pd.api.types.is_numeric_dtype(rdf[k])}
-    tc = s.get('tot_c',0); dc = s.get('dig_c',0)
-    s['pct'] = round(dc/tc*100,2) if tc>0 else 0.0
-    return s
+# ========== PROCESS COD ==========
+def process_cod(df_raw):
+    df = df_raw.copy()
+    df['oid_i']  = df['office-id'].apply(lambda x: int(float(str(x))) if pd.notna(x) else None)
+    df = df.dropna(subset=['oid_i'])
+    df['oid_i']  = df['oid_i'].astype(int)
+    df['region'] = df['oid_i'].map(REGION_MAP).fillna("Other")
+    df['name']   = df['office-name'].apply(lambda x: strip_div(str(x)))
+    agg = df.groupby(['oid_i','region','name'], as_index=False).agg(
+        digital=('no_digital_count','sum'),
+        cash=('no_cash_count','sum')
+    )
+    agg['total_cod'] = agg['digital'] + agg['cash']
+    agg['pct'] = agg.apply(
+        lambda r: round(r['digital']/r['total_cod']*100, 2) if r['total_cod'] > 0 else 0.0,
+        axis=1)
+    return agg
 
-def th(label, cs=1, rs=1, cls=""):
-    a = f' colspan="{cs}"' if cs>1 else ''
-    b = f' rowspan="{rs}"' if rs>1 else ''
-    c = f' class="{cls}"' if cls else ''
-    return f'<th{a}{b}{c}>{label}</th>'
+# ========== HTML TABLE — BOOKING ==========
+def booking_html(df, view, show_region, date_str, use_color, total_label):
+    tbl_id = {"Count":"tbl-cnt","Amount":"tbl-amt","Combined":"tbl-comb"}[view]
 
-def g(d, k):
-    return d.get(k,0) if isinstance(d,dict) else getattr(d,k,0)
+    if view == "Count":
+        h1  = th("Sl.",rs=2)+(th("Region",rs=2) if show_region else "")+th("Division",rs=2)
+        h1 += th("Cash",rs=2)+th("Digital QR (APT)",rs=2)
+        h1 += th("SBI POS Transactions",cs=3,cls="grp")
+        h1 += th("SBI ePAY Transactions",cs=5,cls="grp")
+        h1 += th("Non-Digital",rs=2)+th("Digital",rs=2)+th("Total",rs=2)
+        h1 += th("% of Digital Trnx",rs=2)
+        h2  = th("Card")+th("Bharat QR")+th("Total")
+        h2 += th("Bharat QR")+th("UPI")+th("Credit Card")+th("Debit Card")+th("Total")
+    elif view == "Amount":
+        h1  = th("Sl.",rs=2)+(th("Region",rs=2) if show_region else "")+th("Division",rs=2)
+        h1 += th("Cash (₹)",rs=2)+th("Digital QR (APT) (₹)",rs=2)
+        h1 += th("SBI POS Transactions (₹)",cs=3,cls="grp")
+        h1 += th("SBI ePAY Transactions (₹)",cs=5,cls="grp")
+        h1 += th("Non-Digital (₹)",rs=2)+th("Digital (₹)",rs=2)+th("Total (₹)",rs=2)
+        h1 += th("% of Digital Trnx",rs=2)
+        h2  = th("Card")+th("Bharat QR")+th("Total")
+        h2 += th("Bharat QR")+th("UPI")+th("Credit Card")+th("Debit Card")+th("Total")
+    else:
+        h1  = th("Sl.",rs=2)+(th("Region",rs=2) if show_region else "")+th("Division",rs=2)
+        h1 += th("Cash",cs=2,cls="grp")+th("Digital QR (APT)",cs=2,cls="grp")
+        h1 += th("SBI POS Transactions",cs=6,cls="grp")
+        h1 += th("SBI ePAY Transactions",cs=10,cls="grp")
+        h1 += th("Non-Digital",cs=2,cls="grp")+th("Digital",cs=2,cls="grp")
+        h1 += th("Total",cs=2,cls="grp")+th("% of Digital Trnx",cs=2,cls="grp")
+        h2  = th("Cnt")+th("₹")+th("Cnt")+th("₹")
+        h2 += th("Card(Cnt)")+th("Card(₹)")+th("BQR(Cnt)")+th("BQR(₹)")+th("Total(Cnt)")+th("Total(₹)")
+        h2 += th("BQR(Cnt)")+th("BQR(₹)")+th("UPI(Cnt)")+th("UPI(₹)")+th("CC(Cnt)")+th("CC(₹)")+th("DC(Cnt)")+th("DC(₹)")+th("Total(Cnt)")+th("Total(₹)")
+        h2 += th("Cnt")+th("₹")+th("Cnt")+th("₹")+th("Cnt")+th("₹")+th("Cnt")+th("₹")
 
-# ========== COUNT TABLE ==========
-def build_count(df, show_region, date_str, use_color):
-    h1  = th("Sl.",rs=2) + (th("Region",rs=2) if show_region else "") + th("Division",rs=2)
-    h1 += th("Cash",rs=2)
-    h1 += th("Digital QR (APT)",rs=2)
-    h1 += th("SBI POS Transactions",cs=3,cls="grp")
-    h1 += th("SBI ePAY Transactions",cs=5,cls="grp")
-    h1 += th("Non-Digital",rs=2) + th("Digital",rs=2) + th("Total",rs=2)
-    h1 += th("% of Digital Trnx",rs=2)
+    cap = {"Count":"Count/Transactions","Amount":"Amount (₹)","Combined":"Combined"}[view]
+    html = f'<div class="rpt-wrap" id="{tbl_id}"><table class="rpt">'
+    html += f'<caption>Digital Transaction Status – {cap} — {date_str}</caption>'
+    html += f'<thead><tr>{h1}</tr><tr>{h2}</tr></thead><tbody>'
 
-    h2  = th("Card") + th("Bharat QR") + th("Total")
-    h2 += th("Bharat QR") + th("UPI") + th("Credit Card") + th("Debit Card") + th("Total")
-
-    region_order = [r for r in ["Hyderabad Region","Headquarters Region","Other"]
-                    if r in df["region"].unique()]
-
-    def tds(d, label=None, rcls=""):
+    def cells(d):
+        pv = float(gv(d,"pct"))
         t = ""
-        if label is not None:
-            span = 2 if show_region else 1
-            t += f'<td colspan="{span}"></td><td class="lft"><b>{label}</b></td>'
-        t += f'<td>{indian_num(g(d,"cash_c"))}</td>'
-        t += f'<td>{indian_num(g(d,"dqr_c"))}</td>'
-        t += f'<td>{indian_num(g(d,"pc_c"))}</td>'
-        t += f'<td>{indian_num(g(d,"pb_c"))}</td>'
-        t += f'<td><b>{indian_num(g(d,"pos_c"))}</b></td>'
-        t += f'<td>{indian_num(g(d,"eb_c"))}</td>'
-        t += f'<td>{indian_num(g(d,"eu_c"))}</td>'
-        t += f'<td>{indian_num(g(d,"ec_c"))}</td>'
-        t += f'<td>{indian_num(g(d,"ed_c"))}</td>'
-        t += f'<td><b>{indian_num(g(d,"pay_c"))}</b></td>'
-        t += f'<td>{indian_num(g(d,"cash_c"))}</td>'
-        t += f'<td>{indian_num(g(d,"dig_c"))}</td>'
-        t += f'<td>{indian_num(g(d,"tot_c"))}</td>'
-        t += f'<td><b>{float(g(d,"pct")):.2f}%</b></td>'
-        rc = f' class="{rcls}"' if rcls else ''
-        return f'<tr{rc}>{t}</tr>\n'
-
-    html = f'''<div class="rpt-wrap" id="tbl-cnt">
-    <table class="rpt">
-    <caption>Digital Transaction Status – Count/Transactions — {date_str}</caption>
-    <thead><tr>{h1}</tr><tr>{h2}</tr></thead><tbody>'''
+        if view == "Count":
+            t += f'<td>{indian_num(gv(d,"cash_c"))}</td>'
+            t += f'<td>{indian_num(gv(d,"dqr_c"))}</td>'
+            t += f'<td>{indian_num(gv(d,"pc_c"))}</td><td>{indian_num(gv(d,"pb_c"))}</td>'
+            t += f'<td><b>{indian_num(gv(d,"pos_c"))}</b></td>'
+            t += f'<td>{indian_num(gv(d,"eb_c"))}</td><td>{indian_num(gv(d,"eu_c"))}</td>'
+            t += f'<td>{indian_num(gv(d,"ec_c"))}</td><td>{indian_num(gv(d,"ed_c"))}</td>'
+            t += f'<td><b>{indian_num(gv(d,"pay_c"))}</b></td>'
+            t += f'<td>{indian_num(gv(d,"cash_c"))}</td>'
+            t += f'<td>{indian_num(gv(d,"dig_c"))}</td>'
+            t += f'<td>{indian_num(gv(d,"tot_c"))}</td>'
+            t += f'<td><b>{pv:.2f}%</b></td>'
+        elif view == "Amount":
+            t += f'<td>{indian_amt(gv(d,"cash_a"))}</td>'
+            t += f'<td>{indian_amt(gv(d,"dqr_a"))}</td>'
+            t += f'<td>{indian_amt(gv(d,"pc_a"))}</td><td>{indian_amt(gv(d,"pb_a"))}</td>'
+            t += f'<td><b>{indian_amt(gv(d,"pos_a"))}</b></td>'
+            t += f'<td>{indian_amt(gv(d,"eb_a"))}</td><td>{indian_amt(gv(d,"eu_a"))}</td>'
+            t += f'<td>{indian_amt(gv(d,"ec_a"))}</td><td>{indian_amt(gv(d,"ed_a"))}</td>'
+            t += f'<td><b>{indian_amt(gv(d,"pay_a"))}</b></td>'
+            t += f'<td>{indian_amt(gv(d,"cash_a"))}</td>'
+            t += f'<td>{indian_amt(gv(d,"dig_a"))}</td>'
+            t += f'<td>{indian_amt(gv(d,"tot_a"))}</td>'
+            tc=float(gv(d,"tot_c")); dc=float(gv(d,"dig_c"))
+            t += f'<td><b>{round(dc/tc*100,2) if tc>0 else 0:.2f}%</b></td>'
+        else:
+            t += f'<td>{indian_num(gv(d,"cash_c"))}</td><td>{indian_amt(gv(d,"cash_a"))}</td>'
+            t += f'<td>{indian_num(gv(d,"dqr_c"))}</td><td>{indian_amt(gv(d,"dqr_a"))}</td>'
+            t += f'<td>{indian_num(gv(d,"pc_c"))}</td><td>{indian_amt(gv(d,"pc_a"))}</td>'
+            t += f'<td>{indian_num(gv(d,"pb_c"))}</td><td>{indian_amt(gv(d,"pb_a"))}</td>'
+            t += f'<td><b>{indian_num(gv(d,"pos_c"))}</b></td><td><b>{indian_amt(gv(d,"pos_a"))}</b></td>'
+            t += f'<td>{indian_num(gv(d,"eb_c"))}</td><td>{indian_amt(gv(d,"eb_a"))}</td>'
+            t += f'<td>{indian_num(gv(d,"eu_c"))}</td><td>{indian_amt(gv(d,"eu_a"))}</td>'
+            t += f'<td>{indian_num(gv(d,"ec_c"))}</td><td>{indian_amt(gv(d,"ec_a"))}</td>'
+            t += f'<td>{indian_num(gv(d,"ed_c"))}</td><td>{indian_amt(gv(d,"ed_a"))}</td>'
+            t += f'<td><b>{indian_num(gv(d,"pay_c"))}</b></td><td><b>{indian_amt(gv(d,"pay_a"))}</b></td>'
+            t += f'<td>{indian_num(gv(d,"cash_c"))}</td><td>{indian_amt(gv(d,"cash_a"))}</td>'
+            t += f'<td>{indian_num(gv(d,"dig_c"))}</td><td>{indian_amt(gv(d,"dig_a"))}</td>'
+            t += f'<td>{indian_num(gv(d,"tot_c"))}</td><td>{indian_amt(gv(d,"tot_a"))}</td>'
+            tc=float(gv(d,"tot_c")); dc=float(gv(d,"dig_c"))
+            ta=float(gv(d,"tot_a")); da=float(gv(d,"dig_a"))
+            pc=round(dc/tc*100,2) if tc>0 else 0.0
+            pa=round(da/ta*100,2) if ta>0 else 0.0
+            t += f'<td><b>{pc:.2f}%</b></td><td><b>{pa:.2f}%</b></td>'
+        return t
 
     sl = 1
-    for region in region_order:
-        rdf = df[df["region"]==region].sort_values("pct",ascending=False)
+    for region, rdf in region_rows(df, "region", "pct"):
         for _, row in rdf.iterrows():
-            bg = clr(row["pct"], use_color)
+            bg = clr_dig(row["pct"], use_color)
             pre = f'<td>{sl}</td>'
             if show_region: pre += f'<td>{row["region"]}</td>'
             pre += f'<td class="lft">{row["name"]}</td>'
-            # data cells without wrapping tr
-            inner = tds(row)[4:-6]
-            html += f'<tr style="background:{bg};">{pre}{inner}</tr>\n'
+            html += f'<tr style="background:{bg};">{pre}{cells(row)}</tr>\n'
             sl += 1
-        s = rsum(rdf)
-        # region label only (no "TOTAL —")
-        html += tds(s, label=region, rcls="rtot")
+        s = rsum(rdf); s["name"] = region
+        span = 2 if show_region else 1
+        html += f'<tr class="rtot"><td colspan="{span}"></td><td class="lft"><b>{region}</b></td>{cells(s)}</tr>\n'
 
-    gt = rsum(df)
-    html += tds(gt, label="Total", rcls="gtot")
+    gt = rsum(df); gt["name"] = total_label
+    span = 2 if show_region else 1
+    html += f'<tr class="gtot"><td colspan="{span}"></td><td class="lft"><b>{total_label}</b></td>{cells(gt)}</tr>\n'
     html += "</tbody></table></div>"
     return html
 
-# ========== AMOUNT TABLE ==========
-def build_amount(df, show_region, date_str, use_color):
-    h1  = th("Sl.",rs=2) + (th("Region",rs=2) if show_region else "") + th("Division",rs=2)
-    h1 += th("Cash (₹)",rs=2)
-    h1 += th("Digital QR (APT) (₹)",rs=2)
-    h1 += th("SBI POS Transactions (₹)",cs=3,cls="grp")
-    h1 += th("SBI ePAY Transactions (₹)",cs=5,cls="grp")
-    h1 += th("Non-Digital (₹)",rs=2) + th("Digital (₹)",rs=2) + th("Total (₹)",rs=2)
-    h1 += th("% of Digital Trnx",rs=2)
+# ========== HTML TABLE — COD ==========
+def cod_html(df, show_region, date_str, use_color, total_label):
+    h  = th("Sl.") + (th("Region") if show_region else "") + th("Division")
+    h += th("Total COD Delivered") + th("Digital Trnx.") + th("Cash Trnx.") + th("% Digital")
 
-    h2  = th("Card") + th("Bharat QR") + th("Total")
-    h2 += th("Bharat QR") + th("UPI") + th("Credit Card") + th("Debit Card") + th("Total")
-
-    region_order = [r for r in ["Hyderabad Region","Headquarters Region","Other"]
-                    if r in df["region"].unique()]
-
-    def tds(d, label=None, rcls=""):
-        t = ""
-        if label is not None:
-            span = 2 if show_region else 1
-            t += f'<td colspan="{span}"></td><td class="lft"><b>{label}</b></td>'
-        t += f'<td>{indian_amt(g(d,"cash_a"))}</td>'
-        t += f'<td>{indian_amt(g(d,"dqr_a"))}</td>'
-        t += f'<td>{indian_amt(g(d,"pc_a"))}</td>'
-        t += f'<td>{indian_amt(g(d,"pb_a"))}</td>'
-        t += f'<td><b>{indian_amt(g(d,"pos_a"))}</b></td>'
-        t += f'<td>{indian_amt(g(d,"eb_a"))}</td>'
-        t += f'<td>{indian_amt(g(d,"eu_a"))}</td>'
-        t += f'<td>{indian_amt(g(d,"ec_a"))}</td>'
-        t += f'<td>{indian_amt(g(d,"ed_a"))}</td>'
-        t += f'<td><b>{indian_amt(g(d,"pay_a"))}</b></td>'
-        t += f'<td>{indian_amt(g(d,"cash_a"))}</td>'
-        t += f'<td>{indian_amt(g(d,"dig_a"))}</td>'
-        t += f'<td>{indian_amt(g(d,"tot_a"))}</td>'
-        tc = float(g(d,"tot_c")); dc = float(g(d,"dig_c"))
-        pct = round(dc/tc*100,2) if tc>0 else 0.0
-        t += f'<td><b>{pct:.2f}%</b></td>'
-        rc = f' class="{rcls}"' if rcls else ''
-        return f'<tr{rc}>{t}</tr>\n'
-
-    html = f'''<div class="rpt-wrap" id="tbl-amt">
-    <table class="rpt">
-    <caption>Digital Transaction Status – Amount (₹) — {date_str}</caption>
-    <thead><tr>{h1}</tr><tr>{h2}</tr></thead><tbody>'''
+    html  = '<div class="rpt-wrap" id="tbl-cod"><table class="rpt">'
+    html += f'<caption>Status of COD Digital Transactions — {date_str}</caption>'
+    html += f'<thead><tr>{h}</tr></thead><tbody>'
 
     sl = 1
-    for region in region_order:
-        rdf = df[df["region"]==region].sort_values("pct",ascending=False)
+    for region, rdf in region_rows(df, "region", "pct"):
         for _, row in rdf.iterrows():
-            bg = clr(row["pct"], use_color)
+            bg = clr_cod(row["pct"], use_color)
             pre = f'<td>{sl}</td>'
             if show_region: pre += f'<td>{row["region"]}</td>'
             pre += f'<td class="lft">{row["name"]}</td>'
-            inner = tds(row)[4:-6]
-            html += f'<tr style="background:{bg};">{pre}{inner}</tr>\n'
+            pre += f'<td>{indian_num(row["total_cod"])}</td>'
+            pre += f'<td>{indian_num(row["digital"])}</td>'
+            pre += f'<td>{indian_num(row["cash"])}</td>'
+            pre += f'<td><b>{row["pct"]:.2f}%</b></td>'
+            html += f'<tr style="background:{bg};">{pre}</tr>\n'
             sl += 1
-        s = rsum(rdf)
-        html += tds(s, label=region, rcls="rtot")
+        tc=rdf["total_cod"].sum(); dc=rdf["digital"].sum(); cc=rdf["cash"].sum()
+        pr=round(dc/tc*100,2) if tc>0 else 0.0
+        span = 2 if show_region else 1
+        html += (f'<tr class="rtot"><td colspan="{span}"></td>'
+                 f'<td class="lft"><b>{region}</b></td>'
+                 f'<td>{indian_num(tc)}</td><td>{indian_num(dc)}</td>'
+                 f'<td>{indian_num(cc)}</td><td><b>{pr:.2f}%</b></td></tr>\n')
 
-    gt = rsum(df)
-    html += tds(gt, label="Total", rcls="gtot")
+    tc=df["total_cod"].sum(); dc=df["digital"].sum(); cc=df["cash"].sum()
+    pg=round(dc/tc*100,2) if tc>0 else 0.0
+    span = 2 if show_region else 1
+    html += (f'<tr class="gtot"><td colspan="{span}"></td>'
+             f'<td class="lft"><b>{total_label}</b></td>'
+             f'<td>{indian_num(tc)}</td><td>{indian_num(dc)}</td>'
+             f'<td>{indian_num(cc)}</td><td><b>{pg:.2f}%</b></td></tr>\n')
     html += "</tbody></table></div>"
     return html
 
-# ========== COMBINED TABLE ==========
-def build_combined(df, show_region, date_str, use_color):
-    h1  = th("Sl.",rs=2) + (th("Region",rs=2) if show_region else "") + th("Division",rs=2)
-    h1 += th("Cash",cs=2,cls="grp")
-    h1 += th("Digital QR (APT)",cs=2,cls="grp")
-    h1 += th("SBI POS Transactions",cs=6,cls="grp")
-    h1 += th("SBI ePAY Transactions",cs=10,cls="grp")
-    h1 += th("Non-Digital",cs=2,cls="grp")
-    h1 += th("Digital",cs=2,cls="grp")
-    h1 += th("Total",cs=2,cls="grp")
-    h1 += th("% of Digital Trnx",cs=2,cls="grp")
+# ========== SERVER-SIDE PNG ==========
+def df_to_png(df_display, title, col_colors, header_color="#2f3343"):
+    """Render a DataFrame as a PNG using matplotlib"""
+    import matplotlib.pyplot as plt
+    import matplotlib.colors as mcolors
 
-    h2  = th("Cnt") + th("₹")
-    h2 += th("Cnt") + th("₹")
-    h2 += th("Card(Cnt)") + th("Card(₹)") + th("Bharat QR(Cnt)") + th("Bharat QR(₹)") + th("Total(Cnt)") + th("Total(₹)")
-    h2 += th("BQR(Cnt)") + th("BQR(₹)") + th("UPI(Cnt)") + th("UPI(₹)") + th("CC(Cnt)") + th("CC(₹)") + th("DC(Cnt)") + th("DC(₹)") + th("Total(Cnt)") + th("Total(₹)")
-    h2 += th("Cnt") + th("₹")
-    h2 += th("Cnt") + th("₹")
-    h2 += th("Cnt") + th("₹")
-    h2 += th("Cnt") + th("₹")
+    nrows, ncols = df_display.shape
+    fig_w = max(ncols * 1.4, 10)
+    fig_h = max((nrows + 2) * 0.35, 3)
 
-    region_order = [r for r in ["Hyderabad Region","Headquarters Region","Other"]
-                    if r in df["region"].unique()]
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h))
+    ax.axis('off')
 
-    def tds(d, label=None, rcls=""):
-        t = ""
-        if label is not None:
-            span = 2 if show_region else 1
-            t += f'<td colspan="{span}"></td><td class="lft"><b>{label}</b></td>'
-        t += f'<td>{indian_num(g(d,"cash_c"))}</td><td>{indian_amt(g(d,"cash_a"))}</td>'
-        t += f'<td>{indian_num(g(d,"dqr_c"))}</td><td>{indian_amt(g(d,"dqr_a"))}</td>'
-        t += f'<td>{indian_num(g(d,"pc_c"))}</td><td>{indian_amt(g(d,"pc_a"))}</td>'
-        t += f'<td>{indian_num(g(d,"pb_c"))}</td><td>{indian_amt(g(d,"pb_a"))}</td>'
-        t += f'<td><b>{indian_num(g(d,"pos_c"))}</b></td><td><b>{indian_amt(g(d,"pos_a"))}</b></td>'
-        t += f'<td>{indian_num(g(d,"eb_c"))}</td><td>{indian_amt(g(d,"eb_a"))}</td>'
-        t += f'<td>{indian_num(g(d,"eu_c"))}</td><td>{indian_amt(g(d,"eu_a"))}</td>'
-        t += f'<td>{indian_num(g(d,"ec_c"))}</td><td>{indian_amt(g(d,"ec_a"))}</td>'
-        t += f'<td>{indian_num(g(d,"ed_c"))}</td><td>{indian_amt(g(d,"ed_a"))}</td>'
-        t += f'<td><b>{indian_num(g(d,"pay_c"))}</b></td><td><b>{indian_amt(g(d,"pay_a"))}</b></td>'
-        t += f'<td>{indian_num(g(d,"cash_c"))}</td><td>{indian_amt(g(d,"cash_a"))}</td>'
-        t += f'<td>{indian_num(g(d,"dig_c"))}</td><td>{indian_amt(g(d,"dig_a"))}</td>'
-        t += f'<td>{indian_num(g(d,"tot_c"))}</td><td>{indian_amt(g(d,"tot_a"))}</td>'
-        tc = float(g(d,"tot_c")); dc = float(g(d,"dig_c"))
-        ta = float(g(d,"tot_a")); da = float(g(d,"dig_a"))
-        pc = round(dc/tc*100,2) if tc>0 else 0.0
-        pa = round(da/ta*100,2) if ta>0 else 0.0
-        t += f'<td><b>{pc:.2f}%</b></td><td><b>{pa:.2f}%</b></td>'
-        rc = f' class="{rcls}"' if rcls else ''
-        return f'<tr{rc}>{t}</tr>\n'
+    # Title
+    fig.text(0.5, 0.98, title, ha='center', va='top',
+             fontsize=11, fontweight='bold', color='#cc0000',
+             bbox=dict(facecolor='#FFD700', edgecolor='none', pad=4))
 
-    html = f'''<div class="rpt-wrap" id="tbl-comb">
-    <table class="rpt">
-    <caption>Digital Transaction Status – Combined — {date_str}</caption>
-    <thead><tr>{h1}</tr><tr>{h2}</tr></thead><tbody>'''
+    tbl = ax.table(
+        cellText=df_display.values,
+        colLabels=df_display.columns,
+        loc='center',
+        cellLoc='center'
+    )
+    tbl.auto_set_font_size(False)
+    tbl.set_fontsize(8)
+    tbl.auto_set_column_width(col=list(range(ncols)))
+
+    # Header row style
+    hdr_rgb = mcolors.to_rgba(header_color)
+    for ci in range(ncols):
+        cell = tbl[0, ci]
+        cell.set_facecolor(header_color)
+        cell.set_text_props(color='white', fontweight='bold')
+        cell.set_edgecolor('#555555')
+
+    # Data row colors
+    for ri in range(nrows):
+        bg = col_colors[ri] if ri < len(col_colors) else "#ffffff"
+        for ci in range(ncols):
+            cell = tbl[ri+1, ci]
+            cell.set_facecolor(bg)
+            cell.set_edgecolor('#bbbbbb')
+            if ci == 0:
+                cell.set_text_props(ha='left')
+
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', dpi=150, bbox_inches='tight', pad_inches=0.1)
+    buf.seek(0)
+    plt.close(fig)
+    return buf.getvalue()
+
+def booking_png(df, view, show_region, date_str, use_color, total_label):
+    """Build PNG for booking report"""
+    rows_data = []
+    colors    = []
 
     sl = 1
-    for region in region_order:
-        rdf = df[df["region"]==region].sort_values("pct",ascending=False)
+    for region, rdf in region_rows(df, "region", "pct"):
         for _, row in rdf.iterrows():
-            bg = clr(row["pct"], use_color)
-            pre = f'<td>{sl}</td>'
-            if show_region: pre += f'<td>{row["region"]}</td>'
-            pre += f'<td class="lft">{row["name"]}</td>'
-            inner = tds(row)[4:-6]
-            html += f'<tr style="background:{bg};">{pre}{inner}</tr>\n'
+            r = dict(
+                Sl=sl,
+                Division=row["name"],
+            )
+            if show_region: r = {"Sl":sl,"Region":row["region"],"Division":row["name"]}|{}; r["Division"]=row["name"]
+            if view == "Count":
+                r.update({"Cash":indian_num(row["cash_c"]),"DQR":indian_num(row["dqr_c"]),
+                           "POS Card":indian_num(row["pc_c"]),"POS BQR":indian_num(row["pb_c"]),"POS Tot":indian_num(row["pos_c"]),
+                           "ePAY BQR":indian_num(row["eb_c"]),"UPI":indian_num(row["eu_c"]),"CC":indian_num(row["ec_c"]),"DC":indian_num(row["ed_c"]),"ePAY Tot":indian_num(row["pay_c"]),
+                           "Non-Dig":indian_num(row["cash_c"]),"Digital":indian_num(row["dig_c"]),"Total":indian_num(row["tot_c"]),"% Digital":f'{row["pct"]:.2f}%'})
+            elif view == "Amount":
+                r.update({"Cash(₹)":indian_amt(row["cash_a"]),"DQR(₹)":indian_amt(row["dqr_a"]),
+                           "POS Card(₹)":indian_amt(row["pc_a"]),"POS BQR(₹)":indian_amt(row["pb_a"]),"POS Tot(₹)":indian_amt(row["pos_a"]),
+                           "BQR(₹)":indian_amt(row["eb_a"]),"UPI(₹)":indian_amt(row["eu_a"]),"CC(₹)":indian_amt(row["ec_a"]),"DC(₹)":indian_amt(row["ed_a"]),"ePAY Tot(₹)":indian_amt(row["pay_a"]),
+                           "Non-Dig(₹)":indian_amt(row["cash_a"]),"Digital(₹)":indian_amt(row["dig_a"]),"Total(₹)":indian_amt(row["tot_a"]),"% Digital":f'{row["pct"]:.2f}%'})
+            else:
+                r.update({"Cash":indian_num(row["cash_c"]),"DQR":indian_num(row["dqr_c"]),
+                           "POS Tot":indian_num(row["pos_c"]),"ePAY Tot":indian_num(row["pay_c"]),
+                           "Digital":indian_num(row["dig_c"]),"Digital(₹)":indian_amt(row["dig_a"]),
+                           "Total":indian_num(row["tot_c"]),"Total(₹)":indian_amt(row["tot_a"]),"% Digital":f'{row["pct"]:.2f}%'})
+            rows_data.append(r)
+            colors.append(clr_dig(row["pct"], use_color))
             sl += 1
+        # region subtotal
         s = rsum(rdf)
-        html += tds(s, label=region, rcls="rtot")
+        r = {"Sl":"","Division":region}
+        if view=="Count":
+            r.update({"Cash":indian_num(s.get("cash_c",0)),"DQR":indian_num(s.get("dqr_c",0)),
+                       "POS Card":indian_num(s.get("pc_c",0)),"POS BQR":indian_num(s.get("pb_c",0)),"POS Tot":indian_num(s.get("pos_c",0)),
+                       "ePAY BQR":indian_num(s.get("eb_c",0)),"UPI":indian_num(s.get("eu_c",0)),"CC":indian_num(s.get("ec_c",0)),"DC":indian_num(s.get("ed_c",0)),"ePAY Tot":indian_num(s.get("pay_c",0)),
+                       "Non-Dig":indian_num(s.get("cash_c",0)),"Digital":indian_num(s.get("dig_c",0)),"Total":indian_num(s.get("tot_c",0)),"% Digital":f'{s.get("pct",0):.2f}%'})
+        elif view=="Amount":
+            r.update({"Cash(₹)":indian_amt(s.get("cash_a",0)),"DQR(₹)":indian_amt(s.get("dqr_a",0)),
+                       "POS Card(₹)":indian_amt(s.get("pc_a",0)),"POS BQR(₹)":indian_amt(s.get("pb_a",0)),"POS Tot(₹)":indian_amt(s.get("pos_a",0)),
+                       "BQR(₹)":indian_amt(s.get("eb_a",0)),"UPI(₹)":indian_amt(s.get("eu_a",0)),"CC(₹)":indian_amt(s.get("ec_a",0)),"DC(₹)":indian_amt(s.get("ed_a",0)),"ePAY Tot(₹)":indian_amt(s.get("pay_a",0)),
+                       "Non-Dig(₹)":indian_amt(s.get("cash_a",0)),"Digital(₹)":indian_amt(s.get("dig_a",0)),"Total(₹)":indian_amt(s.get("tot_a",0)),"% Digital":f'{s.get("pct",0):.2f}%'})
+        else:
+            tc2=float(s.get("tot_c",0)); dc2=float(s.get("dig_c",0))
+            ta2=float(s.get("tot_a",0)); da2=float(s.get("dig_a",0))
+            r.update({"Cash":indian_num(s.get("cash_c",0)),"DQR":indian_num(s.get("dqr_c",0)),
+                       "POS Tot":indian_num(s.get("pos_c",0)),"ePAY Tot":indian_num(s.get("pay_c",0)),
+                       "Digital":indian_num(s.get("dig_c",0)),"Digital(₹)":indian_amt(s.get("dig_a",0)),
+                       "Total":indian_num(s.get("tot_c",0)),"Total(₹)":indian_amt(s.get("tot_a",0)),
+                       "% Digital":f'{round(dc2/tc2*100,2) if tc2>0 else 0:.2f}%'})
+        rows_data.append(r); colors.append("#b8d4f0")
 
+    # grand total
     gt = rsum(df)
-    html += tds(gt, label="Total", rcls="gtot")
-    html += "</tbody></table></div>"
-    return html
+    r = {"Sl":"","Division":total_label}
+    if view=="Count":
+        r.update({"Cash":indian_num(gt.get("cash_c",0)),"DQR":indian_num(gt.get("dqr_c",0)),
+                   "POS Card":indian_num(gt.get("pc_c",0)),"POS BQR":indian_num(gt.get("pb_c",0)),"POS Tot":indian_num(gt.get("pos_c",0)),
+                   "ePAY BQR":indian_num(gt.get("eb_c",0)),"UPI":indian_num(gt.get("eu_c",0)),"CC":indian_num(gt.get("ec_c",0)),"DC":indian_num(gt.get("ed_c",0)),"ePAY Tot":indian_num(gt.get("pay_c",0)),
+                   "Non-Dig":indian_num(gt.get("cash_c",0)),"Digital":indian_num(gt.get("dig_c",0)),"Total":indian_num(gt.get("tot_c",0)),"% Digital":f'{gt.get("pct",0):.2f}%'})
+    elif view=="Amount":
+        r.update({"Cash(₹)":indian_amt(gt.get("cash_a",0)),"DQR(₹)":indian_amt(gt.get("dqr_a",0)),
+                   "POS Card(₹)":indian_amt(gt.get("pc_a",0)),"POS BQR(₹)":indian_amt(gt.get("pb_a",0)),"POS Tot(₹)":indian_amt(gt.get("pos_a",0)),
+                   "BQR(₹)":indian_amt(gt.get("eb_a",0)),"UPI(₹)":indian_amt(gt.get("eu_a",0)),"CC(₹)":indian_amt(gt.get("ec_a",0)),"DC(₹)":indian_amt(gt.get("ed_a",0)),"ePAY Tot(₹)":indian_amt(gt.get("pay_a",0)),
+                   "Non-Dig(₹)":indian_amt(gt.get("cash_a",0)),"Digital(₹)":indian_amt(gt.get("dig_a",0)),"Total(₹)":indian_amt(gt.get("tot_a",0)),"% Digital":f'{gt.get("pct",0):.2f}%'})
+    else:
+        tc2=float(gt.get("tot_c",0)); dc2=float(gt.get("dig_c",0))
+        ta2=float(gt.get("tot_a",0)); da2=float(gt.get("dig_a",0))
+        r.update({"Cash":indian_num(gt.get("cash_c",0)),"DQR":indian_num(gt.get("dqr_c",0)),
+                   "POS Tot":indian_num(gt.get("pos_c",0)),"ePAY Tot":indian_num(gt.get("pay_c",0)),
+                   "Digital":indian_num(gt.get("dig_c",0)),"Digital(₹)":indian_amt(gt.get("dig_a",0)),
+                   "Total":indian_num(gt.get("tot_c",0)),"Total(₹)":indian_amt(gt.get("tot_a",0)),
+                   "% Digital":f'{round(dc2/tc2*100,2) if tc2>0 else 0:.2f}%'})
+    rows_data.append(r); colors.append("#FFD700")
+
+    dfd = pd.DataFrame(rows_data)
+    cap = {"Count":"Count/Transactions","Amount":"Amount (₹)","Combined":"Combined"}[view]
+    title = f"Digital Transaction Status – {cap} — {date_str}"
+    return df_to_png(dfd, title, colors)
+
+def cod_png(df, show_region, date_str, use_color, total_label):
+    rows_data = []; colors = []
+    sl = 1
+    for region, rdf in region_rows(df, "region", "pct"):
+        for _, row in rdf.iterrows():
+            r = {"Sl":sl,"Division":row["name"],
+                 "Total COD":indian_num(row["total_cod"]),
+                 "Digital":indian_num(row["digital"]),
+                 "Cash":indian_num(row["cash"]),
+                 "% Digital":f'{row["pct"]:.2f}%'}
+            rows_data.append(r)
+            colors.append(clr_cod(row["pct"], use_color))
+            sl += 1
+        tc=rdf["total_cod"].sum(); dc=rdf["digital"].sum(); cc=rdf["cash"].sum()
+        pr=round(dc/tc*100,2) if tc>0 else 0.0
+        rows_data.append({"Sl":"","Division":region,"Total COD":indian_num(tc),
+                           "Digital":indian_num(dc),"Cash":indian_num(cc),"% Digital":f'{pr:.2f}%'})
+        colors.append("#b8d4f0")
+    tc=df["total_cod"].sum(); dc=df["digital"].sum(); cc=df["cash"].sum()
+    pg=round(dc/tc*100,2) if tc>0 else 0.0
+    rows_data.append({"Sl":"","Division":total_label,"Total COD":indian_num(tc),
+                       "Digital":indian_num(dc),"Cash":indian_num(cc),"% Digital":f'{pg:.2f}%'})
+    colors.append("#FFD700")
+    dfd = pd.DataFrame(rows_data)
+    return df_to_png(dfd, f"Status of COD Digital Transactions — {date_str}", colors)
 
 # ========== EXCEL BUILDER ==========
-def build_excel(df, view, show_region, date_str, use_color):
+def build_excel(df, view, show_region, date_str, use_color, total_label, mode="booking"):
     out = io.BytesIO()
     with pd.ExcelWriter(out, engine="xlsxwriter") as writer:
         wb = writer.book
+        def mkfmt(**kw):
+            base={"border":1,"align":"center","valign":"vcenter","text_wrap":True}
+            base.update(kw); return wb.add_format(base)
+        hdr  = mkfmt(bold=True,bg_color="#2f3343",font_color="#FFFFFF")
+        grpf = mkfmt(bold=True,bg_color="#1a1f2e",font_color="#FFFFFF")
+        cell = mkfmt(); lft=mkfmt(align="left"); boldf=mkfmt(bold=True)
+        rtot = mkfmt(bold=True,bg_color="#b8d4f0")
+        rlft = mkfmt(bold=True,bg_color="#b8d4f0",align="left")
+        gtot = mkfmt(bold=True,bg_color="#FFD700")
+        glft = mkfmt(bold=True,bg_color="#FFD700",align="left")
+        def cf_dig(pct):
+            if not use_color: return cell
+            p=float(pct)
+            return mkfmt(bg_color="#90EE90" if p>=60 else ("#FFFACD" if p>=40 else "#FF9999"))
+        def cf_dig_l(pct):
+            if not use_color: return lft
+            p=float(pct)
+            return mkfmt(bg_color="#90EE90" if p>=60 else ("#FFFACD" if p>=40 else "#FF9999"),align="left")
+        def cf_cod(pct):
+            if not use_color: return cell
+            p=float(pct)
+            return mkfmt(bg_color="#90EE90" if p>=50 else ("#FFFACD" if p>=30 else "#FF9999"))
+        def cf_cod_l(pct):
+            if not use_color: return lft
+            p=float(pct)
+            return mkfmt(bg_color="#90EE90" if p>=50 else ("#FFFACD" if p>=30 else "#FF9999"),align="left")
 
-        # ---- formats ----
-        hdr_fmt  = wb.add_format({"bold":True,"bg_color":"#2f3343","font_color":"#FFFFFF",
-                                   "border":1,"align":"center","valign":"vcenter","text_wrap":True})
-        grp_fmt  = wb.add_format({"bold":True,"bg_color":"#1a1f2e","font_color":"#FFFFFF",
-                                   "border":1,"align":"center","valign":"vcenter","text_wrap":True})
-        cell_fmt = wb.add_format({"border":1,"align":"center","valign":"vcenter"})
-        lft_fmt  = wb.add_format({"border":1,"align":"left","valign":"vcenter"})
-        bold_fmt = wb.add_format({"border":1,"align":"center","valign":"vcenter","bold":True})
-        rtot_fmt = wb.add_format({"border":1,"align":"center","valign":"vcenter",
-                                   "bold":True,"bg_color":"#b8d4f0"})
-        rtot_lft = wb.add_format({"border":1,"align":"left","valign":"vcenter",
-                                   "bold":True,"bg_color":"#b8d4f0"})
-        gtot_fmt = wb.add_format({"border":1,"align":"center","valign":"vcenter",
-                                   "bold":True,"bg_color":"#FFD700"})
-        gtot_lft = wb.add_format({"border":1,"align":"left","valign":"vcenter",
-                                   "bold":True,"bg_color":"#FFD700"})
+        ws_name = {"Count":"Count","Amount":"Amount","Combined":"Combined","COD":"COD"}[view]
+        ws = wb.add_worksheet(ws_name); writer.sheets[ws_name] = ws
+        ws.set_row(0,30); ws.set_row(1,25)
 
-        def color_fmt(pct, base=None):
-            if not use_color: return base or cell_fmt
-            p = float(pct)
-            bg = "#90EE90" if p>=60 else ("#FFFACD" if p>=40 else "#FF9999")
-            return wb.add_format({"border":1,"align":"center","valign":"vcenter","bg_color":bg})
-        def color_lft(pct):
-            if not use_color: return lft_fmt
-            p = float(pct)
-            bg = "#90EE90" if p>=60 else ("#FFFACD" if p>=40 else "#FF9999")
-            return wb.add_format({"border":1,"align":"left","valign":"vcenter","bg_color":bg})
+        if mode == "cod":
+            cols = [("Sl.","sl"),("Division","name"),
+                    ("Total COD Delivered","total_cod"),
+                    ("Digital Trnx.","digital"),
+                    ("Cash Trnx.","cash"),("% Digital","pct")]
+            if show_region: cols.insert(1,("Region","region"))
+            for ci,(lbl,_) in enumerate(cols): ws.write(0,ci,lbl,hdr)
+            dr=1; sl=1
+            for region,rdf in region_rows(df,"region","pct"):
+                for _,row in rdf.iterrows():
+                    pct_v=row["pct"]
+                    for ci,(lbl,key) in enumerate(cols):
+                        f=cf_cod(pct_v); fl=cf_cod_l(pct_v)
+                        if key=="sl":        ws.write(dr,ci,sl,f)
+                        elif key=="region":  ws.write(dr,ci,row["region"],f)
+                        elif key=="name":    ws.write(dr,ci,row["name"],fl)
+                        elif key=="pct":     ws.write(dr,ci,f"{pct_v:.2f}%",f)
+                        else:                ws.write(dr,ci,int(row[key]),f)
+                    sl+=1; dr+=1
+                tc2=rdf["total_cod"].sum(); dc2=rdf["digital"].sum(); cc2=rdf["cash"].sum()
+                pr=round(dc2/tc2*100,2) if tc2>0 else 0.0
+                for ci,(lbl,key) in enumerate(cols):
+                    if key=="sl":           ws.write(dr,ci,"",rtot)
+                    elif key=="region":     ws.write(dr,ci,"",rtot)
+                    elif key=="name":       ws.write(dr,ci,region,rlft)
+                    elif key=="total_cod":  ws.write(dr,ci,int(tc2),rtot)
+                    elif key=="digital":    ws.write(dr,ci,int(dc2),rtot)
+                    elif key=="cash":       ws.write(dr,ci,int(cc2),rtot)
+                    elif key=="pct":        ws.write(dr,ci,f"{pr:.2f}%",rtot)
+                dr+=1
+            tc2=df["total_cod"].sum(); dc2=df["digital"].sum(); cc2=df["cash"].sum()
+            pg=round(dc2/tc2*100,2) if tc2>0 else 0.0
+            for ci,(lbl,key) in enumerate(cols):
+                if key=="sl":           ws.write(dr,ci,"",gtot)
+                elif key=="region":     ws.write(dr,ci,"",gtot)
+                elif key=="name":       ws.write(dr,ci,total_label,glft)
+                elif key=="total_cod":  ws.write(dr,ci,int(tc2),gtot)
+                elif key=="digital":    ws.write(dr,ci,int(dc2),gtot)
+                elif key=="cash":       ws.write(dr,ci,int(cc2),gtot)
+                elif key=="pct":        ws.write(dr,ci,f"{pg:.2f}%",gtot)
+            max_n=max((len(r) for r in df["name"]),default=20)
+            for ci,(lbl,key) in enumerate(cols):
+                ws.set_column(ci,ci,max_n+4 if key=="name" else max(len(lbl)+2,12))
+        else:
+            # Build column spec
+            fixed=[]
+            fixed.append({"r1":"Sl.","r2":"","k":"sl","t":"c"})
+            if show_region: fixed.append({"r1":"Region","r2":"","k":"region","t":"l"})
+            fixed.append({"r1":"Division","r2":"","k":"name","t":"l"})
 
-        is_cnt = view in ("Count","Combined")
-        is_amt = view in ("Amount","Combined")
-        ws_name = {"Count":"Count_Transactions","Amount":"Amount","Combined":"Combined"}[view]
-        ws = wb.add_worksheet(ws_name)
-        writer.sheets[ws_name] = ws
+            dc_list=[]
+            def ac(r1,r2,k,t,grp=False): dc_list.append({"r1":r1,"r2":r2,"k":k,"t":t,"grp":grp})
 
-        region_order = [r for r in ["Hyderabad Region","Headquarters Region","Other"]
-                        if r in df["region"].unique()]
-
-        # ---- build header & column list ----
-        # Each entry: (header_row1_label, header_row2_label, data_key, fmt_type)
-        # fmt_type: 'c'=count, 'a'=amount, 'b'=bold, 'p'=percent, 'l'=left
-        cols = []  # list of dicts
-
-        fixed = []
-        fixed.append({"r1":"Sl.","r2":"","key":"sl","t":"c"})
-        if show_region:
-            fixed.append({"r1":"Region","r2":"","key":"region","t":"l"})
-        fixed.append({"r1":"Division","r2":"","key":"name","t":"l"})
-
-        def add(r1,r2,key,t,grp=False):
-            cols.append({"r1":r1,"r2":r2,"key":key,"t":t,"grp":grp})
-
-        if is_cnt and not is_amt:
-            add("Cash","",          "cash_c","c")
-            add("Digital QR (APT)","","dqr_c","c")
-            add("SBI POS","Card",   "pc_c","c",grp=True)
-            add("SBI POS","Bharat QR","pb_c","c",grp=True)
-            add("SBI POS","Total",  "pos_c","b",grp=True)
-            add("SBI ePAY","Bharat QR","eb_c","c",grp=True)
-            add("SBI ePAY","UPI",   "eu_c","c",grp=True)
-            add("SBI ePAY","Credit Card","ec_c","c",grp=True)
-            add("SBI ePAY","Debit Card","ed_c","c",grp=True)
-            add("SBI ePAY","Total", "pay_c","b",grp=True)
-            add("Non-Digital","",   "cash_c","c")
-            add("Digital","",       "dig_c","c")
-            add("Total","",         "tot_c","c")
-            add("% of Digital Trnx","","pct","p")
-
-        elif is_amt and not is_cnt:
-            add("Cash (₹)","",       "cash_a","a")
-            add("Digital QR (₹)","", "dqr_a","a")
-            add("SBI POS (₹)","Card","pc_a","a",grp=True)
-            add("SBI POS (₹)","Bharat QR","pb_a","a",grp=True)
-            add("SBI POS (₹)","Total","pos_a","b",grp=True)
-            add("SBI ePAY (₹)","Bharat QR","eb_a","a",grp=True)
-            add("SBI ePAY (₹)","UPI","eu_a","a",grp=True)
-            add("SBI ePAY (₹)","Credit Card","ec_a","a",grp=True)
-            add("SBI ePAY (₹)","Debit Card","ed_a","a",grp=True)
-            add("SBI ePAY (₹)","Total","pay_a","b",grp=True)
-            add("Non-Digital (₹)","","cash_a","a")
-            add("Digital (₹)","",    "dig_a","a")
-            add("Total (₹)","",      "tot_a","a")
-            add("% of Digital Trnx","","pct","p")
-
-        else:  # combined
-            add("Cash","Cnt",        "cash_c","c",grp=True)
-            add("Cash","₹",          "cash_a","a",grp=True)
-            add("Digital QR","Cnt",  "dqr_c","c",grp=True)
-            add("Digital QR","₹",    "dqr_a","a",grp=True)
-            add("SBI POS","Card(Cnt)","pc_c","c",grp=True)
-            add("SBI POS","Card(₹)", "pc_a","a",grp=True)
-            add("SBI POS","BQR(Cnt)","pb_c","c",grp=True)
-            add("SBI POS","BQR(₹)",  "pb_a","a",grp=True)
-            add("SBI POS","Total(Cnt)","pos_c","b",grp=True)
-            add("SBI POS","Total(₹)","pos_a","b",grp=True)
-            add("SBI ePAY","BQR(Cnt)","eb_c","c",grp=True)
-            add("SBI ePAY","BQR(₹)", "eb_a","a",grp=True)
-            add("SBI ePAY","UPI(Cnt)","eu_c","c",grp=True)
-            add("SBI ePAY","UPI(₹)", "eu_a","a",grp=True)
-            add("SBI ePAY","CC(Cnt)", "ec_c","c",grp=True)
-            add("SBI ePAY","CC(₹)",   "ec_a","a",grp=True)
-            add("SBI ePAY","DC(Cnt)", "ed_c","c",grp=True)
-            add("SBI ePAY","DC(₹)",   "ed_a","a",grp=True)
-            add("SBI ePAY","Total(Cnt)","pay_c","b",grp=True)
-            add("SBI ePAY","Total(₹)","pay_a","b",grp=True)
-            add("Non-Digital","Cnt", "cash_c","c",grp=True)
-            add("Non-Digital","₹",   "cash_a","a",grp=True)
-            add("Digital","Cnt",     "dig_c","c",grp=True)
-            add("Digital","₹",       "dig_a","a",grp=True)
-            add("Total","Cnt",       "tot_c","c",grp=True)
-            add("Total","₹",         "tot_a","a",grp=True)
-            add("% Digital","Cnt",   "pct","p",grp=True)
-            add("% Digital","₹",     "pct_a","p",grp=True)
-
-        all_cols = fixed + cols
-        ncols = len(all_cols)
-
-        # ---- write header rows ----
-        # Row 0: group/merged headers
-        # Row 1: sub-headers
-        ws.set_row(0, 30)
-        ws.set_row(1, 25)
-
-        # For fixed columns: merge rows 0 and 1
-        for ci, col in enumerate(fixed):
-            ws.merge_range(0, ci, 1, ci, col["r1"], hdr_fmt)
-
-        # For data cols: write row 0 group labels, row 1 sub-labels
-        base = len(fixed)
-        prev_r1 = None
-        r1_start = base
-        for ci, col in enumerate(cols):
-            abs_ci = base + ci
-            r1_label = col["r1"]
-            r2_label = col["r2"]
-            fmt = grp_fmt if col.get("grp") else hdr_fmt
-
-            if r2_label == "":
-                # Single header — merge row 0 and 1
-                ws.merge_range(0, abs_ci, 1, abs_ci, r1_label, fmt)
+            if view=="Count":
+                ac("Cash","","cash_c","c"); ac("Digital QR (APT)","","dqr_c","c")
+                ac("SBI POS","Card","pc_c","c",True); ac("SBI POS","Bharat QR","pb_c","c",True); ac("SBI POS","Total","pos_c","b",True)
+                ac("SBI ePAY","Bharat QR","eb_c","c",True); ac("SBI ePAY","UPI","eu_c","c",True)
+                ac("SBI ePAY","Credit Card","ec_c","c",True); ac("SBI ePAY","Debit Card","ed_c","c",True); ac("SBI ePAY","Total","pay_c","b",True)
+                ac("Non-Digital","","cash_c","c"); ac("Digital","","dig_c","c"); ac("Total","","tot_c","c"); ac("% of Digital Trnx","","pct","p")
+            elif view=="Amount":
+                ac("Cash (₹)","","cash_a","a"); ac("Digital QR (₹)","","dqr_a","a")
+                ac("SBI POS (₹)","Card","pc_a","a",True); ac("SBI POS (₹)","Bharat QR","pb_a","a",True); ac("SBI POS (₹)","Total","pos_a","b",True)
+                ac("SBI ePAY (₹)","Bharat QR","eb_a","a",True); ac("SBI ePAY (₹)","UPI","eu_a","a",True)
+                ac("SBI ePAY (₹)","Credit Card","ec_a","a",True); ac("SBI ePAY (₹)","Debit Card","ed_a","a",True); ac("SBI ePAY (₹)","Total","pay_a","b",True)
+                ac("Non-Digital (₹)","","cash_a","a"); ac("Digital (₹)","","dig_a","a"); ac("Total (₹)","","tot_a","a"); ac("% of Digital Trnx","","pct","p")
             else:
-                # Write sub-header in row 1
-                ws.write(1, abs_ci, r2_label, hdr_fmt)
-                # Group header in row 0 handled after loop via merge
+                ac("Cash","Cnt","cash_c","c",True); ac("Cash","₹","cash_a","a",True)
+                ac("Digital QR","Cnt","dqr_c","c",True); ac("Digital QR","₹","dqr_a","a",True)
+                ac("SBI POS","Card(Cnt)","pc_c","c",True); ac("SBI POS","Card(₹)","pc_a","a",True)
+                ac("SBI POS","BQR(Cnt)","pb_c","c",True); ac("SBI POS","BQR(₹)","pb_a","a",True)
+                ac("SBI POS","Total(Cnt)","pos_c","b",True); ac("SBI POS","Total(₹)","pos_a","b",True)
+                ac("SBI ePAY","BQR(Cnt)","eb_c","c",True); ac("SBI ePAY","BQR(₹)","eb_a","a",True)
+                ac("SBI ePAY","UPI(Cnt)","eu_c","c",True); ac("SBI ePAY","UPI(₹)","eu_a","a",True)
+                ac("SBI ePAY","CC(Cnt)","ec_c","c",True); ac("SBI ePAY","CC(₹)","ec_a","a",True)
+                ac("SBI ePAY","DC(Cnt)","ed_c","c",True); ac("SBI ePAY","DC(₹)","ed_a","a",True)
+                ac("SBI ePAY","Total(Cnt)","pay_c","b",True); ac("SBI ePAY","Total(₹)","pay_a","b",True)
+                ac("Non-Digital","Cnt","cash_c","c",True); ac("Non-Digital","₹","cash_a","a",True)
+                ac("Digital","Cnt","dig_c","c",True); ac("Digital","₹","dig_a","a",True)
+                ac("Total","Cnt","tot_c","c",True); ac("Total","₹","tot_a","a",True)
+                ac("% Digital","Cnt","pct","p",True); ac("% Digital","₹","pct_a","p",True)
 
-        # Merge row-0 group headers
-        ci = 0
-        while ci < len(cols):
-            col = cols[ci]
-            if col["r2"] == "":
-                ci += 1
-                continue
-            # find span of same r1
-            r1 = col["r1"]
-            span_start = base + ci
-            span_end   = span_start
-            j = ci + 1
-            while j < len(cols) and cols[j]["r1"] == r1 and cols[j]["r2"] != "":
-                span_end = base + j
-                j += 1
-            fmt = grp_fmt if col.get("grp") else hdr_fmt
-            if span_start == span_end:
-                ws.write(0, span_start, r1, fmt)
-            else:
-                ws.merge_range(0, span_start, 0, span_end, r1, fmt)
-            ci = j
+            all_cols = fixed + dc_list
 
-        # ---- write data rows ----
-        data_row_start = 2
-        dr = data_row_start
-        sl = 1
+            # Write fixed merged headers
+            for ci,col in enumerate(fixed):
+                ws.merge_range(0,ci,1,ci,col["r1"],hdr)
 
-        def write_row(ws, row_i, d, pct_val, fmt_fn, lft_fn, is_total=False):
-            for ci2, col in enumerate(all_cols):
-                key = col["key"]
-                t   = col["t"]
-                if key == "sl":
-                    ws.write(row_i, ci2, "" if is_total else sl, fmt_fn(pct_val))
-                elif key == "region":
-                    ws.write(row_i, ci2, g(d,"region") if not is_total else "", lft_fn(pct_val) if not is_total else lft_fn(pct_val))
-                elif key == "name":
-                    label = g(d,"name") if not is_total else d.get("_label","")
-                    ws.write(row_i, ci2, label, lft_fn(pct_val))
-                elif key == "pct":
-                    v = float(g(d,"pct") if "pct" in d else 0)
-                    ws.write(row_i, ci2, f"{v:.2f}%", fmt_fn(pct_val))
-                elif key == "pct_a":
-                    ta = float(g(d,"tot_a")); da = float(g(d,"dig_a"))
-                    pa = round(da/ta*100,2) if ta>0 else 0.0
-                    ws.write(row_i, ci2, f"{pa:.2f}%", fmt_fn(pct_val))
+            base = len(fixed)
+            # Write row-1 sub-headers
+            for ci,col in enumerate(dc_list):
+                abs_ci = base+ci
+                if col["r2"]=="":
+                    ws.merge_range(0,abs_ci,1,abs_ci,col["r1"],grpf if col.get("grp") else hdr)
                 else:
-                    val = g(d, key)
-                    if t in ("c","b"):
-                        ws.write(row_i, ci2, int(val), bold_fmt if t=="b" else fmt_fn(pct_val))
+                    ws.write(1,abs_ci,col["r2"],hdr)
+
+            # Merge row-0 group headers
+            ci2=0
+            while ci2 < len(dc_list):
+                col=dc_list[ci2]
+                if col["r2"]=="": ci2+=1; continue
+                r1=col["r1"]; ss=base+ci2; se=ss; j=ci2+1
+                while j<len(dc_list) and dc_list[j]["r1"]==r1 and dc_list[j]["r2"]!="":
+                    se=base+j; j+=1
+                f2=grpf if col.get("grp") else hdr
+                if ss==se: ws.write(0,ss,r1,f2)
+                else: ws.merge_range(0,ss,0,se,r1,f2)
+                ci2=j
+
+            dr=2; sl=1
+            def write_row(ri, d, pct_v, is_tot=False, tot_fmt=None, tot_lft=None):
+                for ci3,col in enumerate(all_cols):
+                    k=col["k"]; t2=col["t"]
+                    f=cf_dig(pct_v) if not is_tot else (tot_fmt or rtot)
+                    fl=cf_dig_l(pct_v) if not is_tot else (tot_lft or rlft)
+                    if k=="sl":
+                        ws.write(ri,ci3,"" if is_tot else sl, f)
+                    elif k=="region":
+                        ws.write(ri,ci3,"" if is_tot else gv(d,"region"), f)
+                    elif k=="name":
+                        # FIX: always use string name, never numeric
+                        val = gv(d,"name")
+                        try: float(str(val)); val=f"Office {gv(d,'oid')}"
+                        except: pass
+                        ws.write(ri,ci3,str(val),fl)
+                    elif k=="pct":
+                        tc3=float(gv(d,"tot_c")); dc3=float(gv(d,"dig_c"))
+                        ws.write(ri,ci3,f"{round(dc3/tc3*100,2) if tc3>0 else 0:.2f}%",f)
+                    elif k=="pct_a":
+                        ta3=float(gv(d,"tot_a")); da3=float(gv(d,"dig_a"))
+                        ws.write(ri,ci3,f"{round(da3/ta3*100,2) if ta3>0 else 0:.2f}%",f)
                     else:
-                        ws.write(row_i, ci2, round(float(val),2), fmt_fn(pct_val))
+                        val=gv(d,k)
+                        ws.write(ri,ci3,int(val) if t2 in ("c","b") else round(float(val),2),
+                                 boldf if t2=="b" and not is_tot else f)
 
-        for region in region_order:
-            rdf = df[df["region"]==region].sort_values("pct",ascending=False)
-            for _, row in rdf.iterrows():
-                pct_v = row["pct"]
-                write_row(ws, dr, row, pct_v,
-                          lambda p: color_fmt(p),
-                          lambda p: color_lft(p))
-                sl += 1; dr += 1
-            # region total row
-            s = rsum(rdf)
-            s["_label"] = region
-            s["name"]   = region
-            s["region"] = ""
-            for ci2, col in enumerate(all_cols):
-                key = col["key"]
-                if key == "sl":   ws.write(dr, ci2, "", rtot_fmt)
-                elif key in ("region",): ws.write(dr, ci2, "", rtot_fmt)
-                elif key == "name": ws.write(dr, ci2, region, rtot_lft)
-                elif key == "pct":
-                    tc2 = float(s.get("tot_c",0)); dc2 = float(s.get("dig_c",0))
-                    ws.write(dr, ci2, f"{round(dc2/tc2*100,2) if tc2>0 else 0:.2f}%", rtot_fmt)
-                elif key == "pct_a":
-                    ta2 = float(s.get("tot_a",0)); da2 = float(s.get("dig_a",0))
-                    ws.write(dr, ci2, f"{round(da2/ta2*100,2) if ta2>0 else 0:.2f}%", rtot_fmt)
-                else:
-                    val = s.get(key,0)
-                    t   = all_cols[ci2]["t"]
-                    ws.write(dr, ci2, int(val) if t in ("c","b") else round(float(val),2), rtot_fmt)
-            dr += 1
+            for region,rdf in region_rows(df,"region","pct"):
+                for _,row in rdf.iterrows():
+                    write_row(dr, row, row["pct"]); sl+=1; dr+=1
+                s=rsum(rdf); s["name"]=region; s["region"]=""; s["oid"]=0
+                write_row(dr, s, 0, is_tot=True, tot_fmt=rtot, tot_lft=rlft); dr+=1
 
-        # grand total
-        gt = rsum(df)
-        gt["_label"] = "Total"
-        for ci2, col in enumerate(all_cols):
-            key = col["key"]
-            if key == "sl":    ws.write(dr, ci2, "", gtot_fmt)
-            elif key == "region": ws.write(dr, ci2, "", gtot_fmt)
-            elif key == "name": ws.write(dr, ci2, "Total", gtot_lft)
-            elif key == "pct":
-                tc2 = float(gt.get("tot_c",0)); dc2 = float(gt.get("dig_c",0))
-                ws.write(dr, ci2, f"{round(dc2/tc2*100,2) if tc2>0 else 0:.2f}%", gtot_fmt)
-            elif key == "pct_a":
-                ta2 = float(gt.get("tot_a",0)); da2 = float(gt.get("dig_a",0))
-                ws.write(dr, ci2, f"{round(da2/ta2*100,2) if ta2>0 else 0:.2f}%", gtot_fmt)
-            else:
-                val = gt.get(key,0)
-                t   = all_cols[ci2]["t"]
-                ws.write(dr, ci2, int(val) if t in ("c","b") else round(float(val),2), gtot_fmt)
-        dr += 1
+            gt=rsum(df); gt["name"]=total_label; gt["region"]=""; gt["oid"]=0
+            write_row(dr, gt, 0, is_tot=True, tot_fmt=gtot, tot_lft=glft)
 
-        # ---- auto column width ----
-        for ci2, col in enumerate(all_cols):
-            # estimate width from header and data
-            max_len = max(len(str(col["r1"])), len(str(col["r2"])))
-            if col["key"] == "name":
-                max_len = max(max_len, df["name"].str.len().max() or 20)
-            ws.set_column(ci2, ci2, min(max_len + 4, 30))
+            max_n=max((len(str(r)) for r in df["name"]),default=20)
+            for ci3,col in enumerate(all_cols):
+                k=col["k"]
+                ws.set_column(ci3,ci3,
+                    min(max_n+4,35) if k=="name" else
+                    20 if k=="region" else
+                    max(len(col["r1"])+2,len(col.get("r2","")+2),12))
 
-    out.seek(0)
-    return out.getvalue()
-
-# ========== IMAGE DOWNLOAD ==========
-IMG_SCRIPT = """
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script>
-function downloadTableImage(tableId, filename) {
-    var el = document.getElementById(tableId);
-    if (!el) { alert('Table not found — please wait for it to fully load then try again.'); return; }
-    html2canvas(el, {scale: 2, useCORS: true, backgroundColor: '#ffffff'}).then(function(canvas) {
-        var link = document.createElement('a');
-        link.download = filename + '.png';
-        link.href = canvas.toDataURL('image/png');
-        link.click();
-    });
-}
-</script>
-"""
-
-def img_btn(table_id, filename, label="📷 Download as Image"):
-    return f"""
-    {IMG_SCRIPT}
-    <button onclick="downloadTableImage('{table_id}','{filename}')"
-     style="background:#2f3343;color:white;border:none;padding:8px 18px;
-            border-radius:6px;cursor:pointer;font-size:14px;margin:6px 4px 0 0;">
-     {label}
-    </button>"""
+    out.seek(0); return out.getvalue()
 
 # ========== SIDEBAR ==========
-st.sidebar.header("Upload Report")
-uploaded    = st.sidebar.file_uploader("Upload Booking Payment Report (CSV)", type=["csv"])
+st.sidebar.header("Upload Reports")
+report_type = st.sidebar.radio("Report Type",
+    ["Digital Transactions","COD Digital Transactions"], index=0)
+uploaded    = st.sidebar.file_uploader("Upload CSV Report", type=["csv"])
 report_date = st.sidebar.date_input("Report Date")
 use_color   = st.sidebar.checkbox("Colour Coding", value=True,
-                  help="Uncheck for black & white output (both image and Excel)")
+    help="Uncheck for black & white output")
 
 # ========== MAIN ==========
 if uploaded:
-    df_raw = pd.read_csv(uploaded)
-    df     = process(df_raw)
+    df_raw   = pd.read_csv(uploaded)
+    date_str = report_date.strftime("%d.%m.%Y")
+    date_fn  = report_date.strftime("%d_%m_%Y")
 
-    if df.empty:
-        st.warning("No valid data found.")
-        st.stop()
+    if report_type == "Digital Transactions":
+        df = process_booking(df_raw)
+        if df.empty: st.warning("No valid data."); st.stop()
+        regions     = df["region"].unique().tolist()
+        show_region = len(regions) > 1
+        total_label = "Telangana Circle" if show_region else "Headquarters Region"
 
-    regions     = df["region"].unique().tolist()
-    show_region = len(regions) > 1
-    date_str    = report_date.strftime("%d.%m.%Y")
-    # For filenames: DD_MM_YYYY
-    date_fn     = report_date.strftime("%d_%m_%Y")
-
-    # Legend
-    if use_color:
-        st.markdown("""
-        <div style='display:flex;gap:14px;margin-bottom:8px;font-size:13px;'>
+        if use_color:
+            st.markdown("""<div style='display:flex;gap:14px;margin-bottom:8px;font-size:13px;'>
             <span style='background:#90EE90;padding:3px 10px;border-radius:4px;'>≥ 60% Digital</span>
             <span style='background:#FFFACD;padding:3px 10px;border-radius:4px;'>40–59% Digital</span>
             <span style='background:#FF9999;padding:3px 10px;border-radius:4px;'>< 40% Digital</span>
-        </div>""", unsafe_allow_html=True)
+            </div>""", unsafe_allow_html=True)
 
-    tab1, tab2, tab3 = st.tabs(["📊 Count / Transactions", "💰 Amount (₹)", "📋 Combined"])
+        tab1, tab2, tab3 = st.tabs(["📊 Count / Transactions","💰 Amount (₹)","📋 Combined"])
 
-    with tab1:
-        cnt_html = build_count(df, show_region, date_str, use_color)
-        st.markdown(cnt_html, unsafe_allow_html=True)
-        st.markdown(img_btn("tbl-cnt",
-            f"Digital_Transactions_Count_{date_fn}"), unsafe_allow_html=True)
-        cnt_xl = build_excel(df, "Count", show_region, date_str, use_color)
-        st.download_button("⬇ Download Excel (Count)",
-            cnt_xl,
-            file_name=f"Digital_Transactions_Count_{date_fn}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        for tab, view, fn_sfx in [
+            (tab1,"Count",f"Digital_Transactions_Count_{date_fn}"),
+            (tab2,"Amount",f"Digital_Transactions_Amount_{date_fn}"),
+            (tab3,"Combined",f"Digital_Transactions_{date_fn}"),
+        ]:
+            with tab:
+                st.markdown(booking_html(df,view,show_region,date_str,use_color,total_label),
+                            unsafe_allow_html=True)
+                # Server-side PNG download
+                png_bytes = booking_png(df,view,show_region,date_str,use_color,total_label)
+                st.download_button(f"📷 Download as Image ({view})", png_bytes,
+                    file_name=f"{fn_sfx}.png", mime="image/png")
+                xl = build_excel(df,view,show_region,date_str,use_color,total_label)
+                st.download_button(f"⬇ Download Excel ({view})", xl,
+                    file_name=f"{fn_sfx}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
-    with tab2:
-        amt_html = build_amount(df, show_region, date_str, use_color)
-        st.markdown(amt_html, unsafe_allow_html=True)
-        st.markdown(img_btn("tbl-amt",
-            f"Digital_Transactions_Amount_{date_fn}"), unsafe_allow_html=True)
-        amt_xl = build_excel(df, "Amount", show_region, date_str, use_color)
-        st.download_button("⬇ Download Excel (Amount)",
-            amt_xl,
-            file_name=f"Digital_Transactions_Amount_{date_fn}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    else:  # COD
+        df = process_cod(df_raw)
+        if df.empty: st.warning("No valid data."); st.stop()
+        regions     = df["region"].unique().tolist()
+        show_region = len(regions) > 1
+        total_label = "Telangana Circle" if show_region else "Headquarters Region"
 
-    with tab3:
-        comb_html = build_combined(df, show_region, date_str, use_color)
-        st.markdown(comb_html, unsafe_allow_html=True)
-        st.markdown(img_btn("tbl-comb",
-            f"Digital_Transactions_{date_fn}"), unsafe_allow_html=True)
-        comb_xl = build_excel(df, "Combined", show_region, date_str, use_color)
-        st.download_button("⬇ Download Excel (Combined)",
-            comb_xl,
-            file_name=f"Digital_Transactions_{date_fn}.xlsx",
+        if use_color:
+            st.markdown("""<div style='display:flex;gap:14px;margin-bottom:8px;font-size:13px;'>
+            <span style='background:#90EE90;padding:3px 10px;border-radius:4px;'>≥ 50% Digital</span>
+            <span style='background:#FFFACD;padding:3px 10px;border-radius:4px;'>30–49% Digital</span>
+            <span style='background:#FF9999;padding:3px 10px;border-radius:4px;'>< 30% Digital</span>
+            </div>""", unsafe_allow_html=True)
+
+        st.markdown(cod_html(df,show_region,date_str,use_color,total_label),
+                    unsafe_allow_html=True)
+        fn = f"COD_Digital_Transactions_{date_fn}"
+        png_bytes = cod_png(df,show_region,date_str,use_color,total_label)
+        st.download_button("📷 Download as Image", png_bytes,
+            file_name=f"{fn}.png", mime="image/png")
+        xl = build_excel(df,"COD",show_region,date_str,use_color,total_label,mode="cod")
+        st.download_button("⬇ Download Excel (COD)", xl,
+            file_name=f"{fn}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 else:
-    st.info("Upload a Booking Payment Report CSV from the sidebar to begin.")
+    st.info("Select report type and upload a CSV from the sidebar to begin.")
