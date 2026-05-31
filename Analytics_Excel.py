@@ -743,6 +743,7 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
                 color_status, subset=["Revenue Status", "Traffic Status"])
             st.dataframe(styled_df, use_container_width=True, hide_index=True)
             avg_history_df = pd.DataFrame(avg_history_results)
+            st.write("Columns =", avg_history_df.columns.tolist())
             st.write("Average History DF Rows:", len(avg_history_df))
 
             if use_average_history and not avg_history_df.empty:
