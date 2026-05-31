@@ -637,6 +637,8 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
             "Traffic Status":               classify(traffic_var, sd_percent),
         })
 
+    st.write("Normal Results:", len(results))
+    st.write("Average Results:", len(avg_history_results))
     result_df = pd.DataFrame(results)
     avg_history_df = pd.DataFrame(avg_history_results)
 
