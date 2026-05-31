@@ -271,6 +271,7 @@ def booking_html(df, view, show_region, date_str, use_color, total_label):
         return t
 
     sl = 1
+    multi_region = len([r for r in REGION_ORDER if r in df["region"].unique()]) > 1
     for region, rdf in region_rows(df, "region", "pct"):
         for _, row in rdf.iterrows():
             bg = clr_dig(row["pct"], use_color)
@@ -279,9 +280,11 @@ def booking_html(df, view, show_region, date_str, use_color, total_label):
             pre += f'<td class="lft">{row["name"]}</td>'
             html += f'<tr style="background:{bg};">{pre}{cells(row)}</tr>\n'
             sl += 1
-        s = rsum(rdf); s["name"] = region
-        span = 2 if show_region else 1
-        html += f'<tr class="rtot"><td colspan="{span}"></td><td class="lft"><b>{region}</b></td>{cells(s)}</tr>\n'
+        # Only show region subtotal if multiple regions
+        if multi_region:
+            s = rsum(rdf); s["name"] = region
+            span = 2 if show_region else 1
+            html += f'<tr class="rtot"><td colspan="{span}"></td><td class="lft"><b>{region}</b></td>{cells(s)}</tr>\n'
 
     gt = rsum(df); gt["name"] = total_label
     span = 2 if show_region else 1
@@ -299,6 +302,7 @@ def cod_html(df, show_region, date_str, use_color, total_label):
     html += f'<thead><tr>{h}</tr></thead><tbody>'
 
     sl = 1
+    multi_region_cod = len([r for r in REGION_ORDER if r in df["region"].unique()]) > 1
     for region, rdf in region_rows(df, "region", "pct"):
         for _, row in rdf.iterrows():
             bg = clr_cod(row["pct"], use_color)
@@ -311,13 +315,14 @@ def cod_html(df, show_region, date_str, use_color, total_label):
             pre += f'<td><b>{row["pct"]:.2f}%</b></td>'
             html += f'<tr style="background:{bg};">{pre}</tr>\n'
             sl += 1
-        tc=rdf["total_cod"].sum(); dc=rdf["digital"].sum(); cc=rdf["cash"].sum()
-        pr=round(dc/tc*100,2) if tc>0 else 0.0
-        span = 2 if show_region else 1
-        html += (f'<tr class="rtot"><td colspan="{span}"></td>'
-                 f'<td class="lft"><b>{region}</b></td>'
-                 f'<td>{indian_num(tc)}</td><td>{indian_num(dc)}</td>'
-                 f'<td>{indian_num(cc)}</td><td><b>{pr:.2f}%</b></td></tr>\n')
+        if multi_region_cod:
+            tc=rdf["total_cod"].sum(); dc=rdf["digital"].sum(); cc=rdf["cash"].sum()
+            pr=round(dc/tc*100,2) if tc>0 else 0.0
+            span = 2 if show_region else 1
+            html += (f'<tr class="rtot"><td colspan="{span}"></td>'
+                     f'<td class="lft"><b>{region}</b></td>'
+                     f'<td>{indian_num(tc)}</td><td>{indian_num(dc)}</td>'
+                     f'<td>{indian_num(cc)}</td><td><b>{pr:.2f}%</b></td></tr>\n')
 
     tc=df["total_cod"].sum(); dc=df["digital"].sum(); cc=df["cash"].sum()
     pg=round(dc/tc*100,2) if tc>0 else 0.0
@@ -331,53 +336,57 @@ def cod_html(df, show_region, date_str, use_color, total_label):
 
 # ========== SERVER-SIDE PNG ==========
 def df_to_png(df_display, title, col_colors, header_color="#2f3343"):
-    """Render a DataFrame as a PNG using matplotlib"""
+    """Render a DataFrame as a PNG using matplotlib — tight layout, no wasted space"""
     import matplotlib.pyplot as plt
-    import matplotlib.colors as mcolors
 
     nrows, ncols = df_display.shape
-    fig_w = max(ncols * 1.4, 10)
-    fig_h = max((nrows + 2) * 0.35, 3)
+    # Scale figure tightly to content
+    col_w = 1.3
+    row_h = 0.32
+    title_h = 0.45
+    fig_w = max(ncols * col_w, 8)
+    fig_h = (nrows + 1) * row_h + title_h + 0.2  # +1 for header row
 
-    fig, ax = plt.subplots(figsize=(fig_w, fig_h))
+    fig = plt.figure(figsize=(fig_w, fig_h))
+    # Title axes at top
+    ax_title = fig.add_axes([0, 1 - title_h/fig_h, 1, title_h/fig_h])
+    ax_title.axis('off')
+    ax_title.set_facecolor('#FFD700')
+    ax_title.text(0.5, 0.5, title, ha='center', va='center',
+                  fontsize=10, fontweight='bold', color='#cc0000',
+                  transform=ax_title.transAxes)
+
+    # Table axes below title
+    tbl_frac = (nrows + 1) * row_h / fig_h
+    ax = fig.add_axes([0, 0, 1, tbl_frac])
     ax.axis('off')
-
-    # Title
-    fig.text(0.5, 0.98, title, ha='center', va='top',
-             fontsize=11, fontweight='bold', color='#cc0000',
-             bbox=dict(facecolor='#FFD700', edgecolor='none', pad=4))
 
     tbl = ax.table(
         cellText=df_display.values,
         colLabels=df_display.columns,
         loc='center',
-        cellLoc='center'
+        cellLoc='center',
+        bbox=[0, 0, 1, 1]
     )
     tbl.auto_set_font_size(False)
     tbl.set_fontsize(8)
     tbl.auto_set_column_width(col=list(range(ncols)))
 
-    # Header row style
-    hdr_rgb = mcolors.to_rgba(header_color)
     for ci in range(ncols):
         cell = tbl[0, ci]
         cell.set_facecolor(header_color)
         cell.set_text_props(color='white', fontweight='bold')
         cell.set_edgecolor('#555555')
 
-    # Data row colors
     for ri in range(nrows):
         bg = col_colors[ri] if ri < len(col_colors) else "#ffffff"
         for ci in range(ncols):
             cell = tbl[ri+1, ci]
             cell.set_facecolor(bg)
             cell.set_edgecolor('#bbbbbb')
-            if ci == 0:
-                cell.set_text_props(ha='left')
 
-    plt.tight_layout(rect=[0, 0, 1, 0.95])
     buf = io.BytesIO()
-    plt.savefig(buf, format='png', dpi=150, bbox_inches='tight', pad_inches=0.1)
+    plt.savefig(buf, format='png', dpi=150, bbox_inches='tight', pad_inches=0.05)
     buf.seek(0)
     plt.close(fig)
     return buf.getvalue()
@@ -434,7 +443,8 @@ def booking_png(df, view, show_region, date_str, use_color, total_label):
                        "Digital":indian_num(s.get("dig_c",0)),"Digital(₹)":indian_amt(s.get("dig_a",0)),
                        "Total":indian_num(s.get("tot_c",0)),"Total(₹)":indian_amt(s.get("tot_a",0)),
                        "% Digital":f'{round(dc2/tc2*100,2) if tc2>0 else 0:.2f}%'})
-        rows_data.append(r); colors.append("#b8d4f0")
+        if len([x for x in REGION_ORDER if x in df["region"].unique()]) > 1:
+            rows_data.append(r); colors.append("#b8d4f0")
 
     # grand total
     gt = rsum(df)
@@ -467,6 +477,7 @@ def booking_png(df, view, show_region, date_str, use_color, total_label):
 def cod_png(df, show_region, date_str, use_color, total_label):
     rows_data = []; colors = []
     sl = 1
+    multi_r = len([x for x in REGION_ORDER if x in df["region"].unique()]) > 1
     for region, rdf in region_rows(df, "region", "pct"):
         for _, row in rdf.iterrows():
             r = {"Sl":sl,"Division":row["name"],
@@ -477,11 +488,12 @@ def cod_png(df, show_region, date_str, use_color, total_label):
             rows_data.append(r)
             colors.append(clr_cod(row["pct"], use_color))
             sl += 1
-        tc=rdf["total_cod"].sum(); dc=rdf["digital"].sum(); cc=rdf["cash"].sum()
-        pr=round(dc/tc*100,2) if tc>0 else 0.0
-        rows_data.append({"Sl":"","Division":region,"Total COD":indian_num(tc),
-                           "Digital":indian_num(dc),"Cash":indian_num(cc),"% Digital":f'{pr:.2f}%'})
-        colors.append("#b8d4f0")
+        if multi_r:
+            tc=rdf["total_cod"].sum(); dc=rdf["digital"].sum(); cc=rdf["cash"].sum()
+            pr=round(dc/tc*100,2) if tc>0 else 0.0
+            rows_data.append({"Sl":"","Division":region,"Total COD":indian_num(tc),
+                               "Digital":indian_num(dc),"Cash":indian_num(cc),"% Digital":f'{pr:.2f}%'})
+            colors.append("#b8d4f0")
     tc=df["total_cod"].sum(); dc=df["digital"].sum(); cc=df["cash"].sum()
     pg=round(dc/tc*100,2) if tc>0 else 0.0
     rows_data.append({"Sl":"","Division":total_label,"Total COD":indian_num(tc),
@@ -524,7 +536,16 @@ def build_excel(df, view, show_region, date_str, use_color, total_label, mode="b
 
         ws_name = {"Count":"Count","Amount":"Amount","Combined":"Combined","COD":"COD"}[view]
         ws = wb.add_worksheet(ws_name); writer.sheets[ws_name] = ws
-        ws.set_row(0,30); ws.set_row(1,25)
+
+        # Title row
+        title_fmt = mkfmt(bold=True,bg_color="#FFD700",font_color="#cc0000",font_size=12,align="center")
+        report_titles = {
+            "Count": f"Digital Transaction Status – Count/Transactions — {date_str}",
+            "Amount": f"Digital Transaction Status – Amount (Rs.) — {date_str}",
+            "Combined": f"Digital Transaction Status – Combined — {date_str}",
+            "COD": f"Status of COD Digital Transactions — {date_str}",
+        }
+        ws.set_row(0, 22)
 
         if mode == "cod":
             cols = [("Sl.","sl"),("Division","name"),
@@ -532,8 +553,12 @@ def build_excel(df, view, show_region, date_str, use_color, total_label, mode="b
                     ("Digital Trnx.","digital"),
                     ("Cash Trnx.","cash"),("% Digital","pct")]
             if show_region: cols.insert(1,("Region","region"))
-            for ci,(lbl,_) in enumerate(cols): ws.write(0,ci,lbl,hdr)
-            dr=1; sl=1
+            ncols_cod = len(cols)
+            ws.merge_range(0,0,0,ncols_cod-1, report_titles.get(view,""), title_fmt)
+            ws.set_row(1,28)
+            for ci,(lbl,_) in enumerate(cols): ws.write(1,ci,lbl,hdr)
+            dr=2; sl=1
+            multi_r_cod_xl = len([x for x in REGION_ORDER if x in df["region"].unique()]) > 1
             for region,rdf in region_rows(df,"region","pct"):
                 for _,row in rdf.iterrows():
                     pct_v=row["pct"]
@@ -545,17 +570,18 @@ def build_excel(df, view, show_region, date_str, use_color, total_label, mode="b
                         elif key=="pct":     ws.write(dr,ci,f"{pct_v:.2f}%",f)
                         else:                ws.write(dr,ci,int(row[key]),f)
                     sl+=1; dr+=1
-                tc2=rdf["total_cod"].sum(); dc2=rdf["digital"].sum(); cc2=rdf["cash"].sum()
-                pr=round(dc2/tc2*100,2) if tc2>0 else 0.0
-                for ci,(lbl,key) in enumerate(cols):
-                    if key=="sl":           ws.write(dr,ci,"",rtot)
-                    elif key=="region":     ws.write(dr,ci,"",rtot)
-                    elif key=="name":       ws.write(dr,ci,region,rlft)
-                    elif key=="total_cod":  ws.write(dr,ci,int(tc2),rtot)
-                    elif key=="digital":    ws.write(dr,ci,int(dc2),rtot)
-                    elif key=="cash":       ws.write(dr,ci,int(cc2),rtot)
-                    elif key=="pct":        ws.write(dr,ci,f"{pr:.2f}%",rtot)
-                dr+=1
+                if multi_r_cod_xl:
+                    tc2=rdf["total_cod"].sum(); dc2=rdf["digital"].sum(); cc2=rdf["cash"].sum()
+                    pr=round(dc2/tc2*100,2) if tc2>0 else 0.0
+                    for ci,(lbl,key) in enumerate(cols):
+                        if key=="sl":           ws.write(dr,ci,"",rtot)
+                        elif key=="region":     ws.write(dr,ci,"",rtot)
+                        elif key=="name":       ws.write(dr,ci,region,rlft)
+                        elif key=="total_cod":  ws.write(dr,ci,int(tc2),rtot)
+                        elif key=="digital":    ws.write(dr,ci,int(dc2),rtot)
+                        elif key=="cash":       ws.write(dr,ci,int(cc2),rtot)
+                        elif key=="pct":        ws.write(dr,ci,f"{pr:.2f}%",rtot)
+                    dr+=1
             tc2=df["total_cod"].sum(); dc2=df["digital"].sum(); cc2=df["cash"].sum()
             pg=round(dc2/tc2*100,2) if tc2>0 else 0.0
             for ci,(lbl,key) in enumerate(cols):
@@ -609,20 +635,25 @@ def build_excel(df, view, show_region, date_str, use_color, total_label, mode="b
 
             all_cols = fixed + dc_list
 
-            # Write fixed merged headers
+            # Title row 0 (merged across all cols), headers start at row 1
+            total_cols_count = len(fixed) + len(dc_list)
+            ws.merge_range(0,0,0,total_cols_count-1, report_titles.get(view,""), title_fmt)
+            ws.set_row(0,22); ws.set_row(1,28); ws.set_row(2,22)
+
+            # Write fixed merged headers (now at rows 1+2 instead of 0+1)
             for ci,col in enumerate(fixed):
-                ws.merge_range(0,ci,1,ci,col["r1"],hdr)
+                ws.merge_range(1,ci,2,ci,col["r1"],hdr)
 
             base = len(fixed)
-            # Write row-1 sub-headers
+            # Write row-2 sub-headers
             for ci,col in enumerate(dc_list):
                 abs_ci = base+ci
                 if col["r2"]=="":
-                    ws.merge_range(0,abs_ci,1,abs_ci,col["r1"],grpf if col.get("grp") else hdr)
+                    ws.merge_range(1,abs_ci,2,abs_ci,col["r1"],grpf if col.get("grp") else hdr)
                 else:
-                    ws.write(1,abs_ci,col["r2"],hdr)
+                    ws.write(2,abs_ci,col["r2"],hdr)
 
-            # Merge row-0 group headers
+            # Merge row-1 group headers
             ci2=0
             while ci2 < len(dc_list):
                 col=dc_list[ci2]
@@ -631,11 +662,11 @@ def build_excel(df, view, show_region, date_str, use_color, total_label, mode="b
                 while j<len(dc_list) and dc_list[j]["r1"]==r1 and dc_list[j]["r2"]!="":
                     se=base+j; j+=1
                 f2=grpf if col.get("grp") else hdr
-                if ss==se: ws.write(0,ss,r1,f2)
-                else: ws.merge_range(0,ss,0,se,r1,f2)
+                if ss==se: ws.write(1,ss,r1,f2)
+                else: ws.merge_range(1,ss,1,se,r1,f2)
                 ci2=j
 
-            dr=2; sl=1
+            dr=3; sl=1
             def write_row(ri, d, pct_v, is_tot=False, tot_fmt=None, tot_lft=None):
                 for ci3,col in enumerate(all_cols):
                     k=col["k"]; t2=col["t"]
@@ -662,11 +693,13 @@ def build_excel(df, view, show_region, date_str, use_color, total_label, mode="b
                         ws.write(ri,ci3,int(val) if t2 in ("c","b") else round(float(val),2),
                                  boldf if t2=="b" and not is_tot else f)
 
+            multi_r_xl = len([x for x in REGION_ORDER if x in df["region"].unique()]) > 1
             for region,rdf in region_rows(df,"region","pct"):
                 for _,row in rdf.iterrows():
                     write_row(dr, row, row["pct"]); sl+=1; dr+=1
-                s=rsum(rdf); s["name"]=region; s["region"]=""; s["oid"]=0
-                write_row(dr, s, 0, is_tot=True, tot_fmt=rtot, tot_lft=rlft); dr+=1
+                if multi_r_xl:
+                    s=rsum(rdf); s["name"]=region; s["region"]=""; s["oid"]=0
+                    write_row(dr, s, 0, is_tot=True, tot_fmt=rtot, tot_lft=rlft); dr+=1
 
             gt=rsum(df); gt["name"]=total_label; gt["region"]=""; gt["oid"]=0
             write_row(dr, gt, 0, is_tot=True, tot_fmt=gtot, tot_lft=glft)
@@ -677,7 +710,7 @@ def build_excel(df, view, show_region, date_str, use_color, total_label, mode="b
                 ws.set_column(ci3,ci3,
                     min(max_n+4,35) if k=="name" else
                     20 if k=="region" else
-                    max(len(col["r1"])+2,len(col.get("r2","")+2),12))
+                    max(len(str(col["r1"]))+2, len(str(col.get("r2","")))+2, 12))
 
     out.seek(0); return out.getvalue()
 
