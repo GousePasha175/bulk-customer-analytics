@@ -471,7 +471,9 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
     use_average_history = st.checkbox(
     "Analyze 'No Historical Data' customers using average of available historical months"
     )
-
+    st.write("Revenue Hist Column:", revenue_col_hist)
+    st.write("Traffic Hist Column:", traffic_col_hist)
+    st.write("Use Average:", use_average_history)
     # ---- Customer Analytics Loop (original logic preserved) ----
     results = []
     avg_history_results = []
@@ -505,7 +507,7 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
                 "Traffic Variance %": "",
                 "Traffic Status": "No Historical Data",
             })
-            st.write(customer_id,"Revenue Hist Col:",revenue_col_hist,"Traffic Hist Col:",traffic_col_hist)        
+                    
             # ----- Average Historical Analysis -----
             if use_average_history and not historical_match.empty:
         
