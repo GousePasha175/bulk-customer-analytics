@@ -191,7 +191,7 @@ def process_cod(df_raw):
     return agg
 
 # ========== HTML TABLE — BOOKING ==========
-def booking_html(df, view, show_region, date_str, use_color, total_label, hyd_summary=None):
+def booking_html(df, view, show_region, date_str, use_color, total_label, full_df=None):
     tbl_id = {"Count":"tbl-cnt","Amount":"tbl-amt","Combined":"tbl-comb"}[view]
 
     if view == "Count":
@@ -294,35 +294,28 @@ def booking_html(df, view, show_region, date_str, use_color, total_label, hyd_su
             span = 2 if show_region else 1
             html += f'<tr class="rtot"><td colspan="{span}"></td><td class="lft"><b>{region}</b></td>{cells(s)}</tr>\n'
 
-    # Inject HYD summary row when Hyderabad detail is hidden
-    if hyd_summary is not None:
-        hs = hyd_summary
-        html += f'<tr class="rtot"><td></td><td class="lft"><b>Hyderabad Region</b></td>{cells(hs)}</tr>\n'
+    # HQR subtotal — always shown
+    hqr_df_local = df[df["region"]=="Headquarters Region"] if "region" in df.columns else df
+    hqr_s = rsum(hqr_df_local); hqr_s["name"] = "Headquarters Region"
+    html += f'<tr class="rtot"><td></td><td class="lft"><b>Headquarters Region</b></td>{cells(hqr_s)}</tr>\n'
 
-    gt = rsum(df) if hyd_summary is None else rsum(pd.concat([df, pd.DataFrame([hyd_summary])], ignore_index=True) if False else df)
-    # For grand total when hyd hidden: sum original full df (passed via closure not available here)
-    # Instead total_label row values computed from df only (HQR) + hyd_summary combined
-    if hyd_summary is not None:
-        # Manually combine HQR sum + HYD summary for grand total
-        hqr_s = rsum(df)
-        combined = {}
-        for k2 in hqr_s:
-            v1 = hqr_s.get(k2, 0)
-            v2 = hyd_summary.get(k2, 0) if isinstance(hyd_summary.get(k2,0), (int,float)) else 0
-            combined[k2] = v1 + v2
-        tc2 = combined.get("tot_c", 0); dc2 = combined.get("dig_c", 0)
-        combined["pct"] = round(dc2/tc2*100, 2) if tc2 > 0 else 0.0
-        combined["name"] = total_label
-        gt = combined
+    # HYD subtotal — shown only when full_df has Hyderabad Region rows
+    if full_df is not None:
+        hyd_df_local = full_df[full_df["region"]=="Hyderabad Region"]
+        if not hyd_df_local.empty:
+            hyd_s = rsum(hyd_df_local); hyd_s["name"] = "Hyderabad Region"
+            html += f'<tr class="rtot"><td></td><td class="lft"><b>Hyderabad Region</b></td>{cells(hyd_s)}</tr>\n'
+        # Grand total from full_df
+        gt = rsum(full_df); gt["name"] = total_label
     else:
         gt = rsum(df); gt["name"] = total_label
-    span = 2 if show_region else 1
-    html += f'<tr class="gtot"><td colspan="{span}"></td><td class="lft"><b>{total_label}</b></td>{cells(gt)}</tr>\n'
+
+    html += f'<tr class="gtot"><td></td><td class="lft"><b>{total_label}</b></td>{cells(gt)}</tr>\n'
     html += "</tbody></table></div>"
     return html
 
 # ========== HTML TABLE — COD ==========
-def cod_html(df, show_region, date_str, use_color, total_label, hyd_summary=None):
+def cod_html(df, show_region, date_str, use_color, total_label, full_df=None):
     h  = th("Sl.") + (th("Region") if show_region else "") + th("Division")
     h += th("Total COD Delivered") + th("Digital Trnx.") + th("Cash Trnx.") + th("% Digital")
 
@@ -353,21 +346,30 @@ def cod_html(df, show_region, date_str, use_color, total_label, hyd_summary=None
                      f'<td>{indian_num(tc)}</td><td>{indian_num(dc)}</td>'
                      f'<td>{indian_num(cc)}</td><td><b>{pr:.2f}%</b></td></tr>\n')
 
-    # Inject HYD summary when detail hidden
-    if hyd_summary is not None:
-        hs = hyd_summary
-        htc=float(hs.get("total_cod",0)); hdc=float(hs.get("digital",0)); hcc=float(hs.get("cash",0))
-        hp=round(hdc/htc*100,2) if htc>0 else 0.0
-        html += (f'<tr class="rtot"><td></td>'
-                 f'<td class="lft"><b>Hyderabad Region</b></td>'
-                 f'<td>{indian_num(htc)}</td><td>{indian_num(hdc)}</td>'
-                 f'<td>{indian_num(hcc)}</td><td><b>{hp:.2f}%</b></td></tr>\n')
-        tc=df["total_cod"].sum()+htc; dc=df["digital"].sum()+hdc; cc=df["cash"].sum()+hcc
+    # HQR subtotal — always shown
+    hqr_cod = df[df["region"]=="Headquarters Region"] if "region" in df.columns else df
+    htc_hqr=hqr_cod["total_cod"].sum(); hdc_hqr=hqr_cod["digital"].sum(); hcc_hqr=hqr_cod["cash"].sum()
+    hp_hqr=round(hdc_hqr/htc_hqr*100,2) if htc_hqr>0 else 0.0
+    html += (f'<tr class="rtot"><td></td>'
+             f'<td class="lft"><b>Headquarters Region</b></td>'
+             f'<td>{indian_num(htc_hqr)}</td><td>{indian_num(hdc_hqr)}</td>'
+             f'<td>{indian_num(hcc_hqr)}</td><td><b>{hp_hqr:.2f}%</b></td></tr>\n')
+
+    # HYD subtotal — shown only when full_df has Hyderabad Region
+    if full_df is not None:
+        hyd_cod = full_df[full_df["region"]=="Hyderabad Region"]
+        if not hyd_cod.empty:
+            htc_h=hyd_cod["total_cod"].sum(); hdc_h=hyd_cod["digital"].sum(); hcc_h=hyd_cod["cash"].sum()
+            hp_h=round(hdc_h/htc_h*100,2) if htc_h>0 else 0.0
+            html += (f'<tr class="rtot"><td></td>'
+                     f'<td class="lft"><b>Hyderabad Region</b></td>'
+                     f'<td>{indian_num(htc_h)}</td><td>{indian_num(hdc_h)}</td>'
+                     f'<td>{indian_num(hcc_h)}</td><td><b>{hp_h:.2f}%</b></td></tr>\n')
+        tc=full_df["total_cod"].sum(); dc=full_df["digital"].sum(); cc=full_df["cash"].sum()
     else:
         tc=df["total_cod"].sum(); dc=df["digital"].sum(); cc=df["cash"].sum()
     pg=round(dc/tc*100,2) if tc>0 else 0.0
-    span = 2 if show_region else 1
-    html += (f'<tr class="gtot"><td colspan="{span}"></td>'
+    html += (f'<tr class="gtot"><td></td>'
              f'<td class="lft"><b>{total_label}</b></td>'
              f'<td>{indian_num(tc)}</td><td>{indian_num(dc)}</td>'
              f'<td>{indian_num(cc)}</td><td><b>{pg:.2f}%</b></td></tr>\n')
@@ -411,6 +413,9 @@ def df_to_png(df_display, title, col_colors, header_color="#2f3343"):
     tbl.auto_set_font_size(False)
     tbl.set_fontsize(8)
     tbl.auto_set_column_width(col=list(range(ncols)))
+    # Scale row heights to be tight
+    for (row_idx, col_idx), cell in tbl.get_celld().items():
+        cell.set_height(row_h / fig_h)
 
     for ci in range(ncols):
         cell = tbl[0, ci]
@@ -431,119 +436,112 @@ def df_to_png(df_display, title, col_colors, header_color="#2f3343"):
     plt.close(fig)
     return buf.getvalue()
 
-def booking_png(df, view, show_region, date_str, use_color, total_label):
-    """Build PNG for booking report"""
-    rows_data = []
-    colors    = []
-
+def booking_png(df, view, show_region, date_str, use_color, total_label, full_df=None):
+    """Build PNG: division rows + HQR subtotal + HYD subtotal (if multi) + Circle/HQR total"""
+    rows_data = []; colors = []
     sl = 1
-    for region, rdf in region_rows(df, "region", "pct"):
-        for _, row in rdf.iterrows():
-            r = dict(
-                Sl=sl,
-                Division=row["name"],
-            )
-            if show_region: r = {"Sl":sl,"Region":row["region"],"Division":row["name"]}|{}; r["Division"]=row["name"]
-            if view == "Count":
-                r.update({"Cash":indian_num(row["cash_c"]),"DQR":indian_num(row["dqr_c"]),
-                           "POS Card":indian_num(row["pc_c"]),"POS BQR":indian_num(row["pb_c"]),"POS Tot":indian_num(row["pos_c"]),
-                           "ePAY BQR":indian_num(row["eb_c"]),"UPI":indian_num(row["eu_c"]),"CC":indian_num(row["ec_c"]),"DC":indian_num(row["ed_c"]),"ePAY Tot":indian_num(row["pay_c"]),
-                           "Non-Dig":indian_num(row["cash_c"]),"Digital":indian_num(row["dig_c"]),"Total":indian_num(row["tot_c"]),"% Digital":f'{row["pct"]:.2f}%'})
-            elif view == "Amount":
-                r.update({"Cash(₹)":indian_amt(row["cash_a"]),"DQR(₹)":indian_amt(row["dqr_a"]),
-                           "POS Card(₹)":indian_amt(row["pc_a"]),"POS BQR(₹)":indian_amt(row["pb_a"]),"POS Tot(₹)":indian_amt(row["pos_a"]),
-                           "BQR(₹)":indian_amt(row["eb_a"]),"UPI(₹)":indian_amt(row["eu_a"]),"CC(₹)":indian_amt(row["ec_a"]),"DC(₹)":indian_amt(row["ed_a"]),"ePAY Tot(₹)":indian_amt(row["pay_a"]),
-                           "Non-Dig(₹)":indian_amt(row["cash_a"]),"Digital(₹)":indian_amt(row["dig_a"]),"Total(₹)":indian_amt(row["tot_a"]),"% Digital":f'{row["pct"]:.2f}%'})
-            else:
-                r.update({"Cash":indian_num(row["cash_c"]),"DQR":indian_num(row["dqr_c"]),
-                           "POS Tot":indian_num(row["pos_c"]),"ePAY Tot":indian_num(row["pay_c"]),
-                           "Digital":indian_num(row["dig_c"]),"Digital(₹)":indian_amt(row["dig_a"]),
-                           "Total":indian_num(row["tot_c"]),"Total(₹)":indian_amt(row["tot_a"]),"% Digital":f'{row["pct"]:.2f}%'})
-            rows_data.append(r)
-            colors.append(clr_dig(row["pct"], use_color))
-            sl += 1
-        # region subtotal
-        s = rsum(rdf)
-        r = {"Sl":"","Division":region}
+
+    def s_row(s, label, view):
+        r = {"Sl":"","Division":label}
         if view=="Count":
             r.update({"Cash":indian_num(s.get("cash_c",0)),"DQR":indian_num(s.get("dqr_c",0)),
                        "POS Card":indian_num(s.get("pc_c",0)),"POS BQR":indian_num(s.get("pb_c",0)),"POS Tot":indian_num(s.get("pos_c",0)),
                        "ePAY BQR":indian_num(s.get("eb_c",0)),"UPI":indian_num(s.get("eu_c",0)),"CC":indian_num(s.get("ec_c",0)),"DC":indian_num(s.get("ed_c",0)),"ePAY Tot":indian_num(s.get("pay_c",0)),
                        "Non-Dig":indian_num(s.get("cash_c",0)),"Digital":indian_num(s.get("dig_c",0)),"Total":indian_num(s.get("tot_c",0)),"% Digital":f'{s.get("pct",0):.2f}%'})
         elif view=="Amount":
-            r.update({"Cash(₹)":indian_amt(s.get("cash_a",0)),"DQR(₹)":indian_amt(s.get("dqr_a",0)),
-                       "POS Card(₹)":indian_amt(s.get("pc_a",0)),"POS BQR(₹)":indian_amt(s.get("pb_a",0)),"POS Tot(₹)":indian_amt(s.get("pos_a",0)),
-                       "BQR(₹)":indian_amt(s.get("eb_a",0)),"UPI(₹)":indian_amt(s.get("eu_a",0)),"CC(₹)":indian_amt(s.get("ec_a",0)),"DC(₹)":indian_amt(s.get("ed_a",0)),"ePAY Tot(₹)":indian_amt(s.get("pay_a",0)),
-                       "Non-Dig(₹)":indian_amt(s.get("cash_a",0)),"Digital(₹)":indian_amt(s.get("dig_a",0)),"Total(₹)":indian_amt(s.get("tot_a",0)),"% Digital":f'{s.get("pct",0):.2f}%'})
+            r.update({"Cash(Rs.)":indian_amt(s.get("cash_a",0)),"DQR(Rs.)":indian_amt(s.get("dqr_a",0)),
+                       "POS Card(Rs.)":indian_amt(s.get("pc_a",0)),"POS BQR(Rs.)":indian_amt(s.get("pb_a",0)),"POS Tot(Rs.)":indian_amt(s.get("pos_a",0)),
+                       "BQR(Rs.)":indian_amt(s.get("eb_a",0)),"UPI(Rs.)":indian_amt(s.get("eu_a",0)),"CC(Rs.)":indian_amt(s.get("ec_a",0)),"DC(Rs.)":indian_amt(s.get("ed_a",0)),"ePAY Tot(Rs.)":indian_amt(s.get("pay_a",0)),
+                       "Non-Dig(Rs.)":indian_amt(s.get("cash_a",0)),"Digital(Rs.)":indian_amt(s.get("dig_a",0)),"Total(Rs.)":indian_amt(s.get("tot_a",0)),"% Digital":f'{s.get("pct",0):.2f}%'})
         else:
             tc2=float(s.get("tot_c",0)); dc2=float(s.get("dig_c",0))
-            ta2=float(s.get("tot_a",0)); da2=float(s.get("dig_a",0))
             r.update({"Cash":indian_num(s.get("cash_c",0)),"DQR":indian_num(s.get("dqr_c",0)),
                        "POS Tot":indian_num(s.get("pos_c",0)),"ePAY Tot":indian_num(s.get("pay_c",0)),
-                       "Digital":indian_num(s.get("dig_c",0)),"Digital(₹)":indian_amt(s.get("dig_a",0)),
-                       "Total":indian_num(s.get("tot_c",0)),"Total(₹)":indian_amt(s.get("tot_a",0)),
+                       "Digital":indian_num(s.get("dig_c",0)),"Digital(Rs.)":indian_amt(s.get("dig_a",0)),
+                       "Total":indian_num(s.get("tot_c",0)),"Total(Rs.)":indian_amt(s.get("tot_a",0)),
                        "% Digital":f'{round(dc2/tc2*100,2) if tc2>0 else 0:.2f}%'})
-        if len([x for x in REGION_ORDER if x in df["region"].unique()]) > 1:
-            rows_data.append(r); colors.append("#b8d4f0")
+        return r
 
-    # grand total
-    gt = rsum(df)
-    r = {"Sl":"","Division":total_label}
-    if view=="Count":
-        r.update({"Cash":indian_num(gt.get("cash_c",0)),"DQR":indian_num(gt.get("dqr_c",0)),
-                   "POS Card":indian_num(gt.get("pc_c",0)),"POS BQR":indian_num(gt.get("pb_c",0)),"POS Tot":indian_num(gt.get("pos_c",0)),
-                   "ePAY BQR":indian_num(gt.get("eb_c",0)),"UPI":indian_num(gt.get("eu_c",0)),"CC":indian_num(gt.get("ec_c",0)),"DC":indian_num(gt.get("ed_c",0)),"ePAY Tot":indian_num(gt.get("pay_c",0)),
-                   "Non-Dig":indian_num(gt.get("cash_c",0)),"Digital":indian_num(gt.get("dig_c",0)),"Total":indian_num(gt.get("tot_c",0)),"% Digital":f'{gt.get("pct",0):.2f}%'})
-    elif view=="Amount":
-        r.update({"Cash(₹)":indian_amt(gt.get("cash_a",0)),"DQR(₹)":indian_amt(gt.get("dqr_a",0)),
-                   "POS Card(₹)":indian_amt(gt.get("pc_a",0)),"POS BQR(₹)":indian_amt(gt.get("pb_a",0)),"POS Tot(₹)":indian_amt(gt.get("pos_a",0)),
-                   "BQR(₹)":indian_amt(gt.get("eb_a",0)),"UPI(₹)":indian_amt(gt.get("eu_a",0)),"CC(₹)":indian_amt(gt.get("ec_a",0)),"DC(₹)":indian_amt(gt.get("ed_a",0)),"ePAY Tot(₹)":indian_amt(gt.get("pay_a",0)),
-                   "Non-Dig(₹)":indian_amt(gt.get("cash_a",0)),"Digital(₹)":indian_amt(gt.get("dig_a",0)),"Total(₹)":indian_amt(gt.get("tot_a",0)),"% Digital":f'{gt.get("pct",0):.2f}%'})
+    # Division rows — only HQR (df is already filtered)
+    for _, row in df[df["region"]=="Headquarters Region"].sort_values("pct",ascending=False).iterrows():
+        r = {"Sl":sl,"Division":row["name"]}
+        if view=="Count":
+            r.update({"Cash":indian_num(row["cash_c"]),"DQR":indian_num(row["dqr_c"]),
+                       "POS Card":indian_num(row["pc_c"]),"POS BQR":indian_num(row["pb_c"]),"POS Tot":indian_num(row["pos_c"]),
+                       "ePAY BQR":indian_num(row["eb_c"]),"UPI":indian_num(row["eu_c"]),"CC":indian_num(row["ec_c"]),"DC":indian_num(row["ed_c"]),"ePAY Tot":indian_num(row["pay_c"]),
+                       "Non-Dig":indian_num(row["cash_c"]),"Digital":indian_num(row["dig_c"]),"Total":indian_num(row["tot_c"]),"% Digital":f'{row["pct"]:.2f}%'})
+        elif view=="Amount":
+            r.update({"Cash(Rs.)":indian_amt(row["cash_a"]),"DQR(Rs.)":indian_amt(row["dqr_a"]),
+                       "POS Card(Rs.)":indian_amt(row["pc_a"]),"POS BQR(Rs.)":indian_amt(row["pb_a"]),"POS Tot(Rs.)":indian_amt(row["pos_a"]),
+                       "BQR(Rs.)":indian_amt(row["eb_a"]),"UPI(Rs.)":indian_amt(row["eu_a"]),"CC(Rs.)":indian_amt(row["ec_a"]),"DC(Rs.)":indian_amt(row["ed_a"]),"ePAY Tot(Rs.)":indian_amt(row["pay_a"]),
+                       "Non-Dig(Rs.)":indian_amt(row["cash_a"]),"Digital(Rs.)":indian_amt(row["dig_a"]),"Total(Rs.)":indian_amt(row["tot_a"]),"% Digital":f'{row["pct"]:.2f}%'})
+        else:
+            r.update({"Cash":indian_num(row["cash_c"]),"DQR":indian_num(row["dqr_c"]),
+                       "POS Tot":indian_num(row["pos_c"]),"ePAY Tot":indian_num(row["pay_c"]),
+                       "Digital":indian_num(row["dig_c"]),"Digital(Rs.)":indian_amt(row["dig_a"]),
+                       "Total":indian_num(row["tot_c"]),"Total(Rs.)":indian_amt(row["tot_a"]),"% Digital":f'{row["pct"]:.2f}%'})
+        rows_data.append(r); colors.append(clr_dig(row["pct"],use_color)); sl+=1
+
+    # HQR subtotal
+    hqr_s = rsum(df[df["region"]=="Headquarters Region"])
+    rows_data.append(s_row(hqr_s,"Headquarters Region",view)); colors.append("#b8d4f0")
+
+    # HYD subtotal + Circle total (only when multi-region)
+    if full_df is not None:
+        hyd_df2 = full_df[full_df["region"]=="Hyderabad Region"]
+        if not hyd_df2.empty:
+            hyd_s2 = rsum(hyd_df2)
+            rows_data.append(s_row(hyd_s2,"Hyderabad Region",view)); colors.append("#b8d4f0")
+        gt2 = rsum(full_df)
+        rows_data.append(s_row(gt2,total_label,view)); colors.append("#FFD700")
     else:
-        tc2=float(gt.get("tot_c",0)); dc2=float(gt.get("dig_c",0))
-        ta2=float(gt.get("tot_a",0)); da2=float(gt.get("dig_a",0))
-        r.update({"Cash":indian_num(gt.get("cash_c",0)),"DQR":indian_num(gt.get("dqr_c",0)),
-                   "POS Tot":indian_num(gt.get("pos_c",0)),"ePAY Tot":indian_num(gt.get("pay_c",0)),
-                   "Digital":indian_num(gt.get("dig_c",0)),"Digital(₹)":indian_amt(gt.get("dig_a",0)),
-                   "Total":indian_num(gt.get("tot_c",0)),"Total(₹)":indian_amt(gt.get("tot_a",0)),
-                   "% Digital":f'{round(dc2/tc2*100,2) if tc2>0 else 0:.2f}%'})
-    rows_data.append(r); colors.append("#FFD700")
+        gt2 = rsum(df)
+        rows_data.append(s_row(gt2,total_label,view)); colors.append("#FFD700")
 
     dfd = pd.DataFrame(rows_data)
-    cap = {"Count":"Count/Transactions","Amount":"Amount (₹)","Combined":"Combined"}[view]
-    title = f"Digital Transaction Status – {cap} — {date_str}"
-    return df_to_png(dfd, title, colors)
+    cap = {"Count":"Count/Transactions","Amount":"Amount (Rs.)","Combined":"Combined"}[view]
+    return df_to_png(dfd, f"Digital Transaction Status – {cap} — {date_str}", colors)
 
-def cod_png(df, show_region, date_str, use_color, total_label):
-    rows_data = []; colors = []
-    sl = 1
-    multi_r = len([x for x in REGION_ORDER if x in df["region"].unique()]) > 1
-    for region, rdf in region_rows(df, "region", "pct"):
-        for _, row in rdf.iterrows():
-            r = {"Sl":sl,"Division":row["name"],
-                 "Total COD":indian_num(row["total_cod"]),
-                 "Digital":indian_num(row["digital"]),
-                 "Cash":indian_num(row["cash"]),
-                 "% Digital":f'{row["pct"]:.2f}%'}
-            rows_data.append(r)
-            colors.append(clr_cod(row["pct"], use_color))
-            sl += 1
-        if multi_r:
-            tc=rdf["total_cod"].sum(); dc=rdf["digital"].sum(); cc=rdf["cash"].sum()
-            pr=round(dc/tc*100,2) if tc>0 else 0.0
-            rows_data.append({"Sl":"","Division":region,"Total COD":indian_num(tc),
-                               "Digital":indian_num(dc),"Cash":indian_num(cc),"% Digital":f'{pr:.2f}%'})
+def cod_png(df, show_region, date_str, use_color, total_label, full_df=None):
+    rows_data = []; colors = []; sl = 1
+
+    # Division rows — HQR only (df is already filtered)
+    for _, row in df[df["region"]=="Headquarters Region"].sort_values("pct",ascending=False).iterrows():
+        rows_data.append({"Sl":sl,"Division":row["name"],
+                           "Total COD":indian_num(row["total_cod"]),"Digital":indian_num(row["digital"]),
+                           "Cash":indian_num(row["cash"]),"% Digital":f'{row["pct"]:.2f}%'})
+        colors.append(clr_cod(row["pct"],use_color)); sl+=1
+
+    # HQR subtotal
+    hqr_c = df[df["region"]=="Headquarters Region"]
+    tc_h=hqr_c["total_cod"].sum(); dc_h=hqr_c["digital"].sum(); cc_h=hqr_c["cash"].sum()
+    pp_h=round(dc_h/tc_h*100,2) if tc_h>0 else 0.0
+    rows_data.append({"Sl":"","Division":"Headquarters Region","Total COD":indian_num(tc_h),
+                       "Digital":indian_num(dc_h),"Cash":indian_num(cc_h),"% Digital":f'{pp_h:.2f}%'})
+    colors.append("#b8d4f0")
+
+    # HYD subtotal + total
+    if full_df is not None:
+        hyd_c = full_df[full_df["region"]=="Hyderabad Region"]
+        if not hyd_c.empty:
+            tc_y=hyd_c["total_cod"].sum(); dc_y=hyd_c["digital"].sum(); cc_y=hyd_c["cash"].sum()
+            pp_y=round(dc_y/tc_y*100,2) if tc_y>0 else 0.0
+            rows_data.append({"Sl":"","Division":"Hyderabad Region","Total COD":indian_num(tc_y),
+                               "Digital":indian_num(dc_y),"Cash":indian_num(cc_y),"% Digital":f'{pp_y:.2f}%'})
             colors.append("#b8d4f0")
-    tc=df["total_cod"].sum(); dc=df["digital"].sum(); cc=df["cash"].sum()
+        tc=full_df["total_cod"].sum(); dc=full_df["digital"].sum(); cc=full_df["cash"].sum()
+    else:
+        tc=df["total_cod"].sum(); dc=df["digital"].sum(); cc=df["cash"].sum()
     pg=round(dc/tc*100,2) if tc>0 else 0.0
     rows_data.append({"Sl":"","Division":total_label,"Total COD":indian_num(tc),
                        "Digital":indian_num(dc),"Cash":indian_num(cc),"% Digital":f'{pg:.2f}%'})
     colors.append("#FFD700")
+
     dfd = pd.DataFrame(rows_data)
     return df_to_png(dfd, f"Status of COD Digital Transactions — {date_str}", colors)
 
 # ========== EXCEL BUILDER ==========
-def build_excel(df, view, show_region, date_str, use_color, total_label, mode="booking"):
+def build_excel(df, view, show_region, date_str, use_color, total_label, full_df=None, mode="booking"):
     out = io.BytesIO()
     with pd.ExcelWriter(out, engine="xlsxwriter") as writer:
         wb = writer.book
@@ -622,7 +620,38 @@ def build_excel(df, view, show_region, date_str, use_color, total_label, mode="b
                         elif key=="cash":       ws.write(dr,ci,int(cc2),rtot)
                         elif key=="pct":        ws.write(dr,ci,f"{pr:.2f}%",rtot)
                     dr+=1
-            tc2=df["total_cod"].sum(); dc2=df["digital"].sum(); cc2=df["cash"].sum()
+            # HQR subtotal
+            hqr_xl = df[df["region"]=="Headquarters Region"] if "region" in df.columns else df
+            tc_hqr=hqr_xl["total_cod"].sum(); dc_hqr=hqr_xl["digital"].sum(); cc_hqr=hqr_xl["cash"].sum()
+            ph_hqr=round(dc_hqr/tc_hqr*100,2) if tc_hqr>0 else 0.0
+            for ci,(lbl,key) in enumerate(cols):
+                if key=="sl": ws.write(dr,ci,"",rtot)
+                elif key in ("region",): ws.write(dr,ci,"",rtot)
+                elif key=="name": ws.write(dr,ci,"Headquarters Region",rlft)
+                elif key=="total_cod": ws.write(dr,ci,int(tc_hqr),rtot)
+                elif key=="digital": ws.write(dr,ci,int(dc_hqr),rtot)
+                elif key=="cash": ws.write(dr,ci,int(cc_hqr),rtot)
+                elif key=="pct": ws.write(dr,ci,f"{ph_hqr:.2f}%",rtot)
+            dr+=1
+
+            # HYD subtotal + grand total
+            if full_df is not None:
+                hyd_xl = full_df[full_df["region"]=="Hyderabad Region"]
+                if not hyd_xl.empty:
+                    tc_h=hyd_xl["total_cod"].sum(); dc_h=hyd_xl["digital"].sum(); cc_h=hyd_xl["cash"].sum()
+                    ph_h=round(dc_h/tc_h*100,2) if tc_h>0 else 0.0
+                    for ci,(lbl,key) in enumerate(cols):
+                        if key=="sl": ws.write(dr,ci,"",rtot)
+                        elif key in ("region",): ws.write(dr,ci,"",rtot)
+                        elif key=="name": ws.write(dr,ci,"Hyderabad Region",rlft)
+                        elif key=="total_cod": ws.write(dr,ci,int(tc_h),rtot)
+                        elif key=="digital": ws.write(dr,ci,int(dc_h),rtot)
+                        elif key=="cash": ws.write(dr,ci,int(cc_h),rtot)
+                        elif key=="pct": ws.write(dr,ci,f"{ph_h:.2f}%",rtot)
+                    dr+=1
+                tc2=full_df["total_cod"].sum(); dc2=full_df["digital"].sum(); cc2=full_df["cash"].sum()
+            else:
+                tc2=df["total_cod"].sum(); dc2=df["digital"].sum(); cc2=df["cash"].sum()
             pg=round(dc2/tc2*100,2) if tc2>0 else 0.0
             for ci,(lbl,key) in enumerate(cols):
                 if key=="sl":           ws.write(dr,ci,"",gtot)
@@ -744,7 +773,21 @@ def build_excel(df, view, show_region, date_str, use_color, total_label, mode="b
                     s=rsum(rdf); s["name"]=region; s["region"]=""; s["oid"]=0
                     write_row(dr, s, 0, is_tot=True, tot_fmt=rtot, tot_lft=rlft); dr+=1
 
-            gt=rsum(df); gt["name"]=total_label; gt["region"]=""; gt["oid"]=0
+            # HQR subtotal
+            hqr_xl2 = df[df["region"]=="Headquarters Region"] if "region" in df.columns else df
+            hqr_s_xl = rsum(hqr_xl2); hqr_s_xl["name"]="Headquarters Region"; hqr_s_xl["region"]=""; hqr_s_xl["oid"]=0
+            write_row(dr, hqr_s_xl, 0, is_tot=True, tot_fmt=rtot, tot_lft=rlft); dr+=1
+
+            # HYD subtotal + grand total
+            if full_df is not None:
+                hyd_xl2 = full_df[full_df["region"]=="Hyderabad Region"]
+                if not hyd_xl2.empty:
+                    hyd_s_xl = rsum(hyd_xl2); hyd_s_xl["name"]="Hyderabad Region"; hyd_s_xl["region"]=""; hyd_s_xl["oid"]=0
+                    write_row(dr, hyd_s_xl, 0, is_tot=True, tot_fmt=rtot, tot_lft=rlft); dr+=1
+                gt_src_xl = full_df
+            else:
+                gt_src_xl = df
+            gt=rsum(gt_src_xl); gt["name"]=total_label; gt["region"]=""; gt["oid"]=0
             write_row(dr, gt, 0, is_tot=True, tot_fmt=gtot, tot_lft=glft)
 
             max_n = max((len(str(r)) for r in df["name"]), default=20)
@@ -778,44 +821,39 @@ show_hyd_detail = st.sidebar.checkbox(
 )
 
 # ========== COMPACT VIEW BUILDER ==========
-def apply_hyd_filter(df, show_hyd_detail, mode="booking"):
+def apply_hyd_filter(df, show_hyd_detail):
     """
-    When show_hyd_detail=False and multiple regions exist:
-    Returns (df_display, hyd_summary_row)
-    df_display = only HQR rows
-    hyd_summary_row = aggregated HYD row (dict) to append as a subtotal
+    Returns (df_display, full_df_or_None)
+    df_display = HQR rows only when show_hyd_detail=False AND multi-region
+    full_df    = original full df (for computing HYD subtotal + Circle total)
+                 None when showing all detail or single region
     """
     regions_in_data = [r for r in REGION_ORDER if r in df["region"].unique()]
-    if show_hyd_detail or len(regions_in_data) <= 1:
+    is_multi = len(regions_in_data) > 1
+
+    if not is_multi:
+        # Single region — show all, no HYD subtotal needed
         return df, None
 
-    hqr_df  = df[df["region"] == "Headquarters Region"]
-    hyd_df  = df[df["region"] == "Hyderabad Region"]
+    if show_hyd_detail:
+        # Multi-region, full detail — pass full_df so footers can compute correct totals
+        return df, df
 
-    if hyd_df.empty:
-        return df, None
-
-    if mode == "booking":
-        hyd_s = rsum(hyd_df)
-        hyd_s["name"] = "Hyderabad Region"
-    else:
-        hyd_s = {
-            "name": "Hyderabad Region",
-            "region": "Hyderabad Region",
-            "total_cod": float(hyd_df["total_cod"].sum()),
-            "digital":   float(hyd_df["digital"].sum()),
-            "cash":      float(hyd_df["cash"].sum()),
-        }
-        tc = hyd_s["total_cod"]
-        hyd_s["pct"] = round(hyd_s["digital"]/tc*100, 2) if tc > 0 else 0.0
-
-    return hqr_df, hyd_s
+    # Multi-region, hide HYD detail — show only HQR rows
+    hqr_df = df[df["region"] == "Headquarters Region"].copy()
+    return hqr_df, df
 
 # ========== MAIN ==========
 if uploaded:
     df_raw   = pd.read_csv(uploaded)
     date_str = report_date.strftime("%d.%m.%Y")
     date_fn  = report_date.strftime("%d_%m_%Y")
+
+    # Date warning
+    from datetime import date as _date
+    today = _date.today()
+    if report_date != today:
+        st.warning(f"⚠️ Report date is {date_str} — today is {today.strftime('%d.%m.%Y')}. Please confirm the date is correct.")
 
     if report_type == "Digital Transactions":
         df = process_booking(df_raw)
@@ -834,7 +872,7 @@ if uploaded:
 
         tab1, tab2, tab3 = st.tabs(["📊 Count / Transactions","💰 Amount (₹)","📋 Combined"])
 
-        df_display, hyd_s = apply_hyd_filter(df, show_hyd_detail, mode="booking")
+        df_display, full_df_ref = apply_hyd_filter(df, show_hyd_detail)
 
         for tab, view, fn_sfx in [
             (tab1,"Count",f"Digital_Transactions_Count_{date_fn}"),
@@ -842,12 +880,12 @@ if uploaded:
             (tab3,"Combined",f"Digital_Transactions_{date_fn}"),
         ]:
             with tab:
-                st.markdown(booking_html(df_display,view,show_region,date_str,use_color,total_label,hyd_s),
+                st.markdown(booking_html(df_display,view,show_region,date_str,use_color,total_label,full_df_ref),
                             unsafe_allow_html=True)
-                png_bytes = booking_png(df_display,view,show_region,date_str,use_color,total_label)
+                png_bytes = booking_png(df_display,view,show_region,date_str,use_color,total_label,full_df_ref)
                 st.download_button(f"📷 Download as Image ({view})", png_bytes,
                     file_name=f"{fn_sfx}.png", mime="image/png")
-                xl = build_excel(df_display,view,show_region,date_str,use_color,total_label)
+                xl = build_excel(df_display,view,show_region,date_str,use_color,total_label,full_df=full_df_ref)
                 st.download_button(f"⬇ Download Excel ({view})", xl,
                     file_name=f"{fn_sfx}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
@@ -867,14 +905,14 @@ if uploaded:
             <span style='background:#FF9999;padding:3px 10px;border-radius:4px;'>< 30% Digital</span>
             </div>""", unsafe_allow_html=True)
 
-        df_display_cod, hyd_s_cod = apply_hyd_filter(df, show_hyd_detail, mode="cod")
-        st.markdown(cod_html(df_display_cod,show_region,date_str,use_color,total_label,hyd_s_cod),
+        df_display_cod, full_df_cod = apply_hyd_filter(df, show_hyd_detail)
+        st.markdown(cod_html(df_display_cod,show_region,date_str,use_color,total_label,full_df_cod),
                     unsafe_allow_html=True)
         fn = f"COD_Digital_Transactions_{date_fn}"
-        png_bytes = cod_png(df_display_cod,show_region,date_str,use_color,total_label)
+        png_bytes = cod_png(df_display_cod,show_region,date_str,use_color,total_label,full_df_cod)
         st.download_button("📷 Download as Image", png_bytes,
             file_name=f"{fn}.png", mime="image/png")
-        xl = build_excel(df_display_cod,"COD",show_region,date_str,use_color,total_label,mode="cod")
+        xl = build_excel(df_display_cod,"COD",show_region,date_str,use_color,total_label,full_df=full_df_cod,mode="cod")
         st.download_button("⬇ Download Excel (COD)", xl,
             file_name=f"{fn}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
