@@ -607,7 +607,77 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
             historical_match[revenue_col_hist].iloc[0], errors="coerce")
         monthly_traffic = pd.to_numeric(
             historical_match[traffic_col_hist].iloc[0], errors="coerce")
-        if monthly_revenue == 0 and monthly_traffic == 0: st.write(customer_id,customer_name,monthly_revenue,monthly_traffic)
+        # Customer exists but May historical data is zero
+        if (
+            use_average_history
+            and monthly_revenue == 0
+            and monthly_traffic == 0
+        ):
+        
+            revenue_cols = [
+                c for c in historical_df.columns
+                if "REVENUE" in str(c).upper()
+            ]
+        
+            traffic_cols = [
+                c for c in historical_df.columns
+                if "TRAFFIC" in str(c).upper()
+            ]
+        
+            revenue_values = []
+            traffic_values = []
+        
+            for col in revenue_cols:
+                val = pd.to_numeric(
+                    historical_match[col].iloc[0],
+                    errors="coerce"
+                )
+        
+                if pd.notna(val) and val > 0:
+                    revenue_values.append(val)
+        
+            for col in traffic_cols:
+                val = pd.to_numeric(
+                    historical_match[col].iloc[0],
+                    errors="coerce"
+                )
+        
+                if pd.notna(val) and val > 0:
+                    traffic_values.append(val)
+        
+            if revenue_values and traffic_values:
+        
+                avg_monthly_revenue = sum(revenue_values) / len(revenue_values)
+                avg_monthly_traffic = sum(traffic_values) / len(traffic_values)
+        
+                avg_daily_revenue = avg_monthly_revenue / days_in_month
+                avg_daily_traffic = avg_monthly_traffic / days_in_month
+        
+                expected_revenue = avg_daily_revenue * uploaded_days
+                expected_traffic = avg_daily_traffic * uploaded_days
+        
+                revenue_var = (
+                    ((current_revenue - expected_revenue)
+                     / expected_revenue) * 100
+                    if expected_revenue > 0 else 0
+                )
+        
+                traffic_var = (
+                    ((current_traffic - expected_traffic)
+                     / expected_traffic) * 100
+                    if expected_traffic > 0 else 0
+                )
+        
+                avg_history_results.append({
+                    "Customer ID": customer_id,
+                    "Customer Name": customer_name,
+                    "Actual Revenue": round(current_revenue),
+                    "Expected Revenue": round(expected_revenue),
+                    "Revenue Variance %": round(revenue_var,2),
+                    "Actual Traffic": round(current_traffic),
+                    "Expected Traffic": round(expected_traffic),
+                    "Traffic Variance %": round(traffic_var,2)
+                })
 
         if pd.isna(monthly_revenue): monthly_revenue = 0
         if pd.isna(monthly_traffic): monthly_traffic = 0
@@ -639,6 +709,14 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
             "Traffic Status":               classify(traffic_var, sd_percent),
         })
 
+    # LOOP ENDS HERE
+    
+    st.write(
+        "Average History Records Found:",
+        len(avg_history_results)
+    )
+
+    results_df = pd.DataFrame(results)
     result_df = pd.DataFrame(results)
     avg_history_df = pd.DataFrame(avg_history_results)
 
