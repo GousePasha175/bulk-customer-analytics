@@ -744,22 +744,21 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
                 color_status, subset=["Revenue Status", "Traffic Status"])
             st.dataframe(styled_df, use_container_width=True, hide_index=True)
             avg_history_df = pd.DataFrame(avg_history_results)
-            st.write("Columns =", avg_history_df.columns.tolist())
-            st.write("Average History DF Rows:", len(avg_history_df))
 
+            st.write("Average History DF Rows:", len(avg_history_df))
+            
             if use_average_history and not avg_history_df.empty:
             
                 st.markdown("---")
+            
                 st.subheader(
                     "Average-Based Analysis for No Historical Data Customers"
                 )
             
-                st.dataframe(avg_history_df, use_container_width=True)
-                # =====================================
-            # Average Historical Analysis
-            # =====================================
-            
-            if use_average_history and not avg_history_df.empty:
+                st.dataframe(
+                    avg_history_df,
+                    use_container_width=True
+                )
             
                 st.markdown("---")
             
@@ -767,7 +766,7 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
                     "Average Historical Performance Analysis"
                 )
             
-                status_order = [
+                avg_status_order = [
                     "Excellent",
                     "Normal",
                     "Warning",
@@ -775,7 +774,7 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
                     "No Historical Data"
                 ]
             
-                for status in status_order:
+                for status in avg_status_order:
             
                     grp = avg_history_df[
                         avg_history_df["Revenue Status"] == status
@@ -800,8 +799,6 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
                             use_container_width=True,
                             hide_index=True
                         )
-                
-
     # ---- Excel Download ----
     output = io.BytesIO()
 
