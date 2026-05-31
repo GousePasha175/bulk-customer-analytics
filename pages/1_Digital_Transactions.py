@@ -175,14 +175,35 @@ def process_booking(df_raw):
 # ========== PROCESS COD ==========
 def process_cod(df_raw):
     df = df_raw.copy()
-    df['oid_i']  = df['office-id'].apply(lambda x: int(float(str(x))) if pd.notna(x) else None)
+    cols = [c.lower().strip() for c in df.columns]
+
+    # Detect office-id column (handle variations)
+    id_col   = next((c for c in df.columns if c.lower().strip() in ('office-id','office_id','office id')), None)
+    name_col = next((c for c in df.columns if c.lower().strip() in ('office-name','office_name','office name')), None)
+    dig_col  = next((c for c in df.columns if 'digital' in c.lower() and 'count' in c.lower()), None)
+    cash_col = next((c for c in df.columns if 'cash' in c.lower() and 'count' in c.lower()), None)
+
+    if not id_col:
+        raise ValueError(
+            f"Could not find Office ID column in uploaded file. "
+            f"Found columns: {list(df.columns[:6])}. "
+            f"Please make sure you selected the correct report type (COD Digital Transactions)."
+        )
+    if not dig_col or not cash_col:
+        raise ValueError(
+            f"Could not find digital/cash count columns. "
+            f"Found: {list(df.columns)}. "
+            f"Please ensure you uploaded the COD report (not the Booking Payment report)."
+        )
+
+    df['oid_i']  = df[id_col].apply(lambda x: int(float(str(x))) if pd.notna(x) else None)
     df = df.dropna(subset=['oid_i'])
     df['oid_i']  = df['oid_i'].astype(int)
     df['region'] = df['oid_i'].map(REGION_MAP).fillna("Other")
-    df['name']   = df['office-name'].apply(lambda x: strip_div(str(x)))
+    df['name']   = df[name_col].apply(lambda x: strip_div(str(x))) if name_col else df['oid_i'].astype(str)
     agg = df.groupby(['oid_i','region','name'], as_index=False).agg(
-        digital=('no_digital_count','sum'),
-        cash=('no_cash_count','sum')
+        digital=(dig_col,'sum'),
+        cash=(cash_col,'sum')
     )
     agg['total_cod'] = agg['digital'] + agg['cash']
     agg['pct'] = agg.apply(
@@ -195,7 +216,7 @@ def booking_html(df, view, show_region, date_str, use_color, total_label, full_d
     tbl_id = {"Count":"tbl-cnt","Amount":"tbl-amt","Combined":"tbl-comb"}[view]
 
     if view == "Count":
-        h1  = th("Sl.",rs=2)+(th("Region",rs=2) if show_region else "")+th("Division",rs=2)
+        h1  = th("Sl.",rs=2)+th("Division",rs=2)
         h1 += th("Cash",rs=2)+th("Digital QR (APT)",rs=2)
         h1 += th("SBI POS Transactions",cs=3,cls="grp")
         h1 += th("SBI ePAY Transactions",cs=5,cls="grp")
@@ -204,7 +225,7 @@ def booking_html(df, view, show_region, date_str, use_color, total_label, full_d
         h2  = th("Card")+th("Bharat QR")+th("Total")
         h2 += th("Bharat QR")+th("UPI")+th("Credit Card")+th("Debit Card")+th("Total")
     elif view == "Amount":
-        h1  = th("Sl.",rs=2)+(th("Region",rs=2) if show_region else "")+th("Division",rs=2)
+        h1  = th("Sl.",rs=2)+th("Division",rs=2)
         h1 += th("Cash (₹)",rs=2)+th("Digital QR (APT) (₹)",rs=2)
         h1 += th("SBI POS Transactions (₹)",cs=3,cls="grp")
         h1 += th("SBI ePAY Transactions (₹)",cs=5,cls="grp")
@@ -213,7 +234,7 @@ def booking_html(df, view, show_region, date_str, use_color, total_label, full_d
         h2  = th("Card")+th("Bharat QR")+th("Total")
         h2 += th("Bharat QR")+th("UPI")+th("Credit Card")+th("Debit Card")+th("Total")
     else:
-        h1  = th("Sl.",rs=2)+(th("Region",rs=2) if show_region else "")+th("Division",rs=2)
+        h1  = th("Sl.",rs=2)+th("Division",rs=2)
         h1 += th("Cash",cs=2,cls="grp")+th("Digital QR (APT)",cs=2,cls="grp")
         h1 += th("SBI POS Transactions",cs=6,cls="grp")
         h1 += th("SBI ePAY Transactions",cs=10,cls="grp")
@@ -279,20 +300,15 @@ def booking_html(df, view, show_region, date_str, use_color, total_label, full_d
         return t
 
     sl = 1
-    multi_region = len([r for r in REGION_ORDER if r in df["region"].unique()]) > 1
+    # Only show division rows for HQR (df is already filtered to HQR only or full)
+    # Subtotals are handled entirely in the footer section below
     for region, rdf in region_rows(df, "region", "pct"):
         for _, row in rdf.iterrows():
             bg = clr_dig(row["pct"], use_color)
             pre = f'<td>{sl}</td>'
-            if show_region: pre += f'<td>{row["region"]}</td>'
             pre += f'<td class="lft">{row["name"]}</td>'
             html += f'<tr style="background:{bg};">{pre}{cells(row)}</tr>\n'
             sl += 1
-        # Only show region subtotal if multiple regions
-        if multi_region:
-            s = rsum(rdf); s["name"] = region
-            span = 2 if show_region else 1
-            html += f'<tr class="rtot"><td colspan="{span}"></td><td class="lft"><b>{region}</b></td>{cells(s)}</tr>\n'
 
     # HQR subtotal — always shown
     hqr_df_local = df[df["region"]=="Headquarters Region"] if "region" in df.columns else df
@@ -316,7 +332,7 @@ def booking_html(df, view, show_region, date_str, use_color, total_label, full_d
 
 # ========== HTML TABLE — COD ==========
 def cod_html(df, show_region, date_str, use_color, total_label, full_df=None):
-    h  = th("Sl.") + (th("Region") if show_region else "") + th("Division")
+    h  = th("Sl.") + th("Division")
     h += th("Total COD Delivered") + th("Digital Trnx.") + th("Cash Trnx.") + th("% Digital")
 
     html  = '<div class="rpt-wrap" id="tbl-cod"><table class="rpt">'
@@ -324,12 +340,11 @@ def cod_html(df, show_region, date_str, use_color, total_label, full_df=None):
     html += f'<thead><tr>{h}</tr></thead><tbody>'
 
     sl = 1
-    multi_region_cod = len([r for r in REGION_ORDER if r in df["region"].unique()]) > 1
+    # Division rows only — subtotals handled in footer below
     for region, rdf in region_rows(df, "region", "pct"):
         for _, row in rdf.iterrows():
             bg = clr_cod(row["pct"], use_color)
             pre = f'<td>{sl}</td>'
-            if show_region: pre += f'<td>{row["region"]}</td>'
             pre += f'<td class="lft">{row["name"]}</td>'
             pre += f'<td>{indian_num(row["total_cod"])}</td>'
             pre += f'<td>{indian_num(row["digital"])}</td>'
@@ -337,14 +352,6 @@ def cod_html(df, show_region, date_str, use_color, total_label, full_df=None):
             pre += f'<td><b>{row["pct"]:.2f}%</b></td>'
             html += f'<tr style="background:{bg};">{pre}</tr>\n'
             sl += 1
-        if multi_region_cod:
-            tc=rdf["total_cod"].sum(); dc=rdf["digital"].sum(); cc=rdf["cash"].sum()
-            pr=round(dc/tc*100,2) if tc>0 else 0.0
-            span = 2 if show_region else 1
-            html += (f'<tr class="rtot"><td colspan="{span}"></td>'
-                     f'<td class="lft"><b>{region}</b></td>'
-                     f'<td>{indian_num(tc)}</td><td>{indian_num(dc)}</td>'
-                     f'<td>{indian_num(cc)}</td><td><b>{pr:.2f}%</b></td></tr>\n')
 
     # HQR subtotal — always shown
     hqr_cod = df[df["region"]=="Headquarters Region"] if "region" in df.columns else df
@@ -596,7 +603,7 @@ def build_excel(df, view, show_region, date_str, use_color, total_label, full_df
             ws.set_row(1,28)
             for ci,(lbl,_) in enumerate(cols): ws.write(1,ci,lbl,hdr)
             dr=2; sl=1
-            multi_r_cod_xl = len([x for x in REGION_ORDER if x in df["region"].unique()]) > 1
+            # Division rows only — subtotals in footer below
             for region,rdf in region_rows(df,"region","pct"):
                 for _,row in rdf.iterrows():
                     pct_v=row["pct"]
@@ -608,18 +615,6 @@ def build_excel(df, view, show_region, date_str, use_color, total_label, full_df
                         elif key=="pct":     ws.write(dr,ci,f"{pct_v:.2f}%",f)
                         else:                ws.write(dr,ci,int(row[key]),f)
                     sl+=1; dr+=1
-                if multi_r_cod_xl:
-                    tc2=rdf["total_cod"].sum(); dc2=rdf["digital"].sum(); cc2=rdf["cash"].sum()
-                    pr=round(dc2/tc2*100,2) if tc2>0 else 0.0
-                    for ci,(lbl,key) in enumerate(cols):
-                        if key=="sl":           ws.write(dr,ci,"",rtot)
-                        elif key=="region":     ws.write(dr,ci,"",rtot)
-                        elif key=="name":       ws.write(dr,ci,region,rlft)
-                        elif key=="total_cod":  ws.write(dr,ci,int(tc2),rtot)
-                        elif key=="digital":    ws.write(dr,ci,int(dc2),rtot)
-                        elif key=="cash":       ws.write(dr,ci,int(cc2),rtot)
-                        elif key=="pct":        ws.write(dr,ci,f"{pr:.2f}%",rtot)
-                    dr+=1
             # HQR subtotal
             hqr_xl = df[df["region"]=="Headquarters Region"] if "region" in df.columns else df
             tc_hqr=hqr_xl["total_cod"].sum(); dc_hqr=hqr_xl["digital"].sum(); cc_hqr=hqr_xl["cash"].sum()
@@ -765,13 +760,10 @@ def build_excel(df, view, show_region, date_str, use_color, total_label, full_df
                         ws.write(ri,ci3,int(val) if t2 in ("c","b") else round(float(val),2),
                                  boldf if t2=="b" and not is_tot else f)
 
-            multi_r_xl = len([x for x in REGION_ORDER if x in df["region"].unique()]) > 1
+            # Division rows only — subtotals in footer below
             for region,rdf in region_rows(df,"region","pct"):
                 for _,row in rdf.iterrows():
                     write_row(dr, row, row["pct"]); sl+=1; dr+=1
-                if multi_r_xl:
-                    s=rsum(rdf); s["name"]=region; s["region"]=""; s["oid"]=0
-                    write_row(dr, s, 0, is_tot=True, tot_fmt=rtot, tot_lft=rlft); dr+=1
 
             # HQR subtotal
             hqr_xl2 = df[df["region"]=="Headquarters Region"] if "region" in df.columns else df
@@ -849,15 +841,26 @@ if uploaded:
     date_str = report_date.strftime("%d.%m.%Y")
     date_fn  = report_date.strftime("%d_%m_%Y")
 
-    # Date warning
-    from datetime import date as _date
+    # Date warning — shown always so user can verify
+    from datetime import date as _date, datetime as _datetime
     today = _date.today()
-    if report_date != today:
-        st.warning(f"⚠️ Report date is {date_str} — today is {today.strftime('%d.%m.%Y')}. Please confirm the date is correct.")
+    # Normalise report_date in case Streamlit returns datetime instead of date
+    rdate = report_date if isinstance(report_date, _date) and not isinstance(report_date, _datetime) else report_date.date()
+    if rdate != today:
+        st.warning(
+            f"⚠️ **Report date set to {date_str}** — today is **{today.strftime('%d.%m.%Y')}**. "
+            f"Please confirm this is correct before downloading."
+        )
+    else:
+        st.info(f"📅 Report date: **{date_str}**")
 
     if report_type == "Digital Transactions":
-        df = process_booking(df_raw)
-        if df.empty: st.warning("No valid data."); st.stop()
+        try:
+            df = process_booking(df_raw)
+        except Exception as e:
+            st.error(f"❌ Could not read Digital Transactions file: {e}")
+            st.stop()
+        if df.empty: st.warning("No valid data found. Check that the Booking Payment Report is uploaded."); st.stop()
         regions     = df["region"].unique().tolist()
         multi_region = len([r for r in REGION_ORDER if r in regions]) > 1
         show_region = False  # Region column always hidden — grouping shown via subtotals
@@ -891,8 +894,12 @@ if uploaded:
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
     else:  # COD
-        df = process_cod(df_raw)
-        if df.empty: st.warning("No valid data."); st.stop()
+        try:
+            df = process_cod(df_raw)
+        except ValueError as e:
+            st.error(f"❌ {e}")
+            st.stop()
+        if df.empty: st.warning("No valid data found. Check that the correct COD report is uploaded."); st.stop()
         regions     = df["region"].unique().tolist()
         multi_region = len([r for r in REGION_ORDER if r in regions]) > 1
         show_region = False  # Region column always hidden — grouping shown via subtotals
