@@ -467,9 +467,14 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
     c3.metric("Total Customers", total_customers)
 
     st.markdown("<hr style='margin:8px 0;border-color:#eee;'>", unsafe_allow_html=True)
+    # ---- Optional Analysis for No Historical Data Customers ----
+    use_average_history = st.checkbox(
+    "Analyze 'No Historical Data' customers using average of available historical months"
+    )
 
     # ---- Customer Analytics Loop (original logic preserved) ----
     results = []
+    avg_history_results = []
 
     for _, row in daily_df.iterrows():
 
@@ -485,19 +490,113 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
             continue
 
         # No historical data
+        # No same-month historical data
         if (historical_match.empty
                 or revenue_col_hist is None
                 or traffic_col_hist is None):
+        
             results.append({
-                "Customer ID":               customer_id,
-                "Customer Name":             customer_name,
-                "Actual Revenue":            round(current_revenue) if not pd.isna(current_revenue) else 0,
-                "Actual Traffic":            round(current_traffic) if not pd.isna(current_traffic) else 0,
-                "Revenue Variance %":        "",
-                "Revenue Status":            "No Historical Data",
-                "Traffic Variance %":        "",
-                "Traffic Status":            "No Historical Data",
+                "Customer ID": customer_id,
+                "Customer Name": customer_name,
+                "Actual Revenue": round(current_revenue) if not pd.isna(current_revenue) else 0,
+                "Actual Traffic": round(current_traffic) if not pd.isna(current_traffic) else 0,
+                "Revenue Variance %": "",
+                "Revenue Status": "No Historical Data",
+                "Traffic Variance %": "",
+                "Traffic Status": "No Historical Data",
             })
+        
+            # ----- Average Historical Analysis -----
+            if use_average_history and not historical_match.empty:
+        
+                revenue_cols = [
+                    c for c in historical_df.columns
+                    if "REVENUE" in str(c).upper()
+                ]
+        
+                traffic_cols = [
+                    c for c in historical_df.columns
+                    if "TRAFFIC" in str(c).upper()
+                ]
+        
+                revenue_values = []
+                traffic_values = []
+        
+                hist_row = historical_match.iloc[0]
+        
+                for col in revenue_cols:
+                    val = pd.to_numeric(hist_row[col], errors="coerce")
+                    if pd.notna(val) and val > 0:
+                        revenue_values.append(val)
+        
+                for col in traffic_cols:
+                    val = pd.to_numeric(hist_row[col], errors="coerce")
+                    if pd.notna(val) and val > 0:
+                        traffic_values.append(val)
+        
+                if revenue_values and traffic_values:
+        
+                    avg_monthly_revenue = np.mean(revenue_values)
+                    avg_monthly_traffic = np.mean(traffic_values)
+        
+                    expected_revenue = (
+                        avg_monthly_revenue / 30.44
+                    ) * uploaded_days
+        
+                    expected_traffic = (
+                        avg_monthly_traffic / 30.44
+                    ) * uploaded_days
+        
+                    revenue_var = (
+                        ((current_revenue - expected_revenue) / expected_revenue) * 100
+                        if expected_revenue > 0 else np.nan
+                    )
+        
+                    traffic_var = (
+                        ((current_traffic - expected_traffic) / expected_traffic) * 100
+                        if expected_traffic > 0 else np.nan
+                    )
+        
+                    avg_history_results.append({
+        
+                        "Customer ID": customer_id,
+                        "Customer Name": customer_name,
+        
+                        "Actual Revenue": round(current_revenue),
+                        "Average Monthly Revenue": round(avg_monthly_revenue),
+                        "Expected Revenue": round(expected_revenue),
+                        "Revenue Variance %": round(revenue_var)
+                        if not pd.isna(revenue_var) else "",
+        
+                        "Revenue Status": classify(
+                            revenue_var,
+                            sd_percent
+                        ),
+        
+                        "Actual Traffic": round(current_traffic),
+                        "Average Monthly Traffic": round(avg_monthly_traffic),
+                        "Expected Traffic": round(expected_traffic),
+        
+                        "Traffic Variance %": round(traffic_var)
+                        if not pd.isna(traffic_var) else "",
+        
+                        "Traffic Status": classify(
+                            traffic_var,
+                            sd_percent
+                        )
+                    })
+        
+                else:
+        
+                    avg_history_results.append({
+        
+                        "Customer ID": customer_id,
+                        "Customer Name": customer_name,
+        
+                        "Revenue Status": "No Historical Data",
+                        "Traffic Status": "No Historical Data"
+                    })
+        
             continue
 
         # Historical values
@@ -537,6 +636,7 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
         })
 
     result_df = pd.DataFrame(results)
+    avg_history_df = pd.DataFrame(avg_history_results)
 
     if result_df.empty:
         st.warning("No records to display.")
@@ -567,12 +667,59 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
             styled_df = group_df.style.map(
                 color_status, subset=["Revenue Status", "Traffic Status"])
             st.dataframe(styled_df, use_container_width=True, hide_index=True)
+                # =====================================
+            # Average Historical Analysis
+            # =====================================
+            
+            if use_average_history and not avg_history_df.empty:
+            
+                st.markdown("---")
+            
+                st.subheader(
+                    "Average Historical Performance Analysis"
+                )
+            
+                status_order = [
+                    "Excellent",
+                    "Normal",
+                    "Warning",
+                    "Critical",
+                    "No Historical Data"
+                ]
+            
+                for status in status_order:
+            
+                    grp = avg_history_df[
+                        avg_history_df["Revenue Status"] == status
+                    ]
+            
+                    if not grp.empty:
+            
+                        st.markdown(
+                            f"### {status} ({len(grp)})"
+                        )
+            
+                        styled = grp.style.map(
+                            color_status,
+                            subset=[
+                                "Revenue Status",
+                                "Traffic Status"
+                            ]
+                        )
+            
+                        st.dataframe(
+                            styled,
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                
 
     # ---- Excel Download ----
     output = io.BytesIO()
 
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
         result_df.to_excel(writer, index=False, sheet_name="Analytics")
+        if use_average_history and not avg_history_df.empty:avg_history_df.to_excel(writer,index=False,sheet_name="Average History Analysis")
         workbook  = writer.book
         worksheet = writer.sheets["Analytics"]
 
