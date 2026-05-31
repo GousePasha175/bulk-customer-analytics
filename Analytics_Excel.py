@@ -697,8 +697,6 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
     result_df = pd.DataFrame(results)
     avg_history_df = pd.DataFrame(avg_history_results)
     st.write(avg_history_df.head(2))
-    st.write(avg_history_df.columns.tolist())
-    st.write(avg_history_df.columns.tolist())
 
     if result_df.empty:
         st.warning("No records to display.")
