@@ -561,14 +561,21 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
                     )
         
                     avg_history_results.append({
-        
-                        "Customer ID": customer_id,
-                        "Customer Name": customer_name,
-        
-                        "Actual Revenue": round(current_revenue),
-                        "Average Monthly Revenue": round(avg_monthly_revenue),
-                        "Expected Revenue": round(expected_revenue),
-                        "Revenue Variance %": round(revenue_var)
+                    "Customer ID": customer_id,
+                    "Customer Name": customer_name,
+                
+                    "Actual Revenue": round(current_revenue),
+                    "Expected Revenue": round(expected_revenue),
+                
+                    "Revenue Variance %": round(revenue_var, 2),
+                    "Revenue Status": classify(revenue_var, sd_percent),
+                
+                    "Actual Traffic": round(current_traffic),
+                    "Expected Traffic": round(expected_traffic),
+                
+                    "Traffic Variance %": round(traffic_var, 2),
+                    "Traffic Status": classify(traffic_var, sd_percent)
+                })
                         if not pd.isna(revenue_var) else "",
         
                         "Revenue Status": classify(
