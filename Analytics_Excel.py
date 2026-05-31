@@ -696,11 +696,8 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
     results_df = pd.DataFrame(results)
     result_df = pd.DataFrame(results)
     avg_history_df = pd.DataFrame(avg_history_results)
-    st.write("Columns =", avg_history_df.columns.tolist())
     st.write(avg_history_df.head(2))
-    st.write("Columns in avg_history_df:")
     st.write(avg_history_df.columns.tolist())
-    st.write(avg_history_df.head())
     st.write(avg_history_df.columns.tolist())
 
     if result_df.empty:
@@ -724,7 +721,6 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
     st.subheader("Customer Analytics")
 
     status_order = ["Excellent", "Normal", "Warning", "Critical", "No Historical Data"]
-    st.write("Columns before grouping:")
     st.write(avg_history_df.columns.tolist())
 
     for status in status_order:
@@ -736,7 +732,6 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
             st.dataframe(styled_df, use_container_width=True, hide_index=True)
     avg_history_df = pd.DataFrame(avg_history_results)
             
-    st.write("Average History DF Rows:", len(avg_history_df))
     
     if use_average_history and not avg_history_df.empty:
     
@@ -745,7 +740,9 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
         st.subheader(
             "Average-Based Analysis for No Historical Data Customers"
         )
-    
+        st.info(
+            f"{len(avg_history_df)} customers were analysed using average historical performance because corresponding-period data was unavailable."
+        )
         st.dataframe(
             avg_history_df,
             use_container_width=True
