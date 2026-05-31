@@ -576,25 +576,6 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
                     "Traffic Variance %": round(traffic_var, 2),
                     "Traffic Status": classify(traffic_var, sd_percent)
                     })
-                        if not pd.isna(revenue_var) else "",
-        
-                        "Revenue Status": classify(
-                            revenue_var,
-                            sd_percent
-                        ),
-        
-                        "Actual Traffic": round(current_traffic),
-                        "Average Monthly Traffic": round(avg_monthly_traffic),
-                        "Expected Traffic": round(expected_traffic),
-        
-                        "Traffic Variance %": round(traffic_var)
-                        if not pd.isna(traffic_var) else "",
-        
-                        "Traffic Status": classify(
-                            traffic_var,
-                            sd_percent
-                        )
-                    })
         
                 else:
         
