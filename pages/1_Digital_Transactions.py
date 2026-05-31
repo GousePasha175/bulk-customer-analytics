@@ -849,11 +849,18 @@ if uploaded:
     date_str = report_date.strftime("%d.%m.%Y")
     date_fn  = report_date.strftime("%d_%m_%Y")
 
-    # Date warning
-    from datetime import date as _date
+    # Date warning — shown always so user can verify
+    from datetime import date as _date, datetime as _datetime
     today = _date.today()
-    if report_date != today:
-        st.warning(f"⚠️ Report date is {date_str} — today is {today.strftime('%d.%m.%Y')}. Please confirm the date is correct.")
+    # Normalise report_date in case Streamlit returns datetime instead of date
+    rdate = report_date if isinstance(report_date, _date) and not isinstance(report_date, _datetime) else report_date.date()
+    if rdate != today:
+        st.warning(
+            f"⚠️ **Report date set to {date_str}** — today is **{today.strftime('%d.%m.%Y')}**. "
+            f"Please confirm this is correct before downloading."
+        )
+    else:
+        st.info(f"📅 Report date: **{date_str}**")
 
     if report_type == "Digital Transactions":
         df = process_booking(df_raw)
