@@ -510,6 +510,7 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
                     
             # ----- Average Historical Analysis -----
             if use_average_history and not historical_match.empty:
+                st.write("Average Triggered For:",customer_id)
         
                 revenue_cols = [
                     c for c in historical_df.columns
@@ -606,6 +607,7 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
             historical_match[revenue_col_hist].iloc[0], errors="coerce")
         monthly_traffic = pd.to_numeric(
             historical_match[traffic_col_hist].iloc[0], errors="coerce")
+        if monthly_revenue == 0 and monthly_traffic == 0: st.write(customer_id,customer_name,monthly_revenue,monthly_traffic)
 
         if pd.isna(monthly_revenue): monthly_revenue = 0
         if pd.isna(monthly_traffic): monthly_traffic = 0
@@ -637,8 +639,6 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
             "Traffic Status":               classify(traffic_var, sd_percent),
         })
 
-    st.write("Normal Results:", len(results))
-    st.write("Average Results:", len(avg_history_results))
     result_df = pd.DataFrame(results)
     avg_history_df = pd.DataFrame(avg_history_results)
 
