@@ -484,6 +484,7 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
         current_traffic = pd.to_numeric(row[traffic_col], errors="coerce")
 
         historical_match = historical_df[historical_df["CLEAN_ID"] == customer_id]
+        st.write(customer_id,"Match Found:",not historical_match.empty)
 
         # Apply show_mode filter
         if historical_match.empty and show_mode == "Only records present in Master Data":
