@@ -497,16 +497,7 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
                 or revenue_col_hist is None
                 or traffic_col_hist is None):
         
-            results.append({
-                "Customer ID": customer_id,
-                "Customer Name": customer_name,
-                "Actual Revenue": round(current_revenue) if not pd.isna(current_revenue) else 0,
-                "Actual Traffic": round(current_traffic) if not pd.isna(current_traffic) else 0,
-                "Revenue Variance %": "",
-                "Revenue Status": "No Historical Data",
-                "Traffic Variance %": "",
-                "Traffic Status": "No Historical Data",
-            })
+            add_to_no_history = True
                     
             # ----- Average Historical Analysis -----
             if use_average_history and not historical_match.empty:
