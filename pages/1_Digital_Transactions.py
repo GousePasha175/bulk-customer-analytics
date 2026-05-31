@@ -105,13 +105,21 @@ def th(label, cs=1, rs=1, cls=""):
     return f'<th{a}{b}{c}>{label}</th>'
 
 def gv(d, k):
-    return d.get(k, 0) if isinstance(d, dict) else getattr(d, k, 0)
+    """Safe getter — avoids pd.Series.name attribute collision"""
+    if isinstance(d, dict):
+        return d.get(k, 0)
+    try:
+        return d[k]   # works for both Series and dict-like
+    except (KeyError, TypeError):
+        return 0
 
 def rsum(rdf):
-    num_cols = [c for c in rdf.columns if pd.api.types.is_numeric_dtype(rdf[c])]
+    skip = {"oid","pct"}  # skip these even if numeric
+    num_cols = [c for c in rdf.columns 
+                if pd.api.types.is_numeric_dtype(rdf[c]) and c not in skip]
     s = {k: float(rdf[k].sum()) for k in num_cols}
-    tc = s.get('tot_c', 0); dc = s.get('dig_c', 0)
-    s['pct'] = round(dc / tc * 100, 2) if tc > 0 else 0.0
+    tc = s.get("tot_c", 0); dc = s.get("dig_c", 0)
+    s["pct"] = round(dc / tc * 100, 2) if tc > 0 else 0.0
     return s
 
 def region_rows(df, col_region, col_sort):
@@ -183,7 +191,7 @@ def process_cod(df_raw):
     return agg
 
 # ========== HTML TABLE — BOOKING ==========
-def booking_html(df, view, show_region, date_str, use_color, total_label):
+def booking_html(df, view, show_region, date_str, use_color, total_label, hyd_summary=None):
     tbl_id = {"Count":"tbl-cnt","Amount":"tbl-amt","Combined":"tbl-comb"}[view]
 
     if view == "Count":
@@ -286,14 +294,35 @@ def booking_html(df, view, show_region, date_str, use_color, total_label):
             span = 2 if show_region else 1
             html += f'<tr class="rtot"><td colspan="{span}"></td><td class="lft"><b>{region}</b></td>{cells(s)}</tr>\n'
 
-    gt = rsum(df); gt["name"] = total_label
+    # Inject HYD summary row when Hyderabad detail is hidden
+    if hyd_summary is not None:
+        hs = hyd_summary
+        html += f'<tr class="rtot"><td></td><td class="lft"><b>Hyderabad Region</b></td>{cells(hs)}</tr>\n'
+
+    gt = rsum(df) if hyd_summary is None else rsum(pd.concat([df, pd.DataFrame([hyd_summary])], ignore_index=True) if False else df)
+    # For grand total when hyd hidden: sum original full df (passed via closure not available here)
+    # Instead total_label row values computed from df only (HQR) + hyd_summary combined
+    if hyd_summary is not None:
+        # Manually combine HQR sum + HYD summary for grand total
+        hqr_s = rsum(df)
+        combined = {}
+        for k2 in hqr_s:
+            v1 = hqr_s.get(k2, 0)
+            v2 = hyd_summary.get(k2, 0) if isinstance(hyd_summary.get(k2,0), (int,float)) else 0
+            combined[k2] = v1 + v2
+        tc2 = combined.get("tot_c", 0); dc2 = combined.get("dig_c", 0)
+        combined["pct"] = round(dc2/tc2*100, 2) if tc2 > 0 else 0.0
+        combined["name"] = total_label
+        gt = combined
+    else:
+        gt = rsum(df); gt["name"] = total_label
     span = 2 if show_region else 1
     html += f'<tr class="gtot"><td colspan="{span}"></td><td class="lft"><b>{total_label}</b></td>{cells(gt)}</tr>\n'
     html += "</tbody></table></div>"
     return html
 
 # ========== HTML TABLE — COD ==========
-def cod_html(df, show_region, date_str, use_color, total_label):
+def cod_html(df, show_region, date_str, use_color, total_label, hyd_summary=None):
     h  = th("Sl.") + (th("Region") if show_region else "") + th("Division")
     h += th("Total COD Delivered") + th("Digital Trnx.") + th("Cash Trnx.") + th("% Digital")
 
@@ -324,7 +353,18 @@ def cod_html(df, show_region, date_str, use_color, total_label):
                      f'<td>{indian_num(tc)}</td><td>{indian_num(dc)}</td>'
                      f'<td>{indian_num(cc)}</td><td><b>{pr:.2f}%</b></td></tr>\n')
 
-    tc=df["total_cod"].sum(); dc=df["digital"].sum(); cc=df["cash"].sum()
+    # Inject HYD summary when detail hidden
+    if hyd_summary is not None:
+        hs = hyd_summary
+        htc=float(hs.get("total_cod",0)); hdc=float(hs.get("digital",0)); hcc=float(hs.get("cash",0))
+        hp=round(hdc/htc*100,2) if htc>0 else 0.0
+        html += (f'<tr class="rtot"><td></td>'
+                 f'<td class="lft"><b>Hyderabad Region</b></td>'
+                 f'<td>{indian_num(htc)}</td><td>{indian_num(hdc)}</td>'
+                 f'<td>{indian_num(hcc)}</td><td><b>{hp:.2f}%</b></td></tr>\n')
+        tc=df["total_cod"].sum()+htc; dc=df["digital"].sum()+hdc; cc=df["cash"].sum()+hcc
+    else:
+        tc=df["total_cod"].sum(); dc=df["digital"].sum(); cc=df["cash"].sum()
     pg=round(dc/tc*100,2) if tc>0 else 0.0
     span = 2 if show_region else 1
     html += (f'<tr class="gtot"><td colspan="{span}"></td>'
@@ -592,9 +632,12 @@ def build_excel(df, view, show_region, date_str, use_color, total_label, mode="b
                 elif key=="digital":    ws.write(dr,ci,int(dc2),gtot)
                 elif key=="cash":       ws.write(dr,ci,int(cc2),gtot)
                 elif key=="pct":        ws.write(dr,ci,f"{pg:.2f}%",gtot)
-            max_n=max((len(r) for r in df["name"]),default=20)
-            for ci,(lbl,key) in enumerate(cols):
-                ws.set_column(ci,ci,max_n+4 if key=="name" else max(len(lbl)+2,12))
+            max_n = max((len(str(r)) for r in df["name"]), default=20)
+            for ci, (lbl, key) in enumerate(cols):
+                if key == "name": ws.set_column(ci, ci, min(max_n + 3, 35))
+                elif key == "region": ws.set_column(ci, ci, 22)
+                elif key == "pct": ws.set_column(ci, ci, 14)
+                else: ws.set_column(ci, ci, max(len(str(lbl)) + 2, 12))
         else:
             # Build column spec
             fixed=[]
@@ -704,13 +747,19 @@ def build_excel(df, view, show_region, date_str, use_color, total_label, mode="b
             gt=rsum(df); gt["name"]=total_label; gt["region"]=""; gt["oid"]=0
             write_row(dr, gt, 0, is_tot=True, tot_fmt=gtot, tot_lft=glft)
 
-            max_n=max((len(str(r)) for r in df["name"]),default=20)
-            for ci3,col in enumerate(all_cols):
-                k=col["k"]
-                ws.set_column(ci3,ci3,
-                    min(max_n+4,35) if k=="name" else
-                    20 if k=="region" else
-                    max(len(str(col["r1"]))+2, len(str(col.get("r2","")))+2, 12))
+            max_n = max((len(str(r)) for r in df["name"]), default=20)
+            for ci3, col in enumerate(all_cols):
+                k = col["k"]
+                r1_len = len(str(col.get("r1","")))
+                r2_len = len(str(col.get("r2","")))
+                if k == "name":
+                    ws.set_column(ci3, ci3, min(max_n + 3, 35))
+                elif k == "region":
+                    ws.set_column(ci3, ci3, 22)
+                elif k in ("pct","pct_a"):
+                    ws.set_column(ci3, ci3, 18)
+                else:
+                    ws.set_column(ci3, ci3, max(r1_len + 2, r2_len + 2, 10))
 
     out.seek(0); return out.getvalue()
 
@@ -722,6 +771,45 @@ uploaded    = st.sidebar.file_uploader("Upload CSV Report", type=["csv"])
 report_date = st.sidebar.date_input("Report Date")
 use_color   = st.sidebar.checkbox("Colour Coding", value=True,
     help="Uncheck for black & white output")
+show_hyd_detail = st.sidebar.checkbox(
+    "Show Hyderabad Region division detail",
+    value=True,
+    help="Uncheck to show only HQR division rows + region subtotals + circle total"
+)
+
+# ========== COMPACT VIEW BUILDER ==========
+def apply_hyd_filter(df, show_hyd_detail, mode="booking"):
+    """
+    When show_hyd_detail=False and multiple regions exist:
+    Returns (df_display, hyd_summary_row)
+    df_display = only HQR rows
+    hyd_summary_row = aggregated HYD row (dict) to append as a subtotal
+    """
+    regions_in_data = [r for r in REGION_ORDER if r in df["region"].unique()]
+    if show_hyd_detail or len(regions_in_data) <= 1:
+        return df, None
+
+    hqr_df  = df[df["region"] == "Headquarters Region"]
+    hyd_df  = df[df["region"] == "Hyderabad Region"]
+
+    if hyd_df.empty:
+        return df, None
+
+    if mode == "booking":
+        hyd_s = rsum(hyd_df)
+        hyd_s["name"] = "Hyderabad Region"
+    else:
+        hyd_s = {
+            "name": "Hyderabad Region",
+            "region": "Hyderabad Region",
+            "total_cod": float(hyd_df["total_cod"].sum()),
+            "digital":   float(hyd_df["digital"].sum()),
+            "cash":      float(hyd_df["cash"].sum()),
+        }
+        tc = hyd_s["total_cod"]
+        hyd_s["pct"] = round(hyd_s["digital"]/tc*100, 2) if tc > 0 else 0.0
+
+    return hqr_df, hyd_s
 
 # ========== MAIN ==========
 if uploaded:
@@ -733,8 +821,9 @@ if uploaded:
         df = process_booking(df_raw)
         if df.empty: st.warning("No valid data."); st.stop()
         regions     = df["region"].unique().tolist()
-        show_region = len(regions) > 1
-        total_label = "Telangana Circle" if show_region else "Headquarters Region"
+        multi_region = len([r for r in REGION_ORDER if r in regions]) > 1
+        show_region = False  # Region column always hidden — grouping shown via subtotals
+        total_label = "Telangana Circle" if multi_region else "Headquarters Region"
 
         if use_color:
             st.markdown("""<div style='display:flex;gap:14px;margin-bottom:8px;font-size:13px;'>
@@ -745,19 +834,20 @@ if uploaded:
 
         tab1, tab2, tab3 = st.tabs(["📊 Count / Transactions","💰 Amount (₹)","📋 Combined"])
 
+        df_display, hyd_s = apply_hyd_filter(df, show_hyd_detail, mode="booking")
+
         for tab, view, fn_sfx in [
             (tab1,"Count",f"Digital_Transactions_Count_{date_fn}"),
             (tab2,"Amount",f"Digital_Transactions_Amount_{date_fn}"),
             (tab3,"Combined",f"Digital_Transactions_{date_fn}"),
         ]:
             with tab:
-                st.markdown(booking_html(df,view,show_region,date_str,use_color,total_label),
+                st.markdown(booking_html(df_display,view,show_region,date_str,use_color,total_label,hyd_s),
                             unsafe_allow_html=True)
-                # Server-side PNG download
-                png_bytes = booking_png(df,view,show_region,date_str,use_color,total_label)
+                png_bytes = booking_png(df_display,view,show_region,date_str,use_color,total_label)
                 st.download_button(f"📷 Download as Image ({view})", png_bytes,
                     file_name=f"{fn_sfx}.png", mime="image/png")
-                xl = build_excel(df,view,show_region,date_str,use_color,total_label)
+                xl = build_excel(df_display,view,show_region,date_str,use_color,total_label)
                 st.download_button(f"⬇ Download Excel ({view})", xl,
                     file_name=f"{fn_sfx}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
@@ -766,8 +856,9 @@ if uploaded:
         df = process_cod(df_raw)
         if df.empty: st.warning("No valid data."); st.stop()
         regions     = df["region"].unique().tolist()
-        show_region = len(regions) > 1
-        total_label = "Telangana Circle" if show_region else "Headquarters Region"
+        multi_region = len([r for r in REGION_ORDER if r in regions]) > 1
+        show_region = False  # Region column always hidden — grouping shown via subtotals
+        total_label = "Telangana Circle" if multi_region else "Headquarters Region"
 
         if use_color:
             st.markdown("""<div style='display:flex;gap:14px;margin-bottom:8px;font-size:13px;'>
@@ -776,13 +867,14 @@ if uploaded:
             <span style='background:#FF9999;padding:3px 10px;border-radius:4px;'>< 30% Digital</span>
             </div>""", unsafe_allow_html=True)
 
-        st.markdown(cod_html(df,show_region,date_str,use_color,total_label),
+        df_display_cod, hyd_s_cod = apply_hyd_filter(df, show_hyd_detail, mode="cod")
+        st.markdown(cod_html(df_display_cod,show_region,date_str,use_color,total_label,hyd_s_cod),
                     unsafe_allow_html=True)
         fn = f"COD_Digital_Transactions_{date_fn}"
-        png_bytes = cod_png(df,show_region,date_str,use_color,total_label)
+        png_bytes = cod_png(df_display_cod,show_region,date_str,use_color,total_label)
         st.download_button("📷 Download as Image", png_bytes,
             file_name=f"{fn}.png", mime="image/png")
-        xl = build_excel(df,"COD",show_region,date_str,use_color,total_label,mode="cod")
+        xl = build_excel(df_display_cod,"COD",show_region,date_str,use_color,total_label,mode="cod")
         st.download_button("⬇ Download Excel (COD)", xl,
             file_name=f"{fn}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
