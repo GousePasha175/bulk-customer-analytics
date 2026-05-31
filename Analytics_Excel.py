@@ -712,6 +712,8 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
     results_df = pd.DataFrame(results)
     result_df = pd.DataFrame(results)
     avg_history_df = pd.DataFrame(avg_history_results)
+    st.write("Columns in avg_history_df:")
+    st.write(avg_history_df.columns.tolist())
     st.write(avg_history_df.head())
     st.write(avg_history_df.columns.tolist())
 
