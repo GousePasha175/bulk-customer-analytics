@@ -58,8 +58,14 @@ REGION_MAP = {
     30530014:"Headquarters Region", 30530015:"Headquarters Region",
     30530016:"Headquarters Region", 30530017:"Headquarters Region",
     30600002:"Headquarters Region",
+    # Region-level summary IDs (pre-aggregated reports)
+    30610001:"Headquarters Region",
+    30610002:"Hyderabad Region",
 }
 REGION_ORDER = ["Headquarters Region", "Hyderabad Region", "Other"]
+
+# IDs that represent region-level totals (not individual divisions)
+REGION_SUMMARY_IDS = {30610001, 30610002}
 
 # ========== HELPERS ==========
 def strip_div(name):
@@ -209,6 +215,8 @@ def process_cod(df_raw):
     agg['pct'] = agg.apply(
         lambda r: round(r['digital']/r['total_cod']*100, 2) if r['total_cod'] > 0 else 0.0,
         axis=1)
+    # Flag if this is a region-summary file (all IDs are region-level, not division-level)
+    agg['is_region_summary'] = agg['oid_i'].isin(REGION_SUMMARY_IDS)
     return agg
 
 # ========== HTML TABLE — BOOKING ==========
@@ -310,21 +318,18 @@ def booking_html(df, view, show_region, date_str, use_color, total_label, full_d
             html += f'<tr style="background:{bg};">{pre}{cells(row)}</tr>\n'
             sl += 1
 
-    # HQR subtotal — always shown
-    hqr_df_local = df[df["region"]=="Headquarters Region"] if "region" in df.columns else df
-    hqr_s = rsum(hqr_df_local); hqr_s["name"] = "Headquarters Region"
-    html += f'<tr class="rtot"><td></td><td class="lft"><b>Headquarters Region</b></td>{cells(hqr_s)}</tr>\n'
-
-    # HYD subtotal — shown only when full_df has Hyderabad Region rows
     if full_df is not None:
-        hyd_df_local = full_df[full_df["region"]=="Hyderabad Region"]
-        if not hyd_df_local.empty:
-            hyd_s = rsum(hyd_df_local); hyd_s["name"] = "Hyderabad Region"
+        # Multi-region: blue HQR subtotal + blue HYD subtotal + gold Circle total
+        hqr_s = rsum(df[df["region"]=="Headquarters Region"]); hqr_s["name"]="Headquarters Region"
+        html += f'<tr class="rtot"><td></td><td class="lft"><b>Headquarters Region</b></td>{cells(hqr_s)}</tr>\n'
+        hyd_local = full_df[full_df["region"]=="Hyderabad Region"]
+        if not hyd_local.empty:
+            hyd_s = rsum(hyd_local); hyd_s["name"]="Hyderabad Region"
             html += f'<tr class="rtot"><td></td><td class="lft"><b>Hyderabad Region</b></td>{cells(hyd_s)}</tr>\n'
-        # Grand total from full_df
-        gt = rsum(full_df); gt["name"] = total_label
+        gt = rsum(full_df)
     else:
-        gt = rsum(df); gt["name"] = total_label
+        # Single region: no blue subtotal — only gold total
+        gt = rsum(df)
 
     html += f'<tr class="gtot"><td></td><td class="lft"><b>{total_label}</b></td>{cells(gt)}</tr>\n'
     html += "</tbody></table></div>"
@@ -353,31 +358,30 @@ def cod_html(df, show_region, date_str, use_color, total_label, full_df=None):
             html += f'<tr style="background:{bg};">{pre}</tr>\n'
             sl += 1
 
-    # HQR subtotal — always shown
-    hqr_cod = df[df["region"]=="Headquarters Region"] if "region" in df.columns else df
-    htc_hqr=hqr_cod["total_cod"].sum(); hdc_hqr=hqr_cod["digital"].sum(); hcc_hqr=hqr_cod["cash"].sum()
-    hp_hqr=round(hdc_hqr/htc_hqr*100,2) if htc_hqr>0 else 0.0
-    html += (f'<tr class="rtot"><td></td>'
-             f'<td class="lft"><b>Headquarters Region</b></td>'
-             f'<td>{indian_num(htc_hqr)}</td><td>{indian_num(hdc_hqr)}</td>'
-             f'<td>{indian_num(hcc_hqr)}</td><td><b>{hp_hqr:.2f}%</b></td></tr>\n')
+    is_summary = "is_region_summary" in df.columns and df["is_region_summary"].all()
 
-    # HYD subtotal — shown only when full_df has Hyderabad Region
-    if full_df is not None:
-        hyd_cod = full_df[full_df["region"]=="Hyderabad Region"]
-        if not hyd_cod.empty:
-            htc_h=hyd_cod["total_cod"].sum(); hdc_h=hyd_cod["digital"].sum(); hcc_h=hyd_cod["cash"].sum()
-            hp_h=round(hdc_h/htc_h*100,2) if htc_h>0 else 0.0
-            html += (f'<tr class="rtot"><td></td>'
-                     f'<td class="lft"><b>Hyderabad Region</b></td>'
-                     f'<td>{indian_num(htc_h)}</td><td>{indian_num(hdc_h)}</td>'
-                     f'<td>{indian_num(hcc_h)}</td><td><b>{hp_h:.2f}%</b></td></tr>\n')
+    if full_df is not None and not is_summary:
+        # Multi-region division file: blue HQR + blue HYD + gold total
+        hqr_c = df[df["region"]=="Headquarters Region"]
+        tc_h=hqr_c["total_cod"].sum(); dc_h=hqr_c["digital"].sum(); cc_h=hqr_c["cash"].sum()
+        pp_h=round(dc_h/tc_h*100,2) if tc_h>0 else 0.0
+        html += (f'<tr class="rtot"><td></td><td class="lft"><b>Headquarters Region</b></td>'
+                 f'<td>{indian_num(tc_h)}</td><td>{indian_num(dc_h)}</td>'
+                 f'<td>{indian_num(cc_h)}</td><td><b>{pp_h:.2f}%</b></td></tr>\n')
+        hyd_c = full_df[full_df["region"]=="Hyderabad Region"]
+        if not hyd_c.empty:
+            tc_y=hyd_c["total_cod"].sum(); dc_y=hyd_c["digital"].sum(); cc_y=hyd_c["cash"].sum()
+            pp_y=round(dc_y/tc_y*100,2) if tc_y>0 else 0.0
+            html += (f'<tr class="rtot"><td></td><td class="lft"><b>Hyderabad Region</b></td>'
+                     f'<td>{indian_num(tc_y)}</td><td>{indian_num(dc_y)}</td>'
+                     f'<td>{indian_num(cc_y)}</td><td><b>{pp_y:.2f}%</b></td></tr>\n')
         tc=full_df["total_cod"].sum(); dc=full_df["digital"].sum(); cc=full_df["cash"].sum()
     else:
+        # Single region or region-summary: no blue subtotal, just gold total
         tc=df["total_cod"].sum(); dc=df["digital"].sum(); cc=df["cash"].sum()
+
     pg=round(dc/tc*100,2) if tc>0 else 0.0
-    html += (f'<tr class="gtot"><td></td>'
-             f'<td class="lft"><b>{total_label}</b></td>'
+    html += (f'<tr class="gtot"><td></td><td class="lft"><b>{total_label}</b></td>'
              f'<td>{indian_num(tc)}</td><td>{indian_num(dc)}</td>'
              f'<td>{indian_num(cc)}</td><td><b>{pg:.2f}%</b></td></tr>\n')
     html += "</tbody></table></div>"
@@ -489,12 +493,10 @@ def booking_png(df, view, show_region, date_str, use_color, total_label, full_df
                        "Total":indian_num(row["tot_c"]),"Total(Rs.)":indian_amt(row["tot_a"]),"% Digital":f'{row["pct"]:.2f}%'})
         rows_data.append(r); colors.append(clr_dig(row["pct"],use_color)); sl+=1
 
-    # HQR subtotal
-    hqr_s = rsum(df[df["region"]=="Headquarters Region"])
-    rows_data.append(s_row(hqr_s,"Headquarters Region",view)); colors.append("#b8d4f0")
-
-    # HYD subtotal + Circle total (only when multi-region)
     if full_df is not None:
+        # Multi-region: blue HQR + blue HYD + gold total
+        hqr_s = rsum(df[df["region"]=="Headquarters Region"])
+        rows_data.append(s_row(hqr_s,"Headquarters Region",view)); colors.append("#b8d4f0")
         hyd_df2 = full_df[full_df["region"]=="Hyderabad Region"]
         if not hyd_df2.empty:
             hyd_s2 = rsum(hyd_df2)
@@ -502,6 +504,7 @@ def booking_png(df, view, show_region, date_str, use_color, total_label, full_df
         gt2 = rsum(full_df)
         rows_data.append(s_row(gt2,total_label,view)); colors.append("#FFD700")
     else:
+        # Single region: no blue subtotal, only gold total
         gt2 = rsum(df)
         rows_data.append(s_row(gt2,total_label,view)); colors.append("#FFD700")
 
@@ -519,16 +522,16 @@ def cod_png(df, show_region, date_str, use_color, total_label, full_df=None):
                            "Cash":indian_num(row["cash"]),"% Digital":f'{row["pct"]:.2f}%'})
         colors.append(clr_cod(row["pct"],use_color)); sl+=1
 
-    # HQR subtotal
-    hqr_c = df[df["region"]=="Headquarters Region"]
-    tc_h=hqr_c["total_cod"].sum(); dc_h=hqr_c["digital"].sum(); cc_h=hqr_c["cash"].sum()
-    pp_h=round(dc_h/tc_h*100,2) if tc_h>0 else 0.0
-    rows_data.append({"Sl":"","Division":"Headquarters Region","Total COD":indian_num(tc_h),
-                       "Digital":indian_num(dc_h),"Cash":indian_num(cc_h),"% Digital":f'{pp_h:.2f}%'})
-    colors.append("#b8d4f0")
+    is_summary_png = "is_region_summary" in df.columns and df["is_region_summary"].all()
 
-    # HYD subtotal + total
-    if full_df is not None:
+    if full_df is not None and not is_summary_png:
+        # Multi-region division file: blue HQR + blue HYD + gold total
+        hqr_c = df[df["region"]=="Headquarters Region"]
+        tc_h=hqr_c["total_cod"].sum(); dc_h=hqr_c["digital"].sum(); cc_h=hqr_c["cash"].sum()
+        pp_h=round(dc_h/tc_h*100,2) if tc_h>0 else 0.0
+        rows_data.append({"Sl":"","Division":"Headquarters Region","Total COD":indian_num(tc_h),
+                           "Digital":indian_num(dc_h),"Cash":indian_num(cc_h),"% Digital":f'{pp_h:.2f}%'})
+        colors.append("#b8d4f0")
         hyd_c = full_df[full_df["region"]=="Hyderabad Region"]
         if not hyd_c.empty:
             tc_y=hyd_c["total_cod"].sum(); dc_y=hyd_c["digital"].sum(); cc_y=hyd_c["cash"].sum()
@@ -538,7 +541,9 @@ def cod_png(df, show_region, date_str, use_color, total_label, full_df=None):
             colors.append("#b8d4f0")
         tc=full_df["total_cod"].sum(); dc=full_df["digital"].sum(); cc=full_df["cash"].sum()
     else:
+        # Single region or summary: no blue subtotal
         tc=df["total_cod"].sum(); dc=df["digital"].sum(); cc=df["cash"].sum()
+
     pg=round(dc/tc*100,2) if tc>0 else 0.0
     rows_data.append({"Sl":"","Division":total_label,"Total COD":indian_num(tc),
                        "Digital":indian_num(dc),"Cash":indian_num(cc),"% Digital":f'{pg:.2f}%'})
@@ -615,22 +620,22 @@ def build_excel(df, view, show_region, date_str, use_color, total_label, full_df
                         elif key=="pct":     ws.write(dr,ci,f"{pct_v:.2f}%",f)
                         else:                ws.write(dr,ci,int(row[key]),f)
                     sl+=1; dr+=1
-            # HQR subtotal
-            hqr_xl = df[df["region"]=="Headquarters Region"] if "region" in df.columns else df
-            tc_hqr=hqr_xl["total_cod"].sum(); dc_hqr=hqr_xl["digital"].sum(); cc_hqr=hqr_xl["cash"].sum()
-            ph_hqr=round(dc_hqr/tc_hqr*100,2) if tc_hqr>0 else 0.0
-            for ci,(lbl,key) in enumerate(cols):
-                if key=="sl": ws.write(dr,ci,"",rtot)
-                elif key in ("region",): ws.write(dr,ci,"",rtot)
-                elif key=="name": ws.write(dr,ci,"Headquarters Region",rlft)
-                elif key=="total_cod": ws.write(dr,ci,int(tc_hqr),rtot)
-                elif key=="digital": ws.write(dr,ci,int(dc_hqr),rtot)
-                elif key=="cash": ws.write(dr,ci,int(cc_hqr),rtot)
-                elif key=="pct": ws.write(dr,ci,f"{ph_hqr:.2f}%",rtot)
-            dr+=1
+            is_summary_xl = "is_region_summary" in df.columns and df["is_region_summary"].all()
 
-            # HYD subtotal + grand total
-            if full_df is not None:
+            if full_df is not None and not is_summary_xl:
+                # Multi-region: blue HQR + blue HYD + gold total
+                hqr_xl = df[df["region"]=="Headquarters Region"] if "region" in df.columns else df
+                tc_hqr=hqr_xl["total_cod"].sum(); dc_hqr=hqr_xl["digital"].sum(); cc_hqr=hqr_xl["cash"].sum()
+                ph_hqr=round(dc_hqr/tc_hqr*100,2) if tc_hqr>0 else 0.0
+                for ci,(lbl,key) in enumerate(cols):
+                    if key=="sl": ws.write(dr,ci,"",rtot)
+                    elif key in ("region",): ws.write(dr,ci,"",rtot)
+                    elif key=="name": ws.write(dr,ci,"Headquarters Region",rlft)
+                    elif key=="total_cod": ws.write(dr,ci,int(tc_hqr),rtot)
+                    elif key=="digital": ws.write(dr,ci,int(dc_hqr),rtot)
+                    elif key=="cash": ws.write(dr,ci,int(cc_hqr),rtot)
+                    elif key=="pct": ws.write(dr,ci,f"{ph_hqr:.2f}%",rtot)
+                dr+=1
                 hyd_xl = full_df[full_df["region"]=="Hyderabad Region"]
                 if not hyd_xl.empty:
                     tc_h=hyd_xl["total_cod"].sum(); dc_h=hyd_xl["digital"].sum(); cc_h=hyd_xl["cash"].sum()
@@ -646,6 +651,7 @@ def build_excel(df, view, show_region, date_str, use_color, total_label, full_df
                     dr+=1
                 tc2=full_df["total_cod"].sum(); dc2=full_df["digital"].sum(); cc2=full_df["cash"].sum()
             else:
+                # Single region or summary: no blue subtotal
                 tc2=df["total_cod"].sum(); dc2=df["digital"].sum(); cc2=df["cash"].sum()
             pg=round(dc2/tc2*100,2) if tc2>0 else 0.0
             for ci,(lbl,key) in enumerate(cols):
@@ -765,19 +771,18 @@ def build_excel(df, view, show_region, date_str, use_color, total_label, full_df
                 for _,row in rdf.iterrows():
                     write_row(dr, row, row["pct"]); sl+=1; dr+=1
 
-            # HQR subtotal
-            hqr_xl2 = df[df["region"]=="Headquarters Region"] if "region" in df.columns else df
-            hqr_s_xl = rsum(hqr_xl2); hqr_s_xl["name"]="Headquarters Region"; hqr_s_xl["region"]=""; hqr_s_xl["oid"]=0
-            write_row(dr, hqr_s_xl, 0, is_tot=True, tot_fmt=rtot, tot_lft=rlft); dr+=1
-
-            # HYD subtotal + grand total
             if full_df is not None:
+                # Multi-region: blue HQR + blue HYD + gold total
+                hqr_xl2 = df[df["region"]=="Headquarters Region"] if "region" in df.columns else df
+                hqr_s_xl = rsum(hqr_xl2); hqr_s_xl["name"]="Headquarters Region"; hqr_s_xl["region"]=""; hqr_s_xl["oid"]=0
+                write_row(dr, hqr_s_xl, 0, is_tot=True, tot_fmt=rtot, tot_lft=rlft); dr+=1
                 hyd_xl2 = full_df[full_df["region"]=="Hyderabad Region"]
                 if not hyd_xl2.empty:
                     hyd_s_xl = rsum(hyd_xl2); hyd_s_xl["name"]="Hyderabad Region"; hyd_s_xl["region"]=""; hyd_s_xl["oid"]=0
                     write_row(dr, hyd_s_xl, 0, is_tot=True, tot_fmt=rtot, tot_lft=rlft); dr+=1
                 gt_src_xl = full_df
             else:
+                # Single region: no blue subtotal, only gold total
                 gt_src_xl = df
             gt=rsum(gt_src_xl); gt["name"]=total_label; gt["region"]=""; gt["oid"]=0
             write_row(dr, gt, 0, is_tot=True, tot_fmt=gtot, tot_lft=glft)
