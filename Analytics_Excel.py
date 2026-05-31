@@ -712,6 +712,8 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
     results_df = pd.DataFrame(results)
     result_df = pd.DataFrame(results)
     avg_history_df = pd.DataFrame(avg_history_results)
+    st.write(avg_history_df.head())
+    st.write(avg_history_df.columns.tolist())
 
     if result_df.empty:
         st.warning("No records to display.")
@@ -734,6 +736,8 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
     st.subheader("Customer Analytics")
 
     status_order = ["Excellent", "Normal", "Warning", "Critical", "No Historical Data"]
+    st.write("Columns before grouping:")
+    st.write(avg_history_df.columns.tolist())
 
     for status in status_order:
         group_df = result_df[result_df["Revenue Status"] == status]
