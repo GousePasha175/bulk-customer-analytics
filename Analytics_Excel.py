@@ -709,13 +709,6 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
             "Traffic Status":               classify(traffic_var, sd_percent),
         })
 
-    # LOOP ENDS HERE
-    
-    st.write(
-        "Average History Records Found:",
-        len(avg_history_results)
-    )
-
     results_df = pd.DataFrame(results)
     result_df = pd.DataFrame(results)
     avg_history_df = pd.DataFrame(avg_history_results)
@@ -749,6 +742,17 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
             styled_df = group_df.style.map(
                 color_status, subset=["Revenue Status", "Traffic Status"])
             st.dataframe(styled_df, use_container_width=True, hide_index=True)
+            avg_history_df = pd.DataFrame(avg_history_results)
+            st.write("Average History DF Rows:", len(avg_history_df))
+
+            if use_average_history and not avg_history_df.empty:
+            
+                st.markdown("---")
+                st.subheader(
+                    "Average-Based Analysis for No Historical Data Customers"
+                )
+            
+                st.dataframe(avg_history_df, use_container_width=True)
                 # =====================================
             # Average Historical Analysis
             # =====================================
