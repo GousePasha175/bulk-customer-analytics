@@ -745,60 +745,60 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
             st.dataframe(styled_df, use_container_width=True, hide_index=True)
     avg_history_df = pd.DataFrame(avg_history_results)
             
-            st.write("Average History DF Rows:", len(avg_history_df))
-            
-            if use_average_history and not avg_history_df.empty:
-            
-                st.markdown("---")
-            
-                st.subheader(
-                    "Average-Based Analysis for No Historical Data Customers"
+    st.write("Average History DF Rows:", len(avg_history_df))
+    
+    if use_average_history and not avg_history_df.empty:
+    
+        st.markdown("---")
+    
+        st.subheader(
+            "Average-Based Analysis for No Historical Data Customers"
+        )
+    
+        st.dataframe(
+            avg_history_df,
+            use_container_width=True
+        )
+    
+        st.markdown("---")
+    
+        st.subheader(
+            "Average Historical Performance Analysis"
+        )
+    
+        avg_status_order = [
+            "Excellent",
+            "Normal",
+            "Warning",
+            "Critical",
+            "No Historical Data"
+        ]
+    
+        for status in avg_status_order:
+    
+            grp = avg_history_df[
+                avg_history_df["Revenue Status"] == status
+            ]
+    
+            if not grp.empty:
+    
+                st.markdown(
+                    f"### {status} ({len(grp)})"
                 )
-            
-                st.dataframe(
-                    avg_history_df,
-                    use_container_width=True
-                )
-            
-                st.markdown("---")
-            
-                st.subheader(
-                    "Average Historical Performance Analysis"
-                )
-            
-                avg_status_order = [
-                    "Excellent",
-                    "Normal",
-                    "Warning",
-                    "Critical",
-                    "No Historical Data"
-                ]
-            
-                for status in avg_status_order:
-            
-                    grp = avg_history_df[
-                        avg_history_df["Revenue Status"] == status
+    
+                styled = grp.style.map(
+                    color_status,
+                    subset=[
+                        "Revenue Status",
+                        "Traffic Status"
                     ]
-            
-                    if not grp.empty:
-            
-                        st.markdown(
-                            f"### {status} ({len(grp)})"
-                        )
-            
-                        styled = grp.style.map(
-                            color_status,
-                            subset=[
-                                "Revenue Status",
-                                "Traffic Status"
-                            ]
-                        )
-            
-                        st.dataframe(
-                            styled,
-                            use_container_width=True,
-                            hide_index=True
-                        )
+                )
+    
+                st.dataframe(
+                    styled,
+                    use_container_width=True,
+                    hide_index=True
+                )
     # ---- Excel Download ----
     output = io.BytesIO()
 
