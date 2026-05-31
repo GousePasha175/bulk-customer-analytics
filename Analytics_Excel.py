@@ -247,7 +247,7 @@ if not st.session_state.authenticated:
             Analytics (Business and Operations)
             </h1>
             <p style='font-size:15px;color:#555;margin-top:2px;margin-bottom:0;'>
-            Headquarter Region - Telangana Postal Circle
+            Headquarters Region - Telangana Postal Circle
             </p>
             </div>
             """, unsafe_allow_html=True)
@@ -299,7 +299,7 @@ with h_c:
     Bulk Customer Business Analytics
     </h1>
     <p style='font-size:15px;color:#555;margin-top:0;'>
-    Headquarter Region - Telangana Postal Circle
+    Headquarters Region - Telangana Postal Circle
     </p>
     """, unsafe_allow_html=True)
 
@@ -326,7 +326,7 @@ DEFAULT_MASTER = _master_candidates[0] if _master_candidates else "data/master.x
 if master_file:
     st.sidebar.success("✅ Using uploaded master data")
 elif os.path.exists(DEFAULT_MASTER):
-    st.sidebar.info("📂 Using default master from repository")
+    st.sidebar.info("📂 Using default master data")
 else:
     st.sidebar.warning("⚠️ No master data found. Please upload one.")
 
@@ -408,8 +408,8 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
         st.stop()
 
     # ---- Date Detection ----
-    upload_start  = pd.to_datetime(daily_df[start_date_col].iloc[0])
-    upload_end    = pd.to_datetime(daily_df[end_date_col].iloc[0])
+    upload_start  = pd.to_datetime(daily_df[start_date_col].iloc[0], dayfirst=True,format="%d-%m-%Y")
+    upload_end    = pd.to_datetime(daily_df[end_date_col].iloc[0], dayfirst=True,format="%d-%m-%Y")
     uploaded_days = (upload_end - upload_start).days + 1
     previous_year = upload_start.year - 1
     upload_month  = upload_start.month
