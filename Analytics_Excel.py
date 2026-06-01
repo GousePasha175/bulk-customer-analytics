@@ -37,6 +37,31 @@ div.stButton > button:hover { background-color: #e23d3d; color: white; }
 # ==========================
 # HELPER FUNCTIONS
 # ==========================
+def format_indian(n):
+    """Format a number in Indian numbering system: 1,38,13,220"""
+    try:
+        n = int(round(n))
+    except (ValueError, TypeError):
+        return str(n)
+    is_negative = n < 0
+    n = abs(n)
+    s = str(n)
+    if len(s) <= 3:
+        result = s
+    else:
+        last3 = s[-3:]
+        rest = s[:-3]
+        parts = []
+        while len(rest) > 2:
+            parts.append(rest[-2:])
+            rest = rest[:-2]
+        if rest:
+            parts.append(rest)
+        parts.reverse()
+        result = ",".join(parts) + "," + last3
+    return ("-" if is_negative else "") + result
+
+
 def classify(variance, threshold):
     if pd.isna(variance):
         return "No Historical Data"
@@ -62,37 +87,21 @@ def color_status(val):
 
 
 def parse_master_excel(file):
-    """
-    Read all sheets from the master Excel.
-    Each sheet has 2 header rows:
-      row 0 : month dates (datetime) in columns, paired as TRAFFIC | REVENUE
-      row 1 : 'TRAFFIC' / 'REVENUE' sub-labels  (or single header row for some sheets)
-    Data rows start after the last header row.
-
-    Returns a flat DataFrame with one row per customer:
-      CUSTOMER ID  |  CUSTOMER NAME  |  YYYY-MM TRAFFIC  |  YYYY-MM REVENUE  | ...
-    """
     xl = pd.ExcelFile(file)
-    master = {}  # key = clean customer id, value = dict of {col_name: value}
+    master = {}
 
     for sheet in xl.sheet_names:
         raw = pd.read_excel(file, sheet_name=sheet, header=None)
 
         id_col_idx   = None
         name_col_idx = None
-        data_start   = None
 
         has_sub_header = any(
             str(v).strip().upper() == 'TRAFFIC'
             for v in raw.iloc[1].tolist()
         )
 
-        if has_sub_header:
-            header_row = 1
-            data_start = 2
-        else:
-            header_row = 0
-            data_start = 1
+        data_start = 2 if has_sub_header else 1
 
         for scan in range(min(3, len(raw))):
             for cidx, val in enumerate(raw.iloc[scan]):
@@ -105,7 +114,7 @@ def parse_master_excel(file):
         if id_col_idx is None:
             continue
 
-        month_map = {}  # (year, month) -> {'t': col_idx, 'r': col_idx}
+        month_map = {}
 
         if has_sub_header:
             date_row = raw.iloc[0]
@@ -120,22 +129,20 @@ def parse_master_excel(file):
                     sub = str(sub_row.iloc[cidx]).strip().upper()
                     if sub == 'TRAFFIC':
                         month_map[current_date]['t'] = cidx
-                    elif sub == 'REVENUE' or sub == 'REV':
+                    elif sub in ('REVENUE', 'REV'):
                         month_map[current_date]['r'] = cidx
         else:
             month_abbr = {
                 'apr': 4, 'may': 5, 'jun': 6, 'jul': 7, 'aug': 8, 'sep': 9,
                 'oct': 10, 'nov': 11, 'dec': 12, 'jan': 1, 'feb': 2, 'mar': 3
             }
-            header_vals = raw.iloc[0].tolist()
-            for cidx, val in enumerate(header_vals):
+            for cidx, val in enumerate(raw.iloc[0].tolist()):
                 s = str(val).strip().lower()
                 for abbr, mo in month_abbr.items():
                     if abbr in s:
                         yr_match = re.search(r'(\d{2})', s)
                         if yr_match:
-                            yr_2 = int(yr_match.group(1))
-                            yr = 2000 + yr_2
+                            yr = 2000 + int(yr_match.group(1))
                             key = (yr, mo)
                             if key not in month_map:
                                 month_map[key] = {'t': None, 'r': None}
@@ -159,7 +166,6 @@ def parse_master_excel(file):
                 continue
 
             clean_id = str(cid_val).replace('.0', '').strip()
-
             cname = ''
             if name_col_idx is not None and name_col_idx < len(row):
                 cname = str(row.iloc[name_col_idx]).strip()
@@ -172,40 +178,28 @@ def parse_master_excel(file):
             for (yr, mo), cols in month_map.items():
                 t_key = f"{yr}-{mo:02d} TRAFFIC"
                 r_key = f"{yr}-{mo:02d} REVENUE"
-
                 t_val = 0
                 r_val = 0
-
                 if cols['t'] is not None and cols['t'] < len(row):
                     t_val = pd.to_numeric(row.iloc[cols['t']], errors='coerce')
                     t_val = 0 if pd.isna(t_val) else t_val
-
                 if cols['r'] is not None and cols['r'] < len(row):
                     r_val = pd.to_numeric(row.iloc[cols['r']], errors='coerce')
                     r_val = 0 if pd.isna(r_val) else r_val
-
                 master[clean_id][t_key] = master[clean_id].get(t_key, 0) + t_val
                 master[clean_id][r_key] = master[clean_id].get(r_key, 0) + r_val
 
-    if not master:
-        return pd.DataFrame()
-
-    return pd.DataFrame(list(master.values()))
+    return pd.DataFrame(list(master.values())) if master else pd.DataFrame()
 
 
 def compute_average_based_result(customer_id, customer_name, current_revenue,
                                   current_traffic, hist_row, historical_df,
                                   uploaded_days, sd_percent):
-    """
-    For a customer with no same-period historical data,
-    compute expected values from the average of ALL available FY months.
-    Returns a result dict or None if no usable historical data exists.
-    """
+    """Compute expected values from average of ALL available FY months."""
     revenue_cols = [c for c in historical_df.columns if "REVENUE" in str(c).upper()]
     traffic_cols = [c for c in historical_df.columns if "TRAFFIC" in str(c).upper()]
 
-    revenue_values = []
-    traffic_values = []
+    revenue_values, traffic_values = [], []
 
     for col in revenue_cols:
         val = pd.to_numeric(hist_row[col], errors='coerce')
@@ -218,12 +212,11 @@ def compute_average_based_result(customer_id, customer_name, current_revenue,
             traffic_values.append(val)
 
     if not revenue_values and not traffic_values:
-        return None  # truly no data at all
+        return None
 
     avg_monthly_revenue = np.mean(revenue_values) if revenue_values else 0
     avg_monthly_traffic = np.mean(traffic_values) if traffic_values else 0
 
-    # Use 30.44 as average days per month
     expected_revenue = (avg_monthly_revenue / 30.44) * uploaded_days
     expected_traffic = (avg_monthly_traffic / 30.44) * uploaded_days
 
@@ -237,21 +230,79 @@ def compute_average_based_result(customer_id, customer_name, current_revenue,
     )
 
     return {
-        "Customer ID":          customer_id,
-        "Customer Name":        customer_name,
-        "Actual Revenue":       round(current_revenue),
-        "Expected Revenue":     round(expected_revenue),
-        "Revenue Variance %":   round(revenue_var, 2) if not pd.isna(revenue_var) else np.nan,
-        "Revenue Status":       classify(revenue_var, sd_percent),
-        "Actual Traffic":       round(current_traffic),
-        "Expected Traffic":     round(expected_traffic),
-        "Traffic Variance %":   round(traffic_var, 2) if not pd.isna(traffic_var) else np.nan,
-        "Traffic Status":       classify(traffic_var, sd_percent),
-        "Avg Revenue Used":     round(avg_monthly_revenue),
-        "Avg Traffic Used":     round(avg_monthly_traffic),
+        "Customer ID":           customer_id,
+        "Customer Name":         customer_name,
+        "Actual Revenue":        round(current_revenue),
+        "Expected Revenue":      round(expected_revenue),
+        "Revenue Variance %":    round(revenue_var, 2) if not pd.isna(revenue_var) else np.nan,
+        "Revenue Status":        classify(revenue_var, sd_percent),
+        "Actual Traffic":        round(current_traffic),
+        "Expected Traffic":      round(expected_traffic),
+        "Traffic Variance %":    round(traffic_var, 2) if not pd.isna(traffic_var) else np.nan,
+        "Traffic Status":        classify(traffic_var, sd_percent),
+        "Avg Revenue Used":      round(avg_monthly_revenue),
+        "Avg Traffic Used":      round(avg_monthly_traffic),
         "Months Averaged (Rev)": len(revenue_values),
         "Months Averaged (Trf)": len(traffic_values),
     }
+
+
+def write_grouped_sheet(writer, df, sheet_name, workbook, formats, status_col="Revenue Status"):
+    """
+    Write df to an Excel sheet grouped by status with a bold header row per group.
+    Groups: Excellent, Normal, Warning, Critical, No Historical Data
+    """
+    status_order  = ["Excellent", "Normal", "Warning", "Critical", "No Historical Data"]
+    header_format = workbook.add_format({
+        "bold": True, "font_size": 12,
+        "bg_color": "#2f3343", "font_color": "#FFFFFF",
+        "border": 1,
+    })
+    col_header_fmt = workbook.add_format({
+        "bold": True, "bg_color": "#D9D9D9", "border": 1
+    })
+    plain_fmt = workbook.add_format({"border": 1})
+
+    ws = writer.book.add_worksheet(sheet_name)
+    writer.sheets[sheet_name] = ws
+
+    cols = list(df.columns)
+    col_width = 22
+
+    current_row = 0
+
+    for status in status_order:
+        grp = df[df[status_col] == status]
+        if grp.empty:
+            continue
+
+        # ── Group header row ───────────────────────────────────────────────────
+        ws.merge_range(current_row, 0, current_row, len(cols) - 1,
+                       f"{status}  ({len(grp)})", header_format)
+        current_row += 1
+
+        # ── Column headers ─────────────────────────────────────────────────────
+        for ci, col in enumerate(cols):
+            ws.write(current_row, ci, col, col_header_fmt)
+            ws.set_column(ci, ci, col_width)
+        current_row += 1
+
+        # ── Data rows ──────────────────────────────────────────────────────────
+        rev_ci = cols.index("Revenue Status") if "Revenue Status" in cols else None
+        trf_ci = cols.index("Traffic Status") if "Traffic Status" in cols else None
+
+        for _, data_row in grp.iterrows():
+            for ci, col in enumerate(cols):
+                val = data_row[col]
+                if isinstance(val, float) and np.isnan(val):
+                    val = ""
+                cell_fmt = plain_fmt
+                if ci == rev_ci or ci == trf_ci:
+                    cell_fmt = formats.get(str(val), plain_fmt)
+                ws.write(current_row, ci, val, cell_fmt)
+            current_row += 1
+
+        current_row += 1  # blank separator between groups
 
 
 # ==========================
@@ -309,14 +360,11 @@ if not st.session_state.authenticated:
                         unsafe_allow_html=True)
             username = st.text_input("", placeholder="Enter Username",
                                      label_visibility="collapsed", key="usr")
-
             st.markdown("<p style='font-size:16px;margin-bottom:2px;font-weight:600;'>Password</p>",
                         unsafe_allow_html=True)
             password = st.text_input("", type="password", placeholder="Enter Password",
                                      label_visibility="collapsed", key="pwd")
-
-            submitted = st.form_submit_button("Submit", use_container_width=True,
-                                              type="primary")
+            submitted = st.form_submit_button("Submit", use_container_width=True, type="primary")
 
         if submitted:
             if username == "admin" and password == "HQR@2026":
@@ -331,7 +379,6 @@ if not st.session_state.authenticated:
 # MAIN APP — POST LOGIN
 # ==========================
 
-# ---- Header ----
 h_l, h_c, h_r = st.columns([1, 8, 1])
 with h_l:
     if logo:
@@ -351,11 +398,7 @@ st.markdown("<hr style='margin:4px 0 10px 0;border-color:#ddd;'>", unsafe_allow_
 # ---- Sidebar ----
 st.sidebar.header("Upload Files")
 
-daily_file = st.sidebar.file_uploader(
-    "Upload Daily / Period File (CSV)",
-    type=["csv"]
-)
-
+daily_file  = st.sidebar.file_uploader("Upload Daily / Period File (CSV)", type=["csv"])
 master_file = st.sidebar.file_uploader(
     "Upload Master Data File (optional — overrides default)",
     type=["xlsx", "xls", "csv"]
@@ -387,60 +430,43 @@ show_mode = st.sidebar.radio(
     )
 )
 
-# ---- Main Process ----
+# ================================================================
+# MAIN PROCESS
+# ================================================================
 if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
 
-    # Read daily CSV
     daily_df = pd.read_csv(daily_file)
 
-    # Load master
     with st.spinner("Loading master data..."):
         active_master = master_file if master_file else (DEFAULT_MASTER if os.path.exists(DEFAULT_MASTER) else None)
         if active_master is None:
             st.error("No master data available. Please upload a master file.")
             st.stop()
         src_name = active_master.name if hasattr(active_master, "name") else str(active_master)
-        if src_name.endswith(".csv"):
-            historical_df = pd.read_csv(active_master)
-        else:
-            historical_df = parse_master_excel(active_master)
+        historical_df = pd.read_csv(active_master) if src_name.endswith(".csv") else parse_master_excel(active_master)
 
     if historical_df.empty:
         st.error("Could not read master data. Please check the file.")
         st.stop()
 
     # ---- Column Detection — Daily File ----
-    customer_id_col   = None
-    customer_name_col = None
-    revenue_col       = None
-    traffic_col       = None
-    start_date_col    = None
-    end_date_col      = None
+    customer_id_col = customer_name_col = revenue_col = None
+    traffic_col = start_date_col = end_date_col = None
 
     for col in daily_df.columns:
         c = str(col).strip().lower()
-        if "customer id" in c:
-            customer_id_col = col
-        elif "customer name" in c:
-            customer_name_col = col
-        elif "amount" in c or "revenue" in c:
-            revenue_col = col
-        elif "article" in c or "traffic" in c:
-            traffic_col = col
-        elif "start" in c:
-            start_date_col = col
-        elif "end" in c:
-            end_date_col = col
+        if "customer id"   in c: customer_id_col   = col
+        elif "customer name" in c: customer_name_col = col
+        elif "amount" in c or "revenue" in c: revenue_col = col
+        elif "article" in c or "traffic" in c: traffic_col = col
+        elif "start" in c: start_date_col = col
+        elif "end"   in c: end_date_col   = col
 
     missing = [n for n, v in [
-        ("Customer ID",   customer_id_col),
-        ("Customer Name", customer_name_col),
-        ("Revenue",       revenue_col),
-        ("Traffic",       traffic_col),
-        ("Start Date",    start_date_col),
-        ("End Date",      end_date_col),
+        ("Customer ID", customer_id_col), ("Customer Name", customer_name_col),
+        ("Revenue", revenue_col), ("Traffic", traffic_col),
+        ("Start Date", start_date_col), ("End Date", end_date_col),
     ] if v is None]
-
     if missing:
         st.error(f"Could not detect columns in daily file: {', '.join(missing)}")
         st.stop()
@@ -453,7 +479,6 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
     upload_month  = upload_start.month
     days_in_month = calendar.monthrange(previous_year, upload_month)[1]
 
-    # ---- Date Validation Banner ----
     st.markdown(f"""
     <div style='background:#f0f7ff;border-left:4px solid #1a73e8;padding:8px 16px;
                 border-radius:6px;margin-bottom:12px;font-size:15px;'>
@@ -465,46 +490,35 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
     """, unsafe_allow_html=True)
 
     # ---- Historical Column Detection ----
-    hist_customer_id_col = None
-    revenue_col_hist     = None
-    traffic_col_hist     = None
+    hist_customer_id_col = revenue_col_hist = traffic_col_hist = None
 
     for col in historical_df.columns:
         c = str(col).upper()
-        if "CUSTOMER ID" in c:
-            hist_customer_id_col = col
-        if (str(previous_year) in c
-                and f"{upload_month:02d}" in c
-                and "REVENUE" in c):
+        if "CUSTOMER ID" in c: hist_customer_id_col = col
+        if str(previous_year) in c and f"{upload_month:02d}" in c and "REVENUE" in c:
             revenue_col_hist = col
-        if (str(previous_year) in c
-                and f"{upload_month:02d}" in c
-                and "TRAFFIC" in c):
+        if str(previous_year) in c and f"{upload_month:02d}" in c and "TRAFFIC" in c:
             traffic_col_hist = col
 
     if hist_customer_id_col is None:
         st.error("Could not find CUSTOMER ID column in master data.")
         st.stop()
 
-    # Whether exact same-period column exists in master
     has_period_col = (revenue_col_hist is not None and traffic_col_hist is not None)
 
-    # ---- Clean Customer ID ----
     historical_df["CLEAN_ID"] = (
         historical_df[hist_customer_id_col]
-        .astype(str)
-        .str.replace(".0", "", regex=False)
-        .str.strip()
+        .astype(str).str.replace(".0", "", regex=False).str.strip()
     )
 
-    # ---- KPI Metrics ----
-    total_revenue   = pd.to_numeric(daily_df[revenue_col],  errors="coerce").sum()
-    total_traffic   = pd.to_numeric(daily_df[traffic_col],  errors="coerce").sum()
+    # ---- KPI Metrics (Indian number format) ----
+    total_revenue   = pd.to_numeric(daily_df[revenue_col], errors="coerce").sum()
+    total_traffic   = pd.to_numeric(daily_df[traffic_col], errors="coerce").sum()
     total_customers = daily_df[customer_id_col].nunique()
 
     c1, c2, c3 = st.columns(3)
-    c1.metric("Total Revenue",   f"₹ {round(total_revenue):,}")
-    c2.metric("Total Traffic",   f"{round(total_traffic):,}")
+    c1.metric("Total Revenue",   f"₹ {format_indian(total_revenue)}")
+    c2.metric("Total Traffic",   format_indian(total_traffic))
     c3.metric("Total Customers", total_customers)
 
     st.markdown("<hr style='margin:8px 0;border-color:#eee;'>", unsafe_allow_html=True)
@@ -513,10 +527,12 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
         "Analyze 'No Historical Data' customers using average of available historical months"
     )
 
-    # ---- Customer Analytics Loop ----
-    results          = []  # customers with valid same-period historical data
-    no_hist_raw      = []  # customers truly with no history (for raw "No Historical Data" section)
-    avg_hist_results = []  # customers analysed using FY average (when checkbox ticked)
+    # ================================================================
+    # CUSTOMER ANALYTICS LOOP
+    # ================================================================
+    results          = []   # customers with same-period historical data
+    no_hist_raw      = []   # customers with NO historical data at all (not in master, or zero avg)
+    avg_hist_results = []   # customers re-analysed using FY average
 
     for _, row in daily_df.iterrows():
 
@@ -527,26 +543,25 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
 
         historical_match = historical_df[historical_df["CLEAN_ID"] == customer_id]
 
-        # Apply show_mode filter
         if historical_match.empty and show_mode == "Only records present in Master Data":
             continue
 
-        # ── CASE 1: Customer not in master at all ──────────────────────────────
+        # ── CASE 1: Not in master ──────────────────────────────────────────────
         if historical_match.empty:
             no_hist_raw.append({
-                "Customer ID":   customer_id,
-                "Customer Name": customer_name,
-                "Actual Revenue": round(current_revenue) if not pd.isna(current_revenue) else 0,
-                "Actual Traffic": round(current_traffic) if not pd.isna(current_traffic) else 0,
+                "Customer ID":                customer_id,
+                "Customer Name":              customer_name,
+                "Actual Revenue":             round(current_revenue) if not pd.isna(current_revenue) else 0,
+                "Actual Traffic":             round(current_traffic) if not pd.isna(current_traffic) else 0,
                 "Historical Monthly Revenue": 0,
-                "Revenue Status": "No Historical Data",
-                "Traffic Status": "No Historical Data",
+                "Revenue Status":             "No Historical Data",
+                "Traffic Status":             "No Historical Data",
             })
             continue
 
         hist_row = historical_match.iloc[0]
 
-        # ── CASE 2: Same-period column missing from master entirely ────────────
+        # ── CASE 2: Same-period column entirely missing in master ──────────────
         if not has_period_col:
             if use_average_history:
                 avg_result = compute_average_based_result(
@@ -555,36 +570,25 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
                 )
                 if avg_result:
                     avg_hist_results.append(avg_result)
-                else:
-                    no_hist_raw.append({
-                        "Customer ID":   customer_id,
-                        "Customer Name": customer_name,
-                        "Actual Revenue": round(current_revenue) if not pd.isna(current_revenue) else 0,
-                        "Actual Traffic": round(current_traffic) if not pd.isna(current_traffic) else 0,
-                        "Historical Monthly Revenue": 0,
-                        "Revenue Status": "No Historical Data",
-                        "Traffic Status": "No Historical Data",
-                    })
-            else:
-                no_hist_raw.append({
-                    "Customer ID":   customer_id,
-                    "Customer Name": customer_name,
-                    "Actual Revenue": round(current_revenue) if not pd.isna(current_revenue) else 0,
-                    "Actual Traffic": round(current_traffic) if not pd.isna(current_traffic) else 0,
-                    "Historical Monthly Revenue": 0,
-                    "Revenue Status": "No Historical Data",
-                    "Traffic Status": "No Historical Data",
-                })
+                    continue
+            no_hist_raw.append({
+                "Customer ID":                customer_id,
+                "Customer Name":              customer_name,
+                "Actual Revenue":             round(current_revenue) if not pd.isna(current_revenue) else 0,
+                "Actual Traffic":             round(current_traffic) if not pd.isna(current_traffic) else 0,
+                "Historical Monthly Revenue": 0,
+                "Revenue Status":             "No Historical Data",
+                "Traffic Status":             "No Historical Data",
+            })
             continue
 
         # ── CASE 3: Customer in master, same-period column exists ──────────────
         monthly_revenue = pd.to_numeric(hist_row[revenue_col_hist], errors="coerce")
         monthly_traffic = pd.to_numeric(hist_row[traffic_col_hist], errors="coerce")
-
         if pd.isna(monthly_revenue): monthly_revenue = 0
         if pd.isna(monthly_traffic): monthly_traffic = 0
 
-        # ── CASE 3a: Same-period value is zero — use FY average if checkbox on ─
+        # ── CASE 3a: Same-period value is zero — try FY average ───────────────
         if monthly_revenue == 0 and monthly_traffic == 0 and use_average_history:
             avg_result = compute_average_based_result(
                 customer_id, customer_name, current_revenue, current_traffic,
@@ -592,9 +596,9 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
             )
             if avg_result:
                 avg_hist_results.append(avg_result)
-                continue  # do NOT also add to main results
+                continue  # NOT added to main results
 
-        # ── CASE 3b: Normal path — use same-period historical values ───────────
+        # ── CASE 3b: Normal path ───────────────────────────────────────────────
         expected_revenue = (monthly_revenue / days_in_month) * uploaded_days
         expected_traffic = (monthly_traffic / days_in_month) * uploaded_days
 
@@ -622,24 +626,20 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
             "Traffic Status":               classify(traffic_var, sd_percent),
         })
 
-    result_df       = pd.DataFrame(results)
-    no_hist_df      = pd.DataFrame(no_hist_raw)
-    avg_history_df  = pd.DataFrame(avg_hist_results)
+    result_df      = pd.DataFrame(results)
+    no_hist_df     = pd.DataFrame(no_hist_raw)
+    avg_history_df = pd.DataFrame(avg_hist_results)
 
     if result_df.empty and no_hist_df.empty and avg_history_df.empty:
         st.warning("No records to display.")
         st.stop()
 
-    # Clean numeric columns
-    number_cols = [
-        "Actual Revenue", "Historical Monthly Revenue", "Historical Avg Revenue",
-        "Actual Traffic", "Historical Monthly Traffic", "Historical Avg Traffic",
-    ]
-    for col in number_cols:
+    # Clean numeric columns in result_df
+    for col in ["Actual Revenue", "Historical Monthly Revenue", "Historical Avg Revenue",
+                "Actual Traffic", "Historical Monthly Traffic", "Historical Avg Traffic"]:
         if col in result_df.columns:
             result_df[col] = (
-                pd.to_numeric(result_df[col], errors="coerce")
-                .fillna(0).round(0).astype(int)
+                pd.to_numeric(result_df[col], errors="coerce").fillna(0).round(0).astype(int)
             )
 
     # ================================================================
@@ -654,84 +654,101 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
             group_df = result_df[result_df["Revenue Status"] == status]
             if not group_df.empty:
                 st.markdown(f"### {status} ({len(group_df)})")
-                styled_df = group_df.style.map(
-                    color_status, subset=["Revenue Status", "Traffic Status"])
+                styled_df = group_df.style.map(color_status, subset=["Revenue Status", "Traffic Status"])
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
-    # ── No Historical Data section (raw — customer not in master) ──────────────
-    if not no_hist_df.empty:
-        st.markdown(f"### No Historical Data ({len(no_hist_df)})")
-        st.dataframe(no_hist_df, use_container_width=True, hide_index=True)
+    # ── No Historical Data — always shown, full list ───────────────────────────
+    # Total = customers with no same-period data (no_hist_raw) +
+    #         those pending avg analysis (avg_hist_results when checkbox OFF)
+    total_no_hist = len(no_hist_raw) + (len(avg_hist_results) if not use_average_history else 0)
+
+    if not no_hist_df.empty or total_no_hist > 0:
+        st.markdown(f"### No Historical Data ({total_no_hist})")
+        if not no_hist_df.empty:
+            st.dataframe(no_hist_df, use_container_width=True, hide_index=True)
 
     # ================================================================
-    # SECTION 2 — Average-Based Analysis
+    # SECTION 2 — Average-Based Analysis (only when checkbox ticked)
     # ================================================================
-    if use_average_history and not avg_history_df.empty:
+    if use_average_history:
+
+        total_no_hist_entries = len(no_hist_raw) + len(avg_hist_results)
+        avg_processable       = len(avg_hist_results)
+        truly_no_data         = len(no_hist_raw)
 
         st.markdown("---")
         st.subheader("Average-Based Analysis for No Historical Data Customers")
+
         st.info(
-            f"{len(avg_history_df)} customers were analysed using average historical "
-            f"performance because corresponding-period data was unavailable."
+            f"**Total No Historical Data entries: {total_no_hist_entries}**  \n"
+            f"Out of these, **{avg_processable}** could be processed using available FY month averages.  \n"
+            f"**{truly_no_data}** entries have no historical data in master at all and remain unclassified."
         )
 
-        # Summary table (all avg customers)
-        display_cols = [
-            "Customer ID", "Customer Name",
-            "Actual Revenue", "Expected Revenue",
-            "Revenue Variance %", "Revenue Status",
-            "Actual Traffic", "Expected Traffic",
-            "Traffic Variance %", "Traffic Status",
-        ]
-        display_cols = [c for c in display_cols if c in avg_history_df.columns]
-        st.dataframe(avg_history_df[display_cols], use_container_width=True, hide_index=True)
+        if not avg_history_df.empty:
+            display_cols = [
+                "Customer ID", "Customer Name",
+                "Actual Revenue", "Expected Revenue", "Revenue Variance %", "Revenue Status",
+                "Actual Traffic", "Expected Traffic", "Traffic Variance %", "Traffic Status",
+            ]
+            display_cols = [c for c in display_cols if c in avg_history_df.columns]
 
-        st.markdown("---")
-        st.subheader("Average Historical Performance Analysis")
+            st.markdown("---")
+            st.subheader("Average Historical Performance Analysis")
 
-        for status in status_order + ["No Historical Data"]:
-            grp = avg_history_df[avg_history_df["Revenue Status"] == status]
-            if not grp.empty:
-                st.markdown(f"### {status} ({len(grp)})")
-                styled = grp[display_cols].style.map(
-                    color_status, subset=["Revenue Status", "Traffic Status"]
-                )
-                st.dataframe(styled, use_container_width=True, hide_index=True)
+            for status in status_order + ["No Historical Data"]:
+                grp = avg_history_df[avg_history_df["Revenue Status"] == status]
+                if not grp.empty:
+                    st.markdown(f"### {status} ({len(grp)})")
+                    styled = grp[display_cols].style.map(
+                        color_status, subset=["Revenue Status", "Traffic Status"]
+                    )
+                    st.dataframe(styled, use_container_width=True, hide_index=True)
 
     # ================================================================
-    # Excel Download
+    # Excel Download — 2 grouped sheets
     # ================================================================
     output = io.BytesIO()
 
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-        if not result_df.empty:
-            result_df.to_excel(writer, index=False, sheet_name="Analytics")
-        if use_average_history and not avg_history_df.empty:
-            avg_history_df.to_excel(writer, index=False, sheet_name="Average History Analysis")
-        if not no_hist_df.empty:
-            no_hist_df.to_excel(writer, index=False, sheet_name="No Historical Data")
-
         workbook = writer.book
 
-        formats = {
-            "Excellent":          workbook.add_format({"bg_color": "#90EE90"}),
-            "Normal":             workbook.add_format({"bg_color": "#FFFACD"}),
-            "Warning":            workbook.add_format({"bg_color": "#FFD580"}),
-            "Critical":           workbook.add_format({"bg_color": "#FF7F7F"}),
-            "No Historical Data": workbook.add_format({"bg_color": "#D3D3D3"}),
+        status_formats = {
+            "Excellent":          workbook.add_format({"bg_color": "#90EE90", "border": 1}),
+            "Normal":             workbook.add_format({"bg_color": "#FFFACD", "border": 1}),
+            "Warning":            workbook.add_format({"bg_color": "#FFD580", "border": 1}),
+            "Critical":           workbook.add_format({"bg_color": "#FF7F7F", "border": 1}),
+            "No Historical Data": workbook.add_format({"bg_color": "#D3D3D3", "border": 1}),
         }
 
-        if not result_df.empty:
-            worksheet = writer.sheets["Analytics"]
-            rev_col_idx = result_df.columns.get_loc("Revenue Status")
-            trf_col_idx = result_df.columns.get_loc("Traffic Status")
-            for row_num in range(len(result_df)):
-                rs = result_df.iloc[row_num]["Revenue Status"]
-                ts = result_df.iloc[row_num]["Traffic Status"]
-                worksheet.write(row_num + 1, rev_col_idx, rs, formats.get(rs, formats["No Historical Data"]))
-                worksheet.write(row_num + 1, trf_col_idx, ts, formats.get(ts, formats["No Historical Data"]))
-            for i, col in enumerate(result_df.columns):
-                worksheet.set_column(i, i, 22)
+        # ── Sheet 1: Main Analytics (Excellent/Normal/Warning/Critical/No Hist) ─
+        # Combine result_df + no_hist_df for the full picture on sheet 1
+        sheet1_df = pd.concat([result_df, no_hist_df], ignore_index=True) if not no_hist_df.empty else result_df.copy()
+
+        if not sheet1_df.empty:
+            write_grouped_sheet(
+                writer, sheet1_df,
+                sheet_name="Customer Analytics",
+                workbook=workbook,
+                formats=status_formats,
+            )
+
+        # ── Sheet 2: Average-Based Analysis (grouped) ──────────────────────────
+        if use_average_history and not avg_history_df.empty:
+            avg_display_cols = [
+                "Customer ID", "Customer Name",
+                "Actual Revenue", "Expected Revenue", "Revenue Variance %", "Revenue Status",
+                "Actual Traffic", "Expected Traffic", "Traffic Variance %", "Traffic Status",
+                "Avg Revenue Used", "Avg Traffic Used",
+                "Months Averaged (Rev)", "Months Averaged (Trf)",
+            ]
+            avg_display_cols = [c for c in avg_display_cols if c in avg_history_df.columns]
+            write_grouped_sheet(
+                writer, avg_history_df[avg_display_cols],
+                sheet_name="Avg-Based Analysis",
+                workbook=workbook,
+                formats=status_formats,
+            )
 
     st.download_button(
         "⬇ Download Excel Report",
