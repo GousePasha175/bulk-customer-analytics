@@ -529,10 +529,28 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
 
     # ================================================================
     # CUSTOMER ANALYTICS LOOP
+    # NOTE: The loop ALWAYS computes both buckets regardless of the
+    # checkbox state.  The checkbox only controls what is *displayed*
+    # and what goes into the Excel.  This ensures that:
+    #   checkbox OFF  → No Historical Data shows ALL 325 entries
+    #   checkbox ON   → No Historical Data shows 212 (325-113),
+    #                   and Section 2 shows the 113 avg-processed ones
     # ================================================================
-    results          = []   # customers with same-period historical data
-    no_hist_raw      = []   # customers with NO historical data at all (not in master, or zero avg)
-    avg_hist_results = []   # customers re-analysed using FY average
+    results          = []   # customers with valid same-period historical data
+    no_hist_raw      = []   # truly no usable data (not in master, or avg also yields nothing)
+    avg_hist_results = []   # customers that CAN be processed via FY average
+                            # (in master but same-period is zero/missing)
+
+    def _no_hist_entry(cid, cname, rev, trf):
+        return {
+            "Customer ID":                cid,
+            "Customer Name":              cname,
+            "Actual Revenue":             round(rev) if not pd.isna(rev) else 0,
+            "Actual Traffic":             round(trf) if not pd.isna(trf) else 0,
+            "Historical Monthly Revenue": 0,
+            "Revenue Status":             "No Historical Data",
+            "Traffic Status":             "No Historical Data",
+        }
 
     for _, row in daily_df.iterrows():
 
@@ -546,40 +564,25 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
         if historical_match.empty and show_mode == "Only records present in Master Data":
             continue
 
-        # ── CASE 1: Not in master ──────────────────────────────────────────────
+        # ── CASE 1: Not in master at all — truly no history ────────────────────
         if historical_match.empty:
-            no_hist_raw.append({
-                "Customer ID":                customer_id,
-                "Customer Name":              customer_name,
-                "Actual Revenue":             round(current_revenue) if not pd.isna(current_revenue) else 0,
-                "Actual Traffic":             round(current_traffic) if not pd.isna(current_traffic) else 0,
-                "Historical Monthly Revenue": 0,
-                "Revenue Status":             "No Historical Data",
-                "Traffic Status":             "No Historical Data",
-            })
+            no_hist_raw.append(_no_hist_entry(customer_id, customer_name,
+                                               current_revenue, current_traffic))
             continue
 
         hist_row = historical_match.iloc[0]
 
         # ── CASE 2: Same-period column entirely missing in master ──────────────
         if not has_period_col:
-            if use_average_history:
-                avg_result = compute_average_based_result(
-                    customer_id, customer_name, current_revenue, current_traffic,
-                    hist_row, historical_df, uploaded_days, sd_percent
-                )
-                if avg_result:
-                    avg_hist_results.append(avg_result)
-                    continue
-            no_hist_raw.append({
-                "Customer ID":                customer_id,
-                "Customer Name":              customer_name,
-                "Actual Revenue":             round(current_revenue) if not pd.isna(current_revenue) else 0,
-                "Actual Traffic":             round(current_traffic) if not pd.isna(current_traffic) else 0,
-                "Historical Monthly Revenue": 0,
-                "Revenue Status":             "No Historical Data",
-                "Traffic Status":             "No Historical Data",
-            })
+            avg_result = compute_average_based_result(
+                customer_id, customer_name, current_revenue, current_traffic,
+                hist_row, historical_df, uploaded_days, sd_percent
+            )
+            if avg_result:
+                avg_hist_results.append(avg_result)   # can be processed via avg
+            else:
+                no_hist_raw.append(_no_hist_entry(customer_id, customer_name,
+                                                   current_revenue, current_traffic))
             continue
 
         # ── CASE 3: Customer in master, same-period column exists ──────────────
@@ -589,16 +592,19 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
         if pd.isna(monthly_traffic): monthly_traffic = 0
 
         # ── CASE 3a: Same-period value is zero — try FY average ───────────────
-        if monthly_revenue == 0 and monthly_traffic == 0 and use_average_history:
+        if monthly_revenue == 0 and monthly_traffic == 0:
             avg_result = compute_average_based_result(
                 customer_id, customer_name, current_revenue, current_traffic,
                 hist_row, historical_df, uploaded_days, sd_percent
             )
             if avg_result:
-                avg_hist_results.append(avg_result)
-                continue  # NOT added to main results
+                avg_hist_results.append(avg_result)   # can be processed via avg
+            else:
+                no_hist_raw.append(_no_hist_entry(customer_id, customer_name,
+                                                   current_revenue, current_traffic))
+            continue
 
-        # ── CASE 3b: Normal path ───────────────────────────────────────────────
+        # ── CASE 3b: Normal path — use same-period historical values ───────────
         expected_revenue = (monthly_revenue / days_in_month) * uploaded_days
         expected_traffic = (monthly_traffic / days_in_month) * uploaded_days
 
@@ -630,6 +636,11 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
     no_hist_df     = pd.DataFrame(no_hist_raw)
     avg_history_df = pd.DataFrame(avg_hist_results)
 
+    # Counts used throughout display
+    count_truly_no_data  = len(no_hist_raw)           # never have avg data
+    count_avg_processable = len(avg_hist_results)     # have avg data available
+    count_total_no_hist  = count_truly_no_data + count_avg_processable  # full 325
+
     if result_df.empty and no_hist_df.empty and avg_history_df.empty:
         st.warning("No records to display.")
         st.stop()
@@ -657,32 +668,48 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
                 styled_df = group_df.style.map(color_status, subset=["Revenue Status", "Traffic Status"])
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
-    # ── No Historical Data — always shown, full list ───────────────────────────
-    # Total = customers with no same-period data (no_hist_raw) +
-    #         those pending avg analysis (avg_hist_results when checkbox OFF)
-    total_no_hist = len(no_hist_raw) + (len(avg_hist_results) if not use_average_history else 0)
+    # ── No Historical Data ─────────────────────────────────────────────────────
+    # checkbox OFF → show ALL (truly_no_data + avg_processable) = full 325
+    # checkbox ON  → show only truly_no_data (e.g. 212), avg_processable moved to Section 2
+    if use_average_history:
+        # Only the ones that have no avg data either
+        nh_display_df    = no_hist_df
+        nh_display_count = count_truly_no_data
+    else:
+        # Combine truly-no-data + avg-processable rows into one display table
+        # Build a no-hist-style frame for avg_history_df entries so they show uniformly
+        if not avg_history_df.empty:
+            avg_as_no_hist = avg_history_df.rename(columns={
+                "Actual Revenue": "Actual Revenue",
+                "Actual Traffic": "Actual Traffic",
+            })[["Customer ID", "Customer Name", "Actual Revenue", "Actual Traffic"]].copy()
+            avg_as_no_hist["Historical Monthly Revenue"] = 0
+            avg_as_no_hist["Revenue Status"] = "No Historical Data"
+            avg_as_no_hist["Traffic Status"]  = "No Historical Data"
+            nh_display_df = pd.concat([no_hist_df, avg_as_no_hist], ignore_index=True)
+        else:
+            nh_display_df = no_hist_df
+        nh_display_count = count_total_no_hist
 
-    if not no_hist_df.empty or total_no_hist > 0:
-        st.markdown(f"### No Historical Data ({total_no_hist})")
-        if not no_hist_df.empty:
-            st.dataframe(no_hist_df, use_container_width=True, hide_index=True)
+    if nh_display_count > 0:
+        st.markdown(f"### No Historical Data ({nh_display_count})")
+        if not nh_display_df.empty:
+            st.dataframe(nh_display_df, use_container_width=True, hide_index=True)
 
     # ================================================================
     # SECTION 2 — Average-Based Analysis (only when checkbox ticked)
     # ================================================================
     if use_average_history:
 
-        total_no_hist_entries = len(no_hist_raw) + len(avg_hist_results)
-        avg_processable       = len(avg_hist_results)
-        truly_no_data         = len(no_hist_raw)
-
         st.markdown("---")
         st.subheader("Average-Based Analysis for No Historical Data Customers")
 
         st.info(
-            f"**Total No Historical Data entries: {total_no_hist_entries}**  \n"
-            f"Out of these, **{avg_processable}** could be processed using available FY month averages.  \n"
-            f"**{truly_no_data}** entries have no historical data in master at all and remain unclassified."
+            f"**Total No Historical Data entries: {count_total_no_hist}**  \n"
+            f"Out of these, **{count_avg_processable}** could be processed using "
+            f"available FY month averages.  \n"
+            f"**{count_truly_no_data}** entries have no historical data in master "
+            f"at all and remain unclassified."
         )
 
         if not avg_history_df.empty:
@@ -722,8 +749,8 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
         }
 
         # ── Sheet 1: Main Analytics (Excellent/Normal/Warning/Critical/No Hist) ─
-        # Combine result_df + no_hist_df for the full picture on sheet 1
-        sheet1_df = pd.concat([result_df, no_hist_df], ignore_index=True) if not no_hist_df.empty else result_df.copy()
+        # nh_display_df already reflects checkbox state correctly (all 325 when OFF, 212 when ON)
+        sheet1_df = pd.concat([result_df, nh_display_df], ignore_index=True) if not nh_display_df.empty else result_df.copy()
 
         if not sheet1_df.empty:
             write_grouped_sheet(
