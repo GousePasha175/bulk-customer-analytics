@@ -6,6 +6,26 @@ import io
 import os
 import re
 import glob as _glob
+
+import glob as _glob
+
+def _render_nav():
+    st.sidebar.markdown(
+        """<div style='padding:8px 0 4px 0;'>
+        <p style='font-size:12px;font-weight:700;color:#888;
+           text-transform:uppercase;letter-spacing:1px;margin:0 0 4px 0;'>Pages</p>
+        </div>""", unsafe_allow_html=True)
+    st.sidebar.page_link("Analytics_Excel.py", label="\U0001f3e0 Home")
+    _posb = (_glob.glob("pages/POSB Daily Report.py") +
+             _glob.glob("pages/*[Pp][Oo][Ss][Bb]*.py"))
+    if _posb:
+        st.sidebar.page_link(_posb[0].replace("\\", "/"), label="\U0001f4ee POSB Daily Report")
+    _dig = (_glob.glob("pages/1_Digital_Transactions.py") +
+            _glob.glob("pages/*[Dd]igital*.py"))
+    if _dig:
+        st.sidebar.page_link(_dig[0].replace("\\", "/"), label="\U0001f4bb Digital Transactions")
+    st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
+
 from PIL import Image
 
 # ==========================
@@ -508,18 +528,7 @@ with h_c:
 st.markdown("<hr style='margin:4px 0 10px 0;border-color:#ddd;'>", unsafe_allow_html=True)
 
 # ---- Sidebar ----
-st.sidebar.markdown("""
-<div style='padding:8px 0 4px 0;'>
-    <p style='font-size:12px;font-weight:700;color:#888;
-              text-transform:uppercase;letter-spacing:1px;margin:0 0 4px 0;'>
-    Pages
-    </p>
-</div>
-""", unsafe_allow_html=True)
-st.sidebar.page_link("Analytics_Excel.py",   label="📊 Business Analytics")
-st.sidebar.page_link("pages/POSB_Report.py", label="📮 POSB Daily Report")
-st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
-
+_render_nav()
 st.sidebar.header("Upload Files")
 
 daily_file  = st.sidebar.file_uploader("Upload Daily / Period File (CSV)", type=["csv"])
