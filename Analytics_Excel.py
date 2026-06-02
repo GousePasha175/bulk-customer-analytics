@@ -472,8 +472,8 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
         st.stop()
 
     # ---- Date Detection ----
-    upload_start  = pd.to_datetime(daily_df[start_date_col].iloc[0], dayfirst=True, errors="coerce")
-    upload_end    = pd.to_datetime(daily_df[end_date_col].iloc[0],   dayfirst=True, errors="coerce")
+    upload_start  = pd.to_datetime(daily_df[start_date_col].iloc[0], format="%d%m%Y", errors="coerce")
+    upload_end    = pd.to_datetime(daily_df[end_date_col].iloc[0], format="%d%m%Y", errors="coerce")
     uploaded_days = (upload_end - upload_start).days + 1
     previous_year = upload_start.year - 1
     upload_month  = upload_start.month
