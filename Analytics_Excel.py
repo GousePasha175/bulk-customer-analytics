@@ -31,6 +31,28 @@ div.stButton > button {
     font-size: 20px; font-weight: 600; margin-top: 8px;
 }
 div.stButton > button:hover { background-color: #e23d3d; color: white; }
+
+/* ── Sidebar collapse fix ──────────────────────────────────────────
+   Keep the re-open arrow always visible and on-screen.
+   Without this, after collapsing, the button shifts off-screen
+   and there is no way to reopen the sidebar without clearing cache. */
+[data-testid="collapsedControl"] {
+    display: flex !important;
+    visibility: visible !important;
+    position: fixed !important;
+    top: 50% !important;
+    left: 0px !important;
+    transform: translateY(-50%) !important;
+    z-index: 999999 !important;
+    background-color: #2f3343 !important;
+    border-radius: 0 8px 8px 0 !important;
+    padding: 10px 6px !important;
+    box-shadow: 2px 2px 6px rgba(0,0,0,0.3) !important;
+}
+[data-testid="collapsedControl"] svg {
+    fill: white !important;
+}
+/* ──────────────────────────────────────────────────────────────── */
 </style>
 """, unsafe_allow_html=True)
 
