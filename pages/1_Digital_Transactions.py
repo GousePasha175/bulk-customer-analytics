@@ -1,4 +1,25 @@
 import streamlit as st
+import glob as _glob
+
+import glob as _glob
+
+def _render_nav():
+    st.sidebar.markdown(
+        """<div style='padding:8px 0 4px 0;'>
+        <p style='font-size:12px;font-weight:700;color:#888;
+           text-transform:uppercase;letter-spacing:1px;margin:0 0 4px 0;'>Pages</p>
+        </div>""", unsafe_allow_html=True)
+    st.sidebar.page_link("Analytics_Excel.py", label="\U0001f3e0 Home")
+    _posb = (_glob.glob("pages/POSB Daily Report.py") +
+             _glob.glob("pages/*[Pp][Oo][Ss][Bb]*.py"))
+    if _posb:
+        st.sidebar.page_link(_posb[0].replace("\\", "/"), label="\U0001f4ee POSB Daily Report")
+    _dig = (_glob.glob("pages/1_Digital_Transactions.py") +
+            _glob.glob("pages/*[Dd]igital*.py"))
+    if _dig:
+        st.sidebar.page_link(_dig[0].replace("\\", "/"), label="\U0001f4bb Digital Transactions")
+    st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
+
 import pandas as pd
 import io, os, re
 import matplotlib
@@ -28,6 +49,32 @@ header{visibility:hidden;height:0px !important;}
 .rpt td.lft{text-align:left !important;}
 .rpt tr.rtot td{background:#b8d4f0 !important;font-weight:700;}
 .rpt tr.gtot td{background:#FFD700 !important;font-weight:700;}
+
+/* ── Sidebar collapse fix: re-open arrow always visible ── */
+[data-testid="collapsedControl"] {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: fixed !important;
+    top: 50% !important;
+    left: 0px !important;
+    transform: translateY(-50%) !important;
+    z-index: 999999 !important;
+    background-color: #2f3343 !important;
+    border-radius: 0 8px 8px 0 !important;
+    padding: 12px 7px !important;
+    box-shadow: 3px 0 8px rgba(0,0,0,0.35) !important;
+    cursor: pointer !important;
+}
+[data-testid="collapsedControl"] button {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+}
+[data-testid="collapsedControl"] svg {
+    fill: white !important;
+    color: white !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -804,6 +851,7 @@ def build_excel(df, view, show_region, date_str, use_color, total_label, full_df
     out.seek(0); return out.getvalue()
 
 # ========== SIDEBAR ==========
+_render_nav()
 st.sidebar.header("Upload Reports")
 report_type = st.sidebar.radio("Report Type",
     ["Digital Transactions","COD Digital Transactions"], index=0)
