@@ -435,7 +435,7 @@ show_mode = st.sidebar.radio(
 # ================================================================
 if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
 
-    daily_df = pd.read_csv(daily_file)
+    daily_df = pd.read_csv(daily_file. parse_dates=[start_date_col, end_date_col], dayfirst=True, infer_datetime_format=True)
 
     with st.spinner("Loading master data..."):
         active_master = master_file if master_file else (DEFAULT_MASTER if os.path.exists(DEFAULT_MASTER) else None)
@@ -472,8 +472,8 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
         st.stop()
 
     # ---- Date Detection ----
-    upload_start  = pd.to_datetime(daily_df[start_date_col].iloc[0], format="%d-%m-%Y", errors="coerce")
-    upload_end    = pd.to_datetime(daily_df[end_date_col].iloc[0], format="%d-%m-%Y", errors="coerce")
+    upload_start  = pd.to_datetime(daily_df[start_date_col].iloc[0], dayfirst=True, errors="coerce")
+    upload_end    = pd.to_datetime(daily_df[end_date_col].iloc[0], dayfirst=True, errors="coerce")
     uploaded_days = (upload_end - upload_start).days + 1
     previous_year = upload_start.year - 1
     upload_month  = upload_start.month
