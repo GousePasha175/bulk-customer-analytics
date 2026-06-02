@@ -10,7 +10,7 @@ import datetime
 from PIL import Image
 
 # ==========================================
-# PAGE CONFIGURATION & INTERFACE LOOK
+# PAGE CONFIGURATION & INTERFACE LOOK (YOUR ORIGINAL)
 # ==========================================
 st.set_page_config(
     page_title="Analytics (Business and Operations)",
@@ -89,10 +89,6 @@ def color_status(val):
 # CORE LEGACY HIERARCHICAL FILE PARSER
 # ==========================================
 def parse_master_dataframe(source_input, is_path=False):
-    """
-    Parses legacy multi-sheet transactional database dumps natively, 
-    accounting for nested variable header blocks and complex layout formatting styles.
-    """
     consolidated = {}
     short_months = [calendar.month_abbr[i].lower() for i in range(1, 13)]
     
@@ -111,7 +107,6 @@ def parse_master_dataframe(source_input, is_path=False):
 
         if not is_path: source_input.seek(0)
 
-        # Strategy A: ISO Multi-Header Rows Detection
         if is_iso_date:
             top_headers = pd.read_csv(source_input, nrows=1, header=None).iloc[0].ffill().tolist()
             if not is_path: source_input.seek(0)
@@ -144,8 +139,6 @@ def parse_master_dataframe(source_input, is_path=False):
                             consolidated[raw_id][f"{p_key} {metric}"] = val
                             y, m = map(int, p_key.split('-'))
                             consolidated[raw_id][f"{p_key} DAYS"] = calendar.monthrange(y, m)[1]
-
-        # Strategy B: Flat Text Attribute Matrix Layout
         else:
             df = pd.read_csv(source_input)
             cid_col = None
@@ -165,152 +158,4 @@ def parse_master_dataframe(source_input, is_path=False):
                             if m_nam in short_months:
                                 m_num = short_months.index(m_nam) + 1
                                 p_key = f"20{y_short}-{m_num:02d}"
-                                metric = "REVENUE" if "REV" in col_s.upper() else "TRAFFIC"
-                                val = pd.to_numeric(row[col], errors='coerce') or 0
-                                consolidated[raw_id][f"{p_key} {metric}"] = val
-                                consolidated[raw_id][f"{p_key} DAYS"] = calendar.monthrange(int(f"20{y_short}"), m_num)[1]
-    except Exception:
-        pass
-        
-    return pd.DataFrame(list(consolidated.values()))
-
-# ==========================================
-# EXCEL SPREADSHEET WRITER ENGINE
-# ==========================================
-def write_grouped_sheet(writer, df, sheet_name, workbook, formats, status_col="Revenue Status"):
-    status_order = ["Excellent", "Normal", "Warning", "Critical", "No Historical Data"]
-    header_format = workbook.add_format({"bold": True, "font_size": 12, "bg_color": "#2f3343", "font_color": "#FFFFFF", "border": 1})
-    col_header_fmt = workbook.add_format({"bold": True, "bg_color": "#D9D9D9", "border": 1})
-    plain_fmt = workbook.add_format({"border": 1})
-
-    ws = writer.book.add_worksheet(sheet_name)
-    writer.sheets[sheet_name] = ws
-    cols = list(df.columns)
-    current_row = 0
-
-    for status in status_order:
-        grp = df[df[status_col] == status]
-        if grp.empty: continue
-
-        ws.merge_range(current_row, 0, current_row, len(cols) - 1, f"{status} ({len(grp)})", header_format)
-        current_row += 1
-        for ci, col in enumerate(cols):
-            ws.write(current_row, ci, col, col_header_fmt)
-            ws.set_column(ci, ci, 20)
-        current_row += 1
-
-        rev_ci = cols.index("Revenue Status") if "Revenue Status" in cols else None
-        trf_ci = cols.index("Traffic Status") if "Traffic Status" in cols else None
-
-        for _, data_row in grp.iterrows():
-            for ci, col in enumerate(cols):
-                val = data_row[col]
-                if isinstance(val, float) and np.isnan(val): val = ""
-                cell_fmt = plain_fmt
-                if ci in (rev_ci, trf_ci): cell_fmt = formats.get(str(val), plain_fmt)
-                ws.write(current_row, ci, val, cell_fmt)
-            current_row += 1
-        current_row += 1
-
-# ==========================================
-# USER ROUTING SECURITY VERIFICATION
-# ==========================================
-logo_path = "assets/logo.png"
-logo = Image.open(logo_path) if os.path.exists(logo_path) else None
-
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
-
-if not st.session_state.authenticated:
-    st.markdown("<style>[data-testid='stSidebar'] { display: none !important; }</style>", unsafe_allow_html=True)
-    hl, hc, hr = st.columns([1, 3, 1])
-    with hc:
-        cl, cr = st.columns([1, 4])
-        with cl:
-            if logo: st.image(logo, width=100)
-        with cr:
-            st.markdown("<h1 style='font-size:24px; color:#2f3343;'>Analytics (Business & Operations)</h1><p>Telangana Circle</p>", unsafe_allow_html=True)
-        with st.form("login"):
-            st.text_input("Username", key="usr")
-            st.text_input("Password", type="password", key="pwd")
-            if st.form_submit_button("Submit", use_container_width=True):
-                if st.session_state.usr == "admin" and st.session_state.pwd == "HQR@2026":
-                    st.session_state.authenticated = True
-                    st.rerun()
-                else: st.error("Invalid credentials")
-    st.stop()
-
-# ==========================================
-# CORE WORKSPACE INTERFACE (AUTHENTICATED)
-# ==========================================
-hl, hc, hr = st.columns([1, 8, 1])
-if logo: hl.image(logo, width=90)
-hc.markdown("<h1 style='margin:0; color:#2f3343;'>Dynamic Customer Cross-Comparison Engine</h1>", unsafe_allow_html=True)
-st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
-
-# Side Panels Configurations
-st.sidebar.header("Configuration Panel")
-opt_master_file = st.sidebar.file_uploader("Upload Master Data File (Optional Override)", type=["csv"])
-daily_file = st.sidebar.file_uploader("Upload Target Evaluation File (Mandatory CSV)", type=["csv"])
-
-deviation_th = st.sidebar.slider("Acceptable Deviation %", 1, 50, 10)
-show_mode = st.sidebar.radio("Records View Filter", ["All Records", "Only records matching Master"])
-use_average_history = st.sidebar.checkbox("Fallback to Cumulative Averages for Missing Target Slices", value=True)
-
-# Safe Lazy Evaluation Master Sync Pipeline
-master_db = pd.DataFrame()
-if opt_master_file:
-    master_db = parse_master_dataframe(opt_master_file, is_path=False)
-elif os.path.exists("master"):
-    local_csv_logs = _glob.glob(os.path.join("master", "*.csv"))
-    chunk_frames = []
-    for f_path in local_csv_logs:
-        if os.path.getsize(f_path) > 0:
-            parsed_chunk = parse_master_dataframe(f_path, is_path=True)
-            if not parsed_chunk.empty:
-                chunk_frames.append(parsed_chunk)
-    if chunk_frames:
-        master_db = pd.concat(chunk_frames, ignore_index=True).drop_duplicates(subset=["CUSTOMER ID"])
-
-# Safe Guard-Rail to prevent interface crashes if folder asset files are missing
-if master_db.empty:
-    st.sidebar.error("⚠️ Local master file directory data repository is empty.")
-    st.info("Please place your historical tracking database logs inside your local 'master/' directory folder, or upload a custom Master file override to begin.")
-    st.stop()
-
-# Chronological Parsing Subsystem
-available_periods = sorted(list(set([c.split()[0] for c in master_db.columns if "REVENUE" in c])))
-month_names_mapping = {f"{i:02d}": calendar.month_name[i] for i in range(1, 13)}
-
-def format_period_label(p):
-    try:
-        y, m = p.split('-')
-        return f"{month_names_mapping.get(m, m)} {y}"
-    except: return p
-
-# Strategic Temporal Targets Selectors
-baseline_modes = [
-    "Previous Year Corresponding Month",
-    "Last Month (MoM Preceding Target Slice)",
-    "2-Month Rolling Historical Average Window",
-    "3-Month Rolling Historical Average Window",
-    "4-Month Rolling Historical Average Window",
-    "5-Month Rolling Historical Average Window",
-    "Global Consolidated Database Average Day Matrix"
-]
-for period in available_periods:
-    baseline_modes.append(f"Static Custom Timeline Snapshot: {format_period_label(period)}")
-
-selected_baseline_strategy = st.sidebar.selectbox("Select Baseline Strategy Rule Target", baseline_modes)
-
-# ==========================================
-# MATHEMATICAL ANALYTICAL COMPUTATION PIPELINE
-# ==========================================
-if daily_file:
-    daily_df = pd.read_csv(daily_file)
-    
-    # Target Parsing Verification Engine
-    cid_col = cname_col = rev_col = traf_col = sd_col = ed_col = None
-    for col in daily_df.columns:
-        c_l = str(col).strip().lower()
-        if "customer id" in c_l or "cust id" in c_l: cid_col = col
+                                metric = "REVENUE" if "REV" in col_s.upper() else "TRAFFIC
