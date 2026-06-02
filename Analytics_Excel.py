@@ -10,7 +10,7 @@ import datetime
 from PIL import Image
 
 # ==========================================
-# PAGE INITIALIZATION & PERFORMANCE THEME
+# PAGE CONFIGURATION & INTERFACE LOOK
 # ==========================================
 st.set_page_config(
     page_title="Analytics (Business and Operations)",
@@ -29,18 +29,26 @@ div.stButton > button {
     font-size: 20px; font-weight: 600; margin-top: 8px;
 }
 div.stButton > button:hover { background-color: #e23d3d; color: white; }
-.metric-container {
+.metric-card-header {
+    background-color: #2f3343; color: white; padding: 10px; 
+    border-top-left-radius: 8px; border-top-right-radius: 8px;
+    font-weight: 600; font-size: 14px; text-align: center;
+}
+.metric-card-body {
     background-color: #f8f9fa; border: 1px solid #e9ecef;
-    padding: 15px; border-radius: 8px; text-align: center;
+    border-top: none; padding: 15px; text-align: center;
+    border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;
+    font-size: 20px; font-weight: bold; color: #ff4b4b;
+    min-height: 65px; display: flex; align-items: center; justify-content: center;
 }
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# ROBUST DATA PROCESSING CORE ENGINE
+# HELPER DATA CONVERSION UTILITIES
 # ==========================================
 def format_indian(n):
-    """Formats values inside the Indian numbering standard ecosystem"""
+    """Formats raw values into the standard Indian numbering system"""
     try: n = int(round(n))
     except (ValueError, TypeError): return str(n)
     is_negative = n < 0
@@ -77,10 +85,13 @@ def color_status(val):
     }
     return colors.get(val, "")
 
+# ==========================================
+# CORE LEGACY HIERARCHICAL FILE PARSER
+# ==========================================
 def parse_master_dataframe(source_input, is_path=False):
     """
-    Parses legacy structural master matrix representations seamlessly, 
-    accounting for multi-row headers and variable formats (Jeedimetla, Bollaram, BNPL, Autonagar).
+    Parses legacy multi-sheet transactional database dumps natively, 
+    accounting for nested variable header blocks and complex layout formatting styles.
     """
     consolidated = {}
     short_months = [calendar.month_abbr[i].lower() for i in range(1, 13)]
@@ -88,33 +99,26 @@ def parse_master_dataframe(source_input, is_path=False):
     
     try:
         if is_path:
-            file_name = os.path.basename(source_input)
             df_raw = pd.read_csv(source_input, nrows=5, header=None)
         else:
-            file_name = source_input.name
             df_raw = pd.read_csv(source_input, nrows=5, header=None)
             source_input.seek(0)
 
-        # Detect structural layout signatures
         is_iso_date = False
         for r_idx in [0, 1]:
             if r_idx < len(df_raw) and any(re.match(r'\d{4}-\d{2}-\d{2}', str(x).strip()) for x in df_raw.iloc[r_idx]):
                 is_iso_date = True
                 break
 
-        if is_path:
-            file_stream = source_input
-        else:
-            file_stream = source_input
-            file_stream.seek(0)
+        if not is_path: source_input.seek(0)
 
-        # Strategy A: Unified ISO Timestamp Subheaders (Jeedimetla, Bollaram, BNPL Style)
+        # Strategy A: ISO Multi-Header Rows Detection (Jeedimetla, Bollaram, BNPL Formats)
         if is_iso_date:
-            top_headers = pd.read_csv(file_stream, nrows=1, header=None).iloc[0].ffill().tolist()
-            if not is_path: file_stream.seek(0)
-            sub_headers = pd.read_csv(file_stream, skiprows=1, nrows=1, header=None).iloc[0].tolist()
-            if not is_path: file_stream.seek(0)
-            df = pd.read_csv(file_stream, skiprows=2, header=None)
+            top_headers = pd.read_csv(source_input, nrows=1, header=None).iloc[0].ffill().tolist()
+            if not is_path: source_input.seek(0)
+            sub_headers = pd.read_csv(source_input, skiprows=1, nrows=1, header=None).iloc[0].tolist()
+            if not is_path: source_input.seek(0)
+            df = pd.read_csv(source_input, skiprows=2, header=None)
             
             col_names = []
             for t, s in zip(top_headers, sub_headers):
@@ -142,9 +146,9 @@ def parse_master_dataframe(source_input, is_path=False):
                             y, m = map(int, p_key.split('-'))
                             consolidated[raw_id][f"{p_key} DAYS"] = calendar.monthrange(y, m)[1]
 
-        # Strategy B: Flattened Attribute Columns (PBC Autonagar Style)
+        # Strategy B: Flat Text Attribute Matrix Layout (Autonagar Format)
         else:
-            df = pd.read_csv(file_stream)
+            df = pd.read_csv(source_input)
             cid_col = None
             for c in df.columns:
                 if str(c).strip().lower() in ["cust id", "customer id"]: cid_col = c
@@ -172,7 +176,7 @@ def parse_master_dataframe(source_input, is_path=False):
     return pd.DataFrame(list(consolidated.values()))
 
 # ==========================================
-# EXCEL SHEET BUILDER WORKER
+# EXCEL SPREADSHEET WRITER ENGINE
 # ==========================================
 def write_grouped_sheet(writer, df, sheet_name, workbook, formats, status_col="Revenue Status"):
     status_order = ["Excellent", "Normal", "Warning", "Critical", "No Historical Data"]
@@ -210,7 +214,7 @@ def write_grouped_sheet(writer, df, sheet_name, workbook, formats, status_col="R
         current_row += 1
 
 # ==========================================
-# SECURITY LAYER ACCESS GATEWAY
+# USER ROUTING SECURITY VERIFICATION
 # ==========================================
 logo_path = "assets/logo.png"
 logo = Image.open(logo_path) if os.path.exists(logo_path) else None
@@ -237,46 +241,46 @@ if not st.session_state.authenticated:
                 else: st.error("Invalid credentials")
     st.stop()
 
-# --- Main Page Header Canvas ---
+# --- Main App Heading Canvas Canvas ---
 hl, hc, hr = st.columns([1, 8, 1])
 if logo: hl.image(logo, width=90)
 hc.markdown("<h1 style='margin:0; color:#2f3343;'>Dynamic Customer Cross-Comparison Engine</h1>", unsafe_allow_html=True)
 st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
 
 # ==========================================
-# SIDEBAR RE-ENGINEERING & DIRECTORY SCAN
+# SIDEBAR SETUP CONFIGURATION
 # ==========================================
-st.sidebar.header("Data Source Configuration")
+st.sidebar.header("Configuration Panel")
 
-# Optional Manual Master Override Upload Component
-opt_master_file = st.sidebar.file_uploader("Upload Master Override File (Optional CSV)", type=["csv"])
+# Optional Custom Override File Tool
+opt_master_file = st.sidebar.file_uploader("Upload Master Data File (Optional Override)", type=["csv"])
 daily_file = st.sidebar.file_uploader("Upload Target Evaluation File (Mandatory CSV)", type=["csv"])
 
-deviation_th = st.sidebar.slider("Acceptable Deviation % Limit", 1, 50, 10)
+deviation_th = st.sidebar.slider("Acceptable Deviation %", 1, 50, 10)
 show_mode = st.sidebar.radio("Records View Filter", ["All Records", "Only records matching Master"])
 use_average_history = st.sidebar.checkbox("Fallback to Cumulative Averages for Missing Target Slices", value=True)
 
-# Build Master Repository Matrix from Optional Upload or Local Cache Folders
+# Native Master Sync Pipeline
 master_db = pd.DataFrame()
 if opt_master_file:
     master_db = parse_master_dataframe(opt_master_file, is_path=False)
 elif os.path.exists("master"):
-    local_csv_files = _glob.glob(os.path.join("master", "*.csv"))
+    local_csv_logs = _glob.glob(os.path.join("master", "*.csv"))
     chunk_frames = []
-    for filepath in local_csv_files:
-        if os.path.getsize(filepath) > 0:
-            parsed_chunk = parse_master_dataframe(filepath, is_path=True)
+    for f_path in local_csv_logs:
+        if os.path.getsize(f_path) > 0:
+            parsed_chunk = parse_master_dataframe(f_path, is_path=True)
             if not parsed_chunk.empty:
                 chunk_frames.append(parsed_chunk)
     if chunk_frames:
         master_db = pd.concat(chunk_frames, ignore_index=True).drop_duplicates(subset=["CUSTOMER ID"])
 
 if master_db.empty:
-    st.sidebar.warning("⚠️ No historical tracking files initialized.")
-    st.info("Drop historical metrics inside your local 'master/' folder or use the sidebar file uploader tool to begin.")
+    st.sidebar.error("⚠️ Local master file directory data repository is empty.")
+    st.info("Place historical snapshot logs inside your local 'master/' workspace directory to enable processing profiles.")
     st.stop()
 
-# Auto-Discovery Timeline Engine
+# Chronological Parsing Subsystem
 available_periods = sorted(list(set([c.split()[0] for c in master_db.columns if "REVENUE" in c])))
 month_names_mapping = {f"{i:02d}": calendar.month_name[i] for i in range(1, 13)}
 
@@ -286,24 +290,28 @@ def format_period_label(p):
         return f"{month_names_mapping.get(m, m)} {y}"
     except: return p
 
-# Comparison Baseline Strategies Core Dropdown
-comparison_strategies = [
-    "Previous Year Corresponding Month (Same Month Match)",
-    "Sequential Preceding Month (MoM Control Baseline)",
-    "Global Historical Average Day Matrix"
+# Strategic Temporal Targets Base Selectors
+baseline_modes = [
+    "Previous Year Corresponding Month",
+    "Last Month (MoM Preceding Target Slice)",
+    "2-Month Rolling Historical Average Window",
+    "3-Month Rolling Historical Average Window",
+    "4-Month Rolling Historical Average Window",
+    "5-Month Rolling Historical Average Window",
+    "Global Consolidated Database Average Day Matrix"
 ]
 for period in available_periods:
-    comparison_strategies.append(f"Explicit Static Baseline Target: {format_period_label(period)}")
+    baseline_modes.append(f"Static Custom Timeline Snapshot: {format_period_label(period)}")
 
-selected_strategy = st.sidebar.selectbox("Select Comparison Baseline Strategy Mode", comparison_strategies)
+selected_baseline_strategy = st.sidebar.selectbox("Select Baseline Strategy Rule Target", baseline_modes)
 
 # ==========================================
-# METRICS TRACKING ENGINE RUNTIME
+# MATHEMATICAL ANALYTICAL COMPUTATION PIPELINE
 # ==========================================
 if daily_file:
     daily_df = pd.read_csv(daily_file)
     
-    # Header Mapping Parser Checks
+    # Target Parsing Verification Engine
     cid_col = cname_col = rev_col = traf_col = sd_col = ed_col = None
     for col in daily_df.columns:
         c_l = str(col).strip().lower()
@@ -314,12 +322,16 @@ if daily_file:
         elif "start" in c_l: sd_col = col
         elif "end" in c_l: ed_col = col
 
-    missing_fields = [k for k, v in [("ID", cid_col), ("Name", cname_col), ("Revenue", rev_col), ("Traffic", traf_col)] if v is None]
-    if missing_fields:
-        st.error(f"Target upload verification failure. Missing descriptive column headers: {missing_fields}")
+    missing_keys = [k for k, v in [("ID", cid_col), ("Name", cname_col), ("Revenue", rev_col), ("Traffic", traf_col)] if v is None]
+    if missing_keys:
+        st.error(f"Target upload validation structure failure. Columns mapping error for attributes: {missing_keys}")
         st.stop()
 
-    # Determine Calendar Range Metrics
+    # Timeline Normalization Framework
     if sd_col and ed_col:
         u_start = pd.to_datetime(daily_df[sd_col].iloc[0], format="%d/%m/%Y", errors="coerce")
-        u_end = pd.to_datetime(daily_df[ed_col].iloc[0], format="%d/%m/%Y",
+        u_end = pd.to_datetime(daily_df[ed_col].iloc[0], format="%d/%m/%Y", errors="coerce")
+        if pd.notna(u_start) and pd.notna(u_end):
+            u_days = (u_end - u_start).days + 1
+            analysis_period_str = f"{u_start.strftime('%B %Y')}"
+            target_range_str = f"{u_start.strftime('%d/%m/%Y')} to {
