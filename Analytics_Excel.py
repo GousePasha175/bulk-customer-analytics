@@ -6,6 +6,7 @@ import io
 import os
 import re
 import glob as _glob
+import datetime
 from PIL import Image
 
 # ==========================
@@ -443,7 +444,14 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
             st.error("No master data available. Please upload a master file.")
             st.stop()
         src_name = active_master.name if hasattr(active_master, "name") else str(active_master)
-        historical_df = pd.read_csv(active_master) if src_name.endswith(".csv") else parse_master_excel(active_master)
+        
+        if src_name.endswith(".csv"):
+            historical_df = pd.read_csv(active_master)
+        else:
+            historical_df = parse_master_excel(active_master)
+            if historical_df.empty:
+                # Fallback: Read as a standard tabular report/sheet
+                historical_df = pd.read_excel(active_master)
 
     if historical_df.empty:
         st.error("Could not read master data. Please check the file.")
@@ -471,40 +479,108 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
         st.error(f"Could not detect columns in daily file: {', '.join(missing)}")
         st.stop()
 
-    # ---- Date Detection ----
-    upload_start  = pd.to_datetime(daily_df[start_date_col].iloc[0], dayfirst=True, errors="coerce")
-    upload_end    = pd.to_datetime(daily_df[end_date_col].iloc[0],   dayfirst=True, errors="coerce")
+    # ---- Date Detection (Strictly Enforce DD/MM/YYYY) ----
+    upload_start  = pd.to_datetime(daily_df[start_date_col].iloc[0], format="%d/%m/%Y", errors="coerce")
+    upload_end    = pd.to_datetime(daily_df[end_date_col].iloc[0],   format="%d/%m/%Y", errors="coerce")
     uploaded_days = (upload_end - upload_start).days + 1
     previous_year = upload_start.year - 1
     upload_month  = upload_start.month
-    days_in_month = calendar.monthrange(previous_year, upload_month)[1]
 
-    st.markdown(f"""
-    <div style='background:#f0f7ff;border-left:4px solid #1a73e8;padding:8px 16px;
-                border-radius:6px;margin-bottom:12px;font-size:15px;'>
-    <b>Period:</b> {upload_start.strftime('%d %b %Y')} → {upload_end.strftime('%d %b %Y')}
-    &nbsp;|&nbsp; <b>Days uploaded:</b> {uploaded_days}
-    &nbsp;|&nbsp; <b>Comparing against:</b> {calendar.month_name[upload_month]} {previous_year}
-    &nbsp;|&nbsp; <b>Days in that month:</b> {days_in_month}
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ---- Historical Column Detection ----
+    # ---- Historical Column Detection & Fallback Adaptability ----
     hist_customer_id_col = revenue_col_hist = traffic_col_hist = None
 
     for col in historical_df.columns:
         c = str(col).upper()
-        if "CUSTOMER ID" in c: hist_customer_id_col = col
+        if "CUSTOMER ID" in c or "CUST ID" in c: 
+            hist_customer_id_col = col
         if str(previous_year) in c and f"{upload_month:02d}" in c and "REVENUE" in c:
             revenue_col_hist = col
         if str(previous_year) in c and f"{upload_month:02d}" in c and "TRAFFIC" in c:
             traffic_col_hist = col
+
+    # Fallback if specific year/month multi-columns are not found (e.g. reading standard Analytical or Daily reports)
+    if revenue_col_hist is None or traffic_col_hist is None:
+        for col in historical_df.columns:
+            c = str(col).upper()
+            if "ACTUAL REVENUE" in c:
+                revenue_col_hist = col
+                break
+        if revenue_col_hist is None:
+            for col in historical_df.columns:
+                c = str(col).upper()
+                if "REVENUE" in c or "AMOUNT" in c or "REV" in c:
+                    revenue_col_hist = col
+                    break
+
+        for col in historical_df.columns:
+            c = str(col).upper()
+            if "ACTUAL TRAFFIC" in c:
+                traffic_col_hist = col
+                break
+        if traffic_col_hist is None:
+            for col in historical_df.columns:
+                c = str(col).upper()
+                if "TRAFFIC" in c or "ARTICLE" in c or "TRF" in c:
+                    traffic_col_hist = col
+                    break
+
+    if hist_customer_id_col is None:
+        for col in historical_df.columns:
+            c = str(col).upper()
+            if "CUSTOMER ID" in c or "CUST ID" in c or "CLEAN_ID" in c:
+                hist_customer_id_col = col
+                break
 
     if hist_customer_id_col is None:
         st.error("Could not find CUSTOMER ID column in master data.")
         st.stop()
 
     has_period_col = (revenue_col_hist is not None and traffic_col_hist is not None)
+
+    # ---- Smart Baseline Period Days Calculation ----
+    hist_start_date_col = None
+    hist_end_date_col = None
+    for col in historical_df.columns:
+        c = str(col).strip().lower()
+        if "start" in c: hist_start_date_col = col
+        elif "end" in c: hist_end_date_col = col
+
+    master_days = None
+    # Scenario A: Master file is an uploaded period CSV/Excel with explicit start/end dates
+    if hist_start_date_col and hist_end_date_col and not historical_df.empty:
+        h_start = pd.to_datetime(historical_df[hist_start_date_col].iloc[0], format="%d/%m/%Y", errors="coerce")
+        h_end = pd.to_datetime(historical_df[hist_end_date_col].iloc[0], format="%d/%m/%Y", errors="coerce")
+        if pd.notna(h_start) and pd.notna(h_end):
+            master_days = (h_end - h_start).days + 1
+
+    # Scenario B: Decide calendar days based on standard multi-month or previous month approach
+    if master_days is None:
+        if revenue_col_hist and str(previous_year) in str(revenue_col_hist) and f"{upload_month:02d}" in str(revenue_col_hist):
+            master_days = calendar.monthrange(previous_year, upload_month)[1]
+        else:
+            # Shift to the immediately preceding month of the upload year (e.g., April 2026 for a May 2026 upload)
+            try:
+                first_day_current = upload_start.replace(day=1)
+                last_day_prev = first_day_current - datetime.timedelta(days=1)
+                master_days = calendar.monthrange(last_day_prev.year, last_day_prev.month)[1]
+            except:
+                master_days = 30  # Fallback standard month length
+
+    # Identify comparison label for display
+    if revenue_col_hist and str(previous_year) in str(revenue_col_hist) and f"{upload_month:02d}" in str(revenue_col_hist):
+        compare_label = f"{calendar.month_name[upload_month]} {previous_year}"
+    else:
+        compare_label = "Uploaded Master / Previous Period Report"
+
+    st.markdown(f"""
+    <div style='background:#f0f7ff;border-left:4px solid #1a73e8;padding:8px 16px;
+                border-radius:6px;margin-bottom:12px;font-size:15px;'>
+    <b>Period:</b> {upload_start.strftime('%d %b %Y')} → {upload_end.strftime('%d %b %Y')}
+    &nbsp;|&nbsp; <b>Days uploaded:</b> {uploaded_days}
+    &nbsp;|&nbsp; <b>Comparing against:</b> {compare_label}
+    &nbsp;|&nbsp; <b>Days in baseline period:</b> {master_days}
+    </div>
+    """, unsafe_allow_html=True)
 
     historical_df["CLEAN_ID"] = (
         historical_df[hist_customer_id_col]
@@ -529,17 +605,10 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
 
     # ================================================================
     # CUSTOMER ANALYTICS LOOP
-    # NOTE: The loop ALWAYS computes both buckets regardless of the
-    # checkbox state.  The checkbox only controls what is *displayed*
-    # and what goes into the Excel.  This ensures that:
-    #   checkbox OFF  → No Historical Data shows ALL 325 entries
-    #   checkbox ON   → No Historical Data shows 212 (325-113),
-    #                   and Section 2 shows the 113 avg-processed ones
     # ================================================================
-    results          = []   # customers with valid same-period historical data
-    no_hist_raw      = []   # truly no usable data (not in master, or avg also yields nothing)
-    avg_hist_results = []   # customers that CAN be processed via FY average
-                            # (in master but same-period is zero/missing)
+    results          = []   
+    no_hist_raw      = []   
+    avg_hist_results = []   
 
     def _no_hist_entry(cid, cname, rev, trf):
         return {
@@ -579,7 +648,7 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
                 hist_row, historical_df, uploaded_days, sd_percent
             )
             if avg_result:
-                avg_hist_results.append(avg_result)   # can be processed via avg
+                avg_hist_results.append(avg_result)   
             else:
                 no_hist_raw.append(_no_hist_entry(customer_id, customer_name,
                                                    current_revenue, current_traffic))
@@ -598,15 +667,15 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
                 hist_row, historical_df, uploaded_days, sd_percent
             )
             if avg_result:
-                avg_hist_results.append(avg_result)   # can be processed via avg
+                avg_hist_results.append(avg_result)   
             else:
                 no_hist_raw.append(_no_hist_entry(customer_id, customer_name,
                                                    current_revenue, current_traffic))
             continue
 
         # ── CASE 3b: Normal path — use same-period historical values ───────────
-        expected_revenue = (monthly_revenue / days_in_month) * uploaded_days
-        expected_traffic = (monthly_traffic / days_in_month) * uploaded_days
+        expected_revenue = (monthly_revenue / master_days) * uploaded_days
+        expected_traffic = (monthly_traffic / master_days) * uploaded_days
 
         revenue_var = (
             ((current_revenue - expected_revenue) / expected_revenue) * 100
@@ -636,16 +705,14 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
     no_hist_df     = pd.DataFrame(no_hist_raw)
     avg_history_df = pd.DataFrame(avg_hist_results)
 
-    # Counts used throughout display
-    count_truly_no_data  = len(no_hist_raw)           # never have avg data
-    count_avg_processable = len(avg_hist_results)     # have avg data available
-    count_total_no_hist  = count_truly_no_data + count_avg_processable  # full 325
+    count_truly_no_data  = len(no_hist_raw)           
+    count_avg_processable = len(avg_hist_results)     
+    count_total_no_hist  = count_truly_no_data + count_avg_processable  
 
     if result_df.empty and no_hist_df.empty and avg_history_df.empty:
         st.warning("No records to display.")
         st.stop()
 
-    # Clean numeric columns in result_df
     for col in ["Actual Revenue", "Historical Monthly Revenue", "Historical Avg Revenue",
                 "Actual Traffic", "Historical Monthly Traffic", "Historical Avg Traffic"]:
         if col in result_df.columns:
@@ -654,7 +721,7 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
             )
 
     # ================================================================
-    # SECTION 1 — Customer Analytics (same-period comparison)
+    # SECTION 1 — Customer Analytics
     # ================================================================
     st.subheader("Customer Analytics")
 
@@ -668,16 +735,10 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
                 styled_df = group_df.style.map(color_status, subset=["Revenue Status", "Traffic Status"])
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
-    # ── No Historical Data ─────────────────────────────────────────────────────
-    # checkbox OFF → show ALL (truly_no_data + avg_processable) = full 325
-    # checkbox ON  → show only truly_no_data (e.g. 212), avg_processable moved to Section 2
     if use_average_history:
-        # Only the ones that have no avg data either
         nh_display_df    = no_hist_df
         nh_display_count = count_truly_no_data
     else:
-        # Combine truly-no-data + avg-processable rows into one display table
-        # Build a no-hist-style frame for avg_history_df entries so they show uniformly
         if not avg_history_df.empty:
             avg_as_no_hist = avg_history_df.rename(columns={
                 "Actual Revenue": "Actual Revenue",
@@ -697,7 +758,7 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
             st.dataframe(nh_display_df, use_container_width=True, hide_index=True)
 
     # ================================================================
-    # SECTION 2 — Average-Based Analysis (only when checkbox ticked)
+    # SECTION 2 — Average-Based Analysis
     # ================================================================
     if use_average_history:
 
@@ -705,7 +766,7 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
         st.subheader("Average-Based Analysis for No Historical Data Customers")
 
         st.info(
-            f"**Total No Historical Data entries: {count_total_no_hist}**  \n"
+            f"**Total No Historical Data entries: {count_total_no_hist}** \n"
             f"Out of these, **{count_avg_processable}** could be processed using "
             f"available FY month averages.  \n"
             f"**{count_truly_no_data}** entries have no historical data in master "
@@ -748,8 +809,6 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
             "No Historical Data": workbook.add_format({"bg_color": "#D3D3D3", "border": 1}),
         }
 
-        # ── Sheet 1: Main Analytics (Excellent/Normal/Warning/Critical/No Hist) ─
-        # nh_display_df already reflects checkbox state correctly (all 325 when OFF, 212 when ON)
         sheet1_df = pd.concat([result_df, nh_display_df], ignore_index=True) if not nh_display_df.empty else result_df.copy()
 
         if not sheet1_df.empty:
@@ -760,7 +819,6 @@ if daily_file and (master_file or os.path.exists(DEFAULT_MASTER)):
                 formats=status_formats,
             )
 
-        # ── Sheet 2: Average-Based Analysis (grouped) ──────────────────────────
         if use_average_history and not avg_history_df.empty:
             avg_display_cols = [
                 "Customer ID", "Customer Name",
