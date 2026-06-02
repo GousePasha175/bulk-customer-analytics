@@ -73,34 +73,26 @@ def color_status(val):
     }
     return colors.get(val, "")
 
-def parse_legacy_and_new_masters(folder_path="master"):
+def parse_master_file(uploaded_file):
     """
-    Scans the master directory, reading existing multi-formatted layout CSVs
-    and newly dropped month-wise standalone reports, unifying into an indexable map.
+    Parses manually uploaded or directory-cached Master data files seamlessly,
+    supporting legacy hierarchical tables and newly dropped clean monthly snapshots.
     """
-    if not os.path.exists(folder_path):
-        os.makedirs(folder_path)
-        
-    csv_files = _glob.glob(os.path.join(folder_path, "*.csv"))
     consolidated = {}
-    
     short_months = [calendar.month_abbr[i].lower() for i in range(1, 13)]
     full_months = [calendar.month_name[i].lower() for i in range(1, 13)]
     
-    for file_path in csv_files:
-        file_name = os.path.basename(file_path)
-        try:
-            # Check if it's a dynamic monthly dump file (e.g. "April 2026.csv")
-            match = re.search(r"([A-Za-z]+)\s+(\d{4})", file_name)
-            
-            # --- STRATEGY A: STANDALONE MONTH DUMP FILE ---
-            if match and not any(k in file_name for k in ["BPC", "BNPL", "PBC", "Master"]):
-                df = pd.read_csv(file_path)
-                m_name, y_str = match.group(1).lower(), match.group(2)
-                m_idx = full_months.index(m_name) + 1 if m_name in full_months else (short_months.index(m_name) + 1 if m_name in short_months else None)
-                if not m_idx: continue
+    try:
+        file_name = uploaded_file.name
+        # Strategy A: Standalone dynamic month dump verification check
+        match = re.search(r"([A-Za-z]+)\s+(\d{4})", file_name)
+        
+        if match and not any(k in file_name for k in ["BPC", "BNPL", "PBC", "Master"]):
+            df = pd.read_csv(uploaded_file)
+            m_name, y_str = match.group(1).lower(), match.group(2)
+            m_idx = full_months.index(m_name) + 1 if m_name in full_months else (short_months.index(m_name) + 1 if m_name in short_months else None)
+            if m_idx:
                 period_key = f"{y_str}-{m_idx:02d}"
-                
                 cid_col = r_col = t_col = None
                 for c in df.columns:
                     cl = str(c).strip().lower()
@@ -114,65 +106,56 @@ def parse_legacy_and_new_masters(folder_path="master"):
                         raw_id = str(row[cid_col]).split('.')[0].strip()
                         if raw_id.lower() in ('', 'nan', 'total', 'grand total'): continue
                         if raw_id not in consolidated: consolidated[raw_id] = {"CUSTOMER ID": raw_id}
-                        
-                        r_val = pd.to_numeric(row[r_col], errors='coerce') or 0
-                        t_val = pd.to_numeric(row[t_col], errors='coerce') or 0
-                        consolidated[raw_id][f"{period_key} REVENUE"] = r_val
-                        consolidated[raw_id][f"{period_key} TRAFFIC"] = t_val
+                        consolidated[raw_id][f"{period_key} REVENUE"] = pd.to_numeric(row[r_col], errors='coerce') or 0
+                        consolidated[raw_id][f"{period_key} TRAFFIC"] = pd.to_numeric(row[t_col], errors='coerce') or 0
                         consolidated[raw_id][f"{period_key} DAYS"] = days_in_month
-                continue
+            return pd.DataFrame(list(consolidated.values()))
 
-            # --- STRATEGY B: LEGACY STRUCTURE MATRIX RECOGNITION ---
-            sample = pd.read_csv(file_path, nrows=5, header=None)
+        # Strategy B: Legacy Structure Hierarchical Matrix Evaluation
+        sample = pd.read_csv(uploaded_file, nrows=5, header=None)
+        is_iso_date = False
+        for r_idx in [0, 1]:
+            if r_idx < len(sample) and any(re.match(r'\d{4}-\d{2}-\d{2}', str(x).strip()) for x in sample.iloc[r_idx]):
+                is_iso_date = True
+                break
+        
+        uploaded_file.seek(0)
+        if is_iso_date:
+            top_headers = pd.read_csv(uploaded_file, nrows=1, header=None).iloc[0].ffill().tolist()
+            sub_headers = pd.read_csv(uploaded_file, skiprows=1, nrows=1, header=None).iloc[0].tolist()
+            df = pd.read_csv(uploaded_file, skiprows=2, header=None)
             
-            # Sub-case B1 & B2: Multi-row headers with ISO Dates (Jeedimetla, Bollaram, BNPL)
-            is_iso_date = False
-            for r_idx in [0, 1]:
-                if r_idx < len(sample) and any(re.match(r'\d{4}-\d{2}-\d{2}', str(x).strip()) for x in sample.iloc[r_idx]):
-                    is_iso_date = True
-                    date_row_idx = r_idx
-                    break
+            col_names = []
+            for t, s in zip(top_headers, sub_headers):
+                t_s, s_s = str(t).strip(), str(s).strip()
+                if re.match(r'\d{4}-\d{2}-\d{2}', t_s):
+                    col_names.append(f"{t_s[:7]} {s_s.upper()}")
+                else:
+                    col_names.append(s_s if s_s and s_s != "nan" else t_s)
+            df.columns = col_names
             
-            if is_iso_date:
-                # Re-parse headers accurately
-                top_headers = pd.read_csv(file_path, nrows=1, header=None).iloc[0].ffill().tolist()
-                sub_headers = pd.read_csv(file_path, skiprows=1, nrows=1, header=None).iloc[0].tolist()
-                df = pd.read_csv(file_path, skiprows=2, header=None)
+            cid_col = [c for c in df.columns if "CUSTOMER ID" in str(c).upper() or "CUST ID" in str(c).upper()][0]
+            for _, row in df.iterrows():
+                raw_id = str(row[cid_col]).split('.')[0].strip()
+                if raw_id.lower() in ('', 'nan', 'total', 'grand total'): continue
+                if raw_id not in consolidated: consolidated[raw_id] = {"CUSTOMER ID": raw_id}
                 
-                col_names = []
-                for t, s in zip(top_headers, sub_headers):
-                    t_s, s_s = str(t).strip(), str(s).strip()
-                    if re.match(r'\d{4}-\d{2}-\d{2}', t_s):
-                        col_names.append(f"{t_s[:7]} {s_s.upper()}")
-                    else:
-                        col_names.append(s_s if s_s and s_s != "nan" else t_s)
-                df.columns = col_names
-                
-                cid_col = [c for c in df.columns if "CUSTOMER ID" in str(c).upper() or "CUST ID" in str(c).upper()][0]
-                for _, row in df.iterrows():
-                    raw_id = str(row[cid_col]).split('.')[0].strip()
-                    if raw_id.lower() in ('', 'nan', 'total', 'grand total'): continue
-                    if raw_id not in consolidated: consolidated[raw_id] = {"CUSTOMER ID": raw_id}
-                    
-                    for col in df.columns:
-                        if "TRAFFIC" in str(col) or "REVENUE" in str(col):
-                            parts = str(col).split()
-                            if len(parts) >= 2 and re.match(r'\d{4}-\d{2}', parts[0]):
-                                p_key = parts[0]
-                                metric = parts[1].upper()
-                                val = pd.to_numeric(row[col], errors='coerce') or 0
-                                consolidated[raw_id][f"{p_key} {metric}"] = val
-                                y, m = map(int, p_key.split('-'))
-                                consolidated[raw_id][f"{p_key} DAYS"] = calendar.monthrange(y, m)[1]
-
-            # Sub-case B3: Autonagar Flat Style ('Apr-25 Traf', 'Apr-25 Rev')
-            else:
-                df = pd.read_csv(file_path)
-                cid_col = None
-                for c in df.columns:
-                    if str(c).strip().lower() in ["cust id", "customer id"]: cid_col = c
-                if not cid_col: continue
-                
+                for col in df.columns:
+                    if "TRAFFIC" in str(col) or "REVENUE" in str(col):
+                        parts = str(col).split()
+                        if len(parts) >= 2 and re.match(r'\d{4}-\d{2}', parts[0]):
+                            p_key = parts[0]
+                            metric = parts[1].upper()
+                            val = pd.to_numeric(row[col], errors='coerce') or 0
+                            consolidated[raw_id][f"{p_key} {metric}"] = val
+                            y, m = map(int, p_key.split('-'))
+                            consolidated[raw_id][f"{p_key} DAYS"] = calendar.monthrange(y, m)[1]
+        else:
+            df = pd.read_csv(uploaded_file)
+            cid_col = None
+            for c in df.columns:
+                if str(c).strip().lower() in ["cust id", "customer id"]: cid_col = c
+            if cid_col:
                 for _, row in df.iterrows():
                     raw_id = str(row[cid_col]).split('.')[0].strip()
                     if raw_id.lower() in ('', 'nan', 'total', 'grand total'): continue
@@ -190,12 +173,10 @@ def parse_legacy_and_new_masters(folder_path="master"):
                                 val = pd.to_numeric(row[col], errors='coerce') or 0
                                 consolidated[raw_id][f"{p_key} {metric}"] = val
                                 consolidated[raw_id][f"{p_key} DAYS"] = calendar.monthrange(int(f"20{y_short}"), m_num)[1]
-        except Exception:
-            continue
-            
-    if not consolidated: return pd.DataFrame()
+    except Exception:
+        pass
+        
     return pd.DataFrame(list(consolidated.values()))
-
 
 # ==========================
 # FILE EXCEL EXPORT WORKER
@@ -236,7 +217,7 @@ def write_grouped_sheet(writer, df, sheet_name, workbook, formats, status_col="R
         current_row += 1
 
 # ==========================
-# MAIN STREAMLIT APPLICATION
+# STREAMLIT LOGIN GATEWAY
 # ==========================
 logo_path = "assets/logo.png"
 logo = Image.open(logo_path) if os.path.exists(logo_path) else None
@@ -263,29 +244,41 @@ if not st.session_state.authenticated:
                 else: st.error("Invalid credentials")
     st.stop()
 
-# --- App Canvas Header ---
+# --- Canvas Header ---
 hl, hc, hr = st.columns([1, 8, 1])
 if logo: hl.image(logo, width=90)
 hc.markdown("<h1 style='margin:0; color:#2f3343;'>Dynamic Customer Cross-Comparison Engine</h1>", unsafe_allow_html=True)
 st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
 
-# Compile Repositories
-with st.spinner("Indexing Master Data Repositories..."):
-    master_db = parse_legacy_and_new_masters("master")
+# ---- SIDEBAR INTERFACE ----
+st.sidebar.header("Data Source Configuration")
 
-# Sidebar Setup
-st.sidebar.header("Configuration Setup")
+# RESTORED FEATURE: Master Dataset File Uploader
+master_file = st.sidebar.file_uploader("Upload Master Data File (CSV)", type=["csv"])
 daily_file = st.sidebar.file_uploader("Upload Target Evaluation File (CSV)", type=["csv"])
 
 deviation_th = st.sidebar.slider("Acceptable Deviation %", 1, 50, 10)
 show_mode = st.sidebar.radio("Records View Filter", ["All Records", "Only records matching Master"])
 
+# RESTORED FEATURE: Checkbox for cumulative backup averages 
+use_average_history = st.sidebar.checkbox("Analyze missing snapshot months using cumulative database averages", value=True)
+
+# Build unified reference profile matrix if input exists
+master_db = pd.DataFrame()
+if master_file:
+    master_db = parse_master_file(master_file)
+elif os.path.exists("master"):
+    # Fallback to local structured master cache storage folder if manual input isn't provided
+    csv_logs = _glob.glob(os.path.join("master", "*.csv"))
+    frames = [parse_master_file(open(f, 'r')) for f in csv_logs if os.path.getsize(f) > 0]
+    if frames:
+        master_db = pd.concat(frames, ignore_index=True).drop_duplicates(subset=["CUSTOMER ID"])
+
 if master_db.empty:
-    st.sidebar.error("⚠️ Master Database folder ('master/') has no readable history files.")
-    st.info("Please turn the multi-sheet file layers into CSV formats and save them inside the 'master/' directory folder.")
+    st.info("Please upload your historical Master Data tracking file in the sidebar layout menu to initialize context mappings.")
     st.stop()
 
-# Extract unique list of historical timelines available across profiles
+# Dynamically populate timeline drop-downs from hierarchical metrics discovered
 available_periods = sorted(list(set([c.split()[0] for c in master_db.columns if "REVENUE" in c])))
 month_names_mapping = {f"{i:02d}": calendar.month_name[i] for i in range(1, 13)}
 
@@ -293,19 +286,21 @@ def format_period_label(p):
     try:
         y, m = p.split('-')
         return f"{month_names_mapping.get(m, m)} {y}"
-    except:
-        return p
+    except: return p
 
-baseline_options = ["Cumulative History Average"] + [format_period_label(p) for p in available_periods]
-selected_baseline_lbl = st.sidebar.selectbox("Select Comparison Baseline", baseline_options)
+baseline_options = ["Dynamic Target Month Match"] + [format_period_label(p) for p in available_periods]
+if use_average_history:
+    baseline_options.append("Cumulative History Average Summary")
+
+selected_baseline_lbl = st.sidebar.selectbox("Select Comparison Baseline Dropdown Target", baseline_options)
 
 # ================================================================
-# CROSS MATRIX COMPARISON EXECUTION ENGINE
+# PERFORMANCE PROCESSING ENGINE
 # ================================================================
 if daily_file:
     daily_df = pd.read_csv(daily_file)
     
-    # Detect target evaluation file column headers
+    # Track target upload headers mapping patterns
     cid_col = cname_col = rev_col = traf_col = sd_col = ed_col = None
     for col in daily_df.columns:
         c_l = str(col).strip().lower()
@@ -318,22 +313,25 @@ if daily_file:
 
     missing = [k for k, v in [("ID", cid_col), ("Name", cname_col), ("Revenue", rev_col), ("Traffic", traf_col)] if v is None]
     if missing:
-        st.error(f"Target upload missing parameters: {missing}")
+        st.error(f"Target upload parameters missing structural verification headers: {missing}")
         st.stop()
 
-    # Resolve uploaded timeline range properties
+    # Extract target record execution timeline metadata values
     if sd_col and ed_col:
         u_start = pd.to_datetime(daily_df[sd_col].iloc[0], format="%d/%m/%Y", errors="coerce")
         u_end = pd.to_datetime(daily_df[ed_col].iloc[0], format="%d/%m/%Y", errors="coerce")
         if pd.notna(u_start) and pd.notna(u_end):
             u_days = (u_end - u_start).days + 1
             target_range_str = f"{u_start.strftime('%d %b %Y')} to {u_end.strftime('%d %b %Y')} ({u_days} Days)"
+            inferred_p_key = f"{u_start.year}-{u_start.month:02d}"
         else:
             u_days = 30
-            target_range_str = "Custom Month Range (Assumed 30-Day Pro-Rata Base)"
+            target_range_str = "Custom Month Scale (Assumed 30 Days)"
+            inferred_p_key = None
     else:
         u_days = 30
-        target_range_str = "Custom Range (Assumed 30-Day Pro-Rata Base)"
+        target_range_str = "Custom Framework Range (Assumed 30 Days)"
+        inferred_p_key = None
 
     eval_records = []
     master_db["CLEAN_ID"] = master_db["CUSTOMER ID"].astype(str).str.strip()
@@ -341,7 +339,7 @@ if daily_file:
     for _, row in daily_df.iterrows():
         cust_id = str(row[cid_col]).split('.')[0].strip()
         if cust_id.lower() in ('', 'nan', 'total', 'grand total'): continue
-        cust_name = row[cname_col] if cname_col and pd.notna(row[cname_col]) else "Unknown Account"
+        cust_name = row[cname_col] if cname_col and pd.notna(row[cname_col]) else "Unknown Profile Account"
         
         act_rev = pd.to_numeric(row[rev_col], errors='coerce') or 0
         act_trf = pd.to_numeric(row[traf_col], errors='coerce') or 0
@@ -360,22 +358,27 @@ if daily_file:
         exp_rev = exp_trf = 0
         valid_comparison = False
         
-        # Scenario A: Comparing against a specific historical slice chosen in select box
-        if selected_baseline_lbl != "Cumulative History Average":
+        # Route logic based on dropdown setup choice selection
+        chosen_p_key = None
+        if "Dynamic Target Month Match" in selected_baseline_lbl and inferred_p_key:
+            chosen_p_key = inferred_p_key
+        elif "Cumulative History Average Summary" not in selected_baseline_lbl and "Dynamic Target Month Match" not in selected_baseline_lbl:
             sel_idx = baseline_options.index(selected_baseline_lbl) - 1
-            target_p_key = available_periods[sel_idx]
-            
-            m_rev = pd.to_numeric(hist_row.get(f"{target_p_key} REVENUE"), errors='coerce') or 0
-            m_trf = pd.to_numeric(hist_row.get(f"{target_p_key} TRAFFIC"), errors='coerce') or 0
-            m_days = pd.to_numeric(hist_row.get(f"{target_p_key} DAYS"), errors='coerce') or 30
+            if sel_idx < len(available_periods):
+                chosen_p_key = available_periods[sel_idx]
+
+        if chosen_p_key:
+            m_rev = pd.to_numeric(hist_row.get(f"{chosen_p_key} REVENUE"), errors='coerce') or 0
+            m_trf = pd.to_numeric(hist_row.get(f"{chosen_p_key} TRAFFIC"), errors='coerce') or 0
+            m_days = pd.to_numeric(hist_row.get(f"{chosen_p_key} DAYS"), errors='coerce') or 30
             
             if m_rev > 0 or m_trf > 0:
                 exp_rev = (m_rev / m_days) * u_days
                 exp_trf = (m_trf / m_days) * u_days
                 valid_comparison = True
-        
-        # Scenario B: Cumulative Historical Global Averages Mode
-        else:
+
+        # Fallback to cumulative averages if toggled or explicitly selected
+        if not valid_comparison and use_average_history:
             rev_cols = [c for c in master_db.columns if "REVENUE" in c]
             trf_cols = [c for c in master_db.columns if "TRAFFIC" in c]
             
@@ -409,21 +412,20 @@ if daily_file:
                 })
 
     out_df = pd.DataFrame(eval_records)
-    
     if out_df.empty:
-        st.warning("No comparative metrics matched to display.")
+        st.warning("No cross-comparison metrics found to report.")
         st.stop()
 
-    # Informative Context Banner
+    # Informational Summary Layout Banner
     st.markdown(f"""
-    <div style='background:#f0f7ff; border-left:4px solid #1a73e8; padding:10px 16px; border-radius:6px; margin-bottom:15px; font-size: 15px;'>
-    📊 <b>Active Target Selection:</b> {target_range_str} <br>
-    🔄 <b>Comparison Baseline Standard:</b> {selected_baseline_lbl} (Pro-rata scaled based on operational days)
+    <div style='background:#f0f7ff; border-left:4px solid #1a73e8; padding:10px 16px; border-radius:6px; margin-bottom:15px; font-size:15px;'>
+    📊 <b>Active Evaluation Range:</b> {target_range_str} <br>
+    🔄 <b>Active Baseline Comparison Strategy:</b> {selected_baseline_lbl} (Pro-rata daily normalized values applied)
     </div>
     """, unsafe_allow_html=True)
 
-    # Main Visual Output Categories
-    st.subheader("Comparative Variance Summary")
+    # Render Screen Tables Separated by Groups
+    st.subheader("Performance Status Overview Tables")
     status_order = ["Excellent", "Normal", "Warning", "Critical", "No Historical Data"]
     
     for status in status_order:
@@ -435,7 +437,7 @@ if daily_file:
                 use_container_width=True, hide_index=True
             )
 
-    # Multi-Sheet Excel compilation download
+    # Multi-Sheet Excel Spreadsheet Downloader Generation
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
         workbook = writer.book
@@ -446,13 +448,13 @@ if daily_file:
             "Critical": workbook.add_format({"bg_color": "#FF7F7F", "border": 1}),
             "No Historical Data": workbook.add_format({"bg_color": "#D3D3D3", "border": 1})
         }
-        write_grouped_sheet(writer, out_df, sheet_name="Cross Analysis Report", workbook=workbook, formats=status_formats)
+        write_grouped_sheet(writer, out_df, sheet_name="Cross Analysis Summary", workbook=workbook, formats=status_formats)
 
     st.download_button(
-        label="⬇ Download Comparison Report (Excel)",
+        label="⬇ Download Comparison Report Spreadsheet (Excel)",
         data=output.getvalue(),
         file_name=f"Cross_Comparison_Report_{datetime.date.today()}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 else:
-    st.info("Upload active target period evaluation file to initialize analytics pipeline.")
+    st.info("Upload your active period target CSV evaluation file on the sidebar configuration layout framework to execute analytics.")
