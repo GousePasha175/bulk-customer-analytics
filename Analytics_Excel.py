@@ -32,13 +32,11 @@ div.stButton > button {
 }
 div.stButton > button:hover { background-color: #e23d3d; color: white; }
 
-/* ── Sidebar collapse fix ──────────────────────────────────────────
-   Keep the re-open arrow always visible and on-screen.
-   Without this, after collapsing, the button shifts off-screen
-   and there is no way to reopen the sidebar without clearing cache. */
+/* ── Sidebar: always show the re-open arrow even when collapsed ── */
 [data-testid="collapsedControl"] {
     display: flex !important;
     visibility: visible !important;
+    opacity: 1 !important;
     position: fixed !important;
     top: 50% !important;
     left: 0px !important;
@@ -46,13 +44,20 @@ div.stButton > button:hover { background-color: #e23d3d; color: white; }
     z-index: 999999 !important;
     background-color: #2f3343 !important;
     border-radius: 0 8px 8px 0 !important;
-    padding: 10px 6px !important;
-    box-shadow: 2px 2px 6px rgba(0,0,0,0.3) !important;
+    padding: 12px 7px !important;
+    box-shadow: 3px 0 8px rgba(0,0,0,0.35) !important;
+    cursor: pointer !important;
+}
+[data-testid="collapsedControl"] button {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
 }
 [data-testid="collapsedControl"] svg {
     fill: white !important;
+    color: white !important;
 }
-/* ──────────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────── */
 </style>
 """, unsafe_allow_html=True)
 
@@ -503,6 +508,18 @@ with h_c:
 st.markdown("<hr style='margin:4px 0 10px 0;border-color:#ddd;'>", unsafe_allow_html=True)
 
 # ---- Sidebar ----
+st.sidebar.markdown("""
+<div style='padding:8px 0 4px 0;'>
+    <p style='font-size:12px;font-weight:700;color:#888;
+              text-transform:uppercase;letter-spacing:1px;margin:0 0 4px 0;'>
+    Pages
+    </p>
+</div>
+""", unsafe_allow_html=True)
+st.sidebar.page_link("Analytics_Excel.py",   label="📊 Business Analytics")
+st.sidebar.page_link("pages/POSB_Report.py", label="📮 POSB Daily Report")
+st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
+
 st.sidebar.header("Upload Files")
 
 daily_file  = st.sidebar.file_uploader("Upload Daily / Period File (CSV)", type=["csv"])
