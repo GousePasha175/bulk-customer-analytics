@@ -221,7 +221,6 @@ logo = Image.open(logo_path) if os.path.exists(logo_path) else None
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
-# FIRST: Handle Login System wrapper cleanly before looking at database assets
 if not st.session_state.authenticated:
     st.markdown("<style>[data-testid='stSidebar'] { display: none !important; }</style>", unsafe_allow_html=True)
     hl, hc, hr = st.columns([1, 3, 1])
@@ -276,7 +275,7 @@ elif os.path.exists("master"):
 # Safe Guard-Rail to prevent interface crashes if folder asset files are missing
 if master_db.empty:
     st.sidebar.error("⚠️ Local master file directory data repository is empty.")
-    st.info("Please place your historical tracking database logs inside your local 'master/' directory folder, or upload a custom Master file override in the sidebar configuration widget to generate data comparison matrices.")
+    st.info("Please place your historical tracking database logs inside your local 'master/' directory folder, or upload a custom Master file override to begin.")
     st.stop()
 
 # Chronological Parsing Subsystem
@@ -366,6 +365,143 @@ if daily_file:
 
     # Cross Evaluation Engine Pipeline Loop Execution
     eval_records = []
+    avg_records_pool = [] # Sub-pool tracking table
     master_db["CLEAN_ID"] = master_db["CUSTOMER ID"].astype(str).str.strip()
 
-    for _, row in daily_df.iterrows
+    for _, row in daily_df.iterrows():
+        cust_id = str(row[cid_col]).split('.')[0].strip()
+        if cust_id.lower() in ('', 'nan', 'total', 'grand total'): continue
+        cust_name = row[cname_col] if cname_col and pd.notna(row[cname_col]) else "Unknown Account Profile"
+        
+        act_rev = pd.to_numeric(row[rev_col], errors='coerce') or 0
+        act_trf = pd.to_numeric(row[traf_col], errors='coerce') or 0
+        
+        match_hist = master_db[master_db["CLEAN_ID"] == cust_id]
+        if match_hist.empty:
+            if show_mode == "All Records":
+                eval_records.append({
+                    "Customer ID": cust_id, "Customer Name": cust_name,
+                    "Actual Revenue": round(act_rev), "Expected Revenue (Pro-Rata)": "", "Revenue Variance %": "", "Revenue Status": "No Historical Data",
+                    "Actual Traffic": round(act_trf), "Expected Traffic (Pro-Rata)": "", "Traffic Variance %": "", "Traffic Status": "No Historical Data"
+                })
+            continue
+
+        hist_row = match_hist.iloc[0]
+        exp_rev = exp_trf = 0
+        valid_comparison = False
+        fallback_used = False
+        target_keys_pool = []
+
+        if "Previous Year Corresponding Month" in selected_baseline_strategy:
+            if prev_year_month_key: target_keys_pool = [prev_year_month_key]
+        elif "Last Month" in selected_baseline_strategy:
+            if preceding_month_key: target_keys_pool = [preceding_month_key]
+        elif "Rolling Historical Average Window" in selected_baseline_strategy:
+            try:
+                num_months = int(selected_baseline_strategy.split("-")[0])
+                if active_month_key in available_periods:
+                    curr_idx = available_periods.index(active_month_key)
+                    start_idx = max(0, curr_idx - num_months)
+                    target_keys_pool = available_periods[start_idx:curr_idx]
+                else:
+                    target_keys_pool = available_periods[-num_months:]
+            except: pass
+        elif "Static Custom Timeline Snapshot:" in selected_baseline_strategy:
+            raw_lbl = selected_baseline_strategy.replace("Static Custom Timeline Snapshot: ", "").strip()
+            for p in available_periods:
+                if format_period_label(p) == raw_lbl:
+                    target_keys_pool = [p]
+                    break
+
+        if target_keys_pool and not "Global Consolidated Database Average Day Matrix" in selected_baseline_strategy:
+            r_slices = [pd.to_numeric(hist_row.get(f"{k} REVENUE"), errors='coerce') or 0 for k in target_keys_pool if f"{k} REVENUE" in master_db.columns]
+            t_slices = [pd.to_numeric(hist_row.get(f"{k} TRAFFIC"), errors='coerce') or 0 for k in target_keys_pool if f"{k} TRAFFIC" in master_db.columns]
+            d_slices = [pd.to_numeric(hist_row.get(f"{k} DAYS"), errors='coerce') or 30 for k in target_keys_pool if f"{k} DAYS" in master_db.columns]
+            
+            if sum(r_slices) > 0 or sum(t_slices) > 0:
+                daily_rev_rates = [r / d if d > 0 else 0 for r, d in zip(r_slices, d_slices) if r > 0]
+                daily_trf_rates = [t / d if d > 0 else 0 for t, d in zip(t_slices, d_slices) if t > 0]
+                
+                exp_rev = (np.mean(daily_rev_rates) if daily_rev_rates else 0) * u_days
+                exp_trf = (np.mean(daily_trf_rates) if daily_trf_rates else 0) * u_days
+                valid_comparison = True
+
+        # Fallback Subroutine Strategy Matrix
+        if not valid_comparison and (use_average_history or "Global Consolidated Database Average Day Matrix" in selected_baseline_strategy):
+            rev_cols = [c for c in master_db.columns if "REVENUE" in c]
+            trf_cols = [c for c in master_db.columns if "TRAFFIC" in c]
+            
+            r_vals = [pd.to_numeric(hist_row[c], errors='coerce') or 0 for c in rev_cols if (pd.to_numeric(hist_row[c], errors='coerce') or 0) > 0]
+            t_vals = [pd.to_numeric(hist_row[c], errors='coerce') or 0 for c in trf_cols if (pd.to_numeric(hist_row[c], errors='coerce') or 0) > 0]
+            
+            if r_vals or t_vals:
+                exp_rev = ((np.mean(r_vals) if r_vals else 0) / 30.44) * u_days
+                exp_trf = ((np.mean(t_vals) if t_vals else 0) / 30.44) * u_days
+                valid_comparison = True
+                fallback_used = True
+
+        if valid_comparison:
+            r_var = (((act_rev - exp_rev) / exp_rev) * 100) if exp_rev > 0 else np.nan
+            t_var = (((act_trf - exp_trf) / exp_trf) * 100) if exp_trf > 0 else np.nan
+            
+            rec = {
+                "Customer ID": cust_id, "Customer Name": cust_name,
+                "Actual Revenue": round(act_rev), "Expected Revenue (Pro-Rata)": round(exp_rev), 
+                "Revenue Variance %": round(r_var, 2) if not pd.isna(r_var) else "", "Revenue Status": classify(r_var, deviation_th),
+                "Actual Traffic": round(act_trf), "Expected Traffic (Pro-Rata)": round(exp_trf), 
+                "Traffic Variance %": round(t_var, 2) if not pd.isna(t_var) else "", "Traffic Status": classify(t_var, deviation_th)
+            }
+            eval_records.append(rec)
+            if fallback_used:
+                avg_records_pool.append(rec)
+        else:
+            if show_mode == "All Records":
+                eval_records.append({
+                    "Customer ID": cust_id, "Customer Name": cust_name,
+                    "Actual Revenue": round(act_rev), "Expected Revenue (Pro-Rata)": "", "Revenue Variance %": "", "Revenue Status": "No Historical Data",
+                    "Actual Traffic": round(act_trf), "Expected Traffic (Pro-Rata)": "", "Traffic Variance %": "", "Traffic Status": "No Historical Data"
+                })
+
+    out_df = pd.DataFrame(eval_records)
+    avg_history_df = pd.DataFrame(avg_records_pool) # CRITICAL FIX: Safe initialization to avoid NameErrors
+
+    if out_df.empty:
+        st.warning("No tracking performance values discovered matching criteria bounds filters.")
+        st.stop()
+
+    st.subheader("Performance Status Classifications Grid")
+    status_order = ["Excellent", "Normal", "Warning", "Critical", "No Historical Data"]
+    
+    for status in status_order:
+        sub_grp = out_df[out_df["Revenue Status"] == status]
+        if not sub_grp.empty:
+            st.markdown(f"#### {status} Status Segment — ({len(sub_grp)} Customer Accounts Managed)")
+            st.dataframe(
+                sub_grp.style.applymap(color_status, subset=["Revenue Status", "Traffic Status"]),
+                use_container_width=True, hide_index=True
+            )
+
+    # Excel Output Direct Spreadsheet Generation Block
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        workbook = writer.book
+        status_formats = {
+            "Excellent": workbook.add_format({"bg_color": "#90EE90", "border": 1}),
+            "Normal": workbook.add_format({"bg_color": "#FFFACD", "border": 1}),
+            "Warning": workbook.add_format({"bg_color": "#FFD580", "border": 1}),
+            "Critical": workbook.add_format({"bg_color": "#FF7F7F", "border": 1}),
+            "No Historical Data": workbook.add_format({"bg_color": "#D3D3D3", "border": 1})
+        }
+        
+        # Sheet 1: Core Analysis
+        write_grouped_sheet(writer, out_df, sheet_name="Cross Analysis Report", workbook=workbook, formats=status_formats)
+        
+        # Sheet 2: Average-Based Analysis Fallback Sheet (Conditional verification completely fixed)
+        if use_average_history and not avg_history_df.empty:
+            write_grouped_sheet(writer, avg_history_df, sheet_name="Avg-Based Analysis", workbook=workbook, formats=status_formats)
+
+    st.download_button(
+        label="⬇ Download Cross Comparison Analytical Report (Excel)",
+        data=output.getvalue(),
+        file_name=f"Cross_Comparison_Report_{datetime.date.today()}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.
