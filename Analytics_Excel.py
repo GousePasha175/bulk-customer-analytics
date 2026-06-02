@@ -111,7 +111,7 @@ def parse_master_dataframe(source_input, is_path=False):
 
         if not is_path: source_input.seek(0)
 
-        # Strategy A: ISO Multi-Header Rows Detection (Jeedimetla, Bollaram, BNPL Formats)
+        # Strategy A: ISO Multi-Header Rows Detection
         if is_iso_date:
             top_headers = pd.read_csv(source_input, nrows=1, header=None).iloc[0].ffill().tolist()
             if not is_path: source_input.seek(0)
@@ -145,7 +145,7 @@ def parse_master_dataframe(source_input, is_path=False):
                             y, m = map(int, p_key.split('-'))
                             consolidated[raw_id][f"{p_key} DAYS"] = calendar.monthrange(y, m)[1]
 
-        # Strategy B: Flat Text Attribute Matrix Layout (Autonagar Format)
+        # Strategy B: Flat Text Attribute Matrix Layout
         else:
             df = pd.read_csv(source_input)
             cid_col = None
@@ -179,4 +179,193 @@ def parse_master_dataframe(source_input, is_path=False):
 # ==========================================
 def write_grouped_sheet(writer, df, sheet_name, workbook, formats, status_col="Revenue Status"):
     status_order = ["Excellent", "Normal", "Warning", "Critical", "No Historical Data"]
-    header_format = workbook
+    header_format = workbook.add_format({"bold": True, "font_size": 12, "bg_color": "#2f3343", "font_color": "#FFFFFF", "border": 1})
+    col_header_fmt = workbook.add_format({"bold": True, "bg_color": "#D9D9D9", "border": 1})
+    plain_fmt = workbook.add_format({"border": 1})
+
+    ws = writer.book.add_worksheet(sheet_name)
+    writer.sheets[sheet_name] = ws
+    cols = list(df.columns)
+    current_row = 0
+
+    for status in status_order:
+        grp = df[df[status_col] == status]
+        if grp.empty: continue
+
+        ws.merge_range(current_row, 0, current_row, len(cols) - 1, f"{status} ({len(grp)})", header_format)
+        current_row += 1
+        for ci, col in enumerate(cols):
+            ws.write(current_row, ci, col, col_header_fmt)
+            ws.set_column(ci, ci, 20)
+        current_row += 1
+
+        rev_ci = cols.index("Revenue Status") if "Revenue Status" in cols else None
+        trf_ci = cols.index("Traffic Status") if "Traffic Status" in cols else None
+
+        for _, data_row in grp.iterrows():
+            for ci, col in enumerate(cols):
+                val = data_row[col]
+                if isinstance(val, float) and np.isnan(val): val = ""
+                cell_fmt = plain_fmt
+                if ci in (rev_ci, trf_ci): cell_fmt = formats.get(str(val), plain_fmt)
+                ws.write(current_row, ci, val, cell_fmt)
+            current_row += 1
+        current_row += 1
+
+# ==========================================
+# USER ROUTING SECURITY VERIFICATION
+# ==========================================
+logo_path = "assets/logo.png"
+logo = Image.open(logo_path) if os.path.exists(logo_path) else None
+
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+# FIRST: Handle Login System wrapper cleanly before looking at database assets
+if not st.session_state.authenticated:
+    st.markdown("<style>[data-testid='stSidebar'] { display: none !important; }</style>", unsafe_allow_html=True)
+    hl, hc, hr = st.columns([1, 3, 1])
+    with hc:
+        cl, cr = st.columns([1, 4])
+        with cl:
+            if logo: st.image(logo, width=100)
+        with cr:
+            st.markdown("<h1 style='font-size:24px; color:#2f3343;'>Analytics (Business & Operations)</h1><p>Telangana Circle</p>", unsafe_allow_html=True)
+        with st.form("login"):
+            st.text_input("Username", key="usr")
+            st.text_input("Password", type="password", key="pwd")
+            if st.form_submit_button("Submit", use_container_width=True):
+                if st.session_state.usr == "admin" and st.session_state.pwd == "HQR@2026":
+                    st.session_state.authenticated = True
+                    st.rerun()
+                else: st.error("Invalid credentials")
+    st.stop()
+
+# ==========================================
+# CORE WORKSPACE INTERFACE (AUTHENTICATED)
+# ==========================================
+hl, hc, hr = st.columns([1, 8, 1])
+if logo: hl.image(logo, width=90)
+hc.markdown("<h1 style='margin:0; color:#2f3343;'>Dynamic Customer Cross-Comparison Engine</h1>", unsafe_allow_html=True)
+st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
+
+# Side Panels Configurations
+st.sidebar.header("Configuration Panel")
+opt_master_file = st.sidebar.file_uploader("Upload Master Data File (Optional Override)", type=["csv"])
+daily_file = st.sidebar.file_uploader("Upload Target Evaluation File (Mandatory CSV)", type=["csv"])
+
+deviation_th = st.sidebar.slider("Acceptable Deviation %", 1, 50, 10)
+show_mode = st.sidebar.radio("Records View Filter", ["All Records", "Only records matching Master"])
+use_average_history = st.sidebar.checkbox("Fallback to Cumulative Averages for Missing Target Slices", value=True)
+
+# Safe Lazy Evaluation Master Sync Pipeline
+master_db = pd.DataFrame()
+if opt_master_file:
+    master_db = parse_master_dataframe(opt_master_file, is_path=False)
+elif os.path.exists("master"):
+    local_csv_logs = _glob.glob(os.path.join("master", "*.csv"))
+    chunk_frames = []
+    for f_path in local_csv_logs:
+        if os.path.getsize(f_path) > 0:
+            parsed_chunk = parse_master_dataframe(f_path, is_path=True)
+            if not parsed_chunk.empty:
+                chunk_frames.append(parsed_chunk)
+    if chunk_frames:
+        master_db = pd.concat(chunk_frames, ignore_index=True).drop_duplicates(subset=["CUSTOMER ID"])
+
+# Safe Guard-Rail to prevent interface crashes if folder asset files are missing
+if master_db.empty:
+    st.sidebar.error("⚠️ Local master file directory data repository is empty.")
+    st.info("Please place your historical tracking database logs inside your local 'master/' directory folder, or upload a custom Master file override in the sidebar configuration widget to generate data comparison matrices.")
+    st.stop()
+
+# Chronological Parsing Subsystem
+available_periods = sorted(list(set([c.split()[0] for c in master_db.columns if "REVENUE" in c])))
+month_names_mapping = {f"{i:02d}": calendar.month_name[i] for i in range(1, 13)}
+
+def format_period_label(p):
+    try:
+        y, m = p.split('-')
+        return f"{month_names_mapping.get(m, m)} {y}"
+    except: return p
+
+# Strategic Temporal Targets Selectors
+baseline_modes = [
+    "Previous Year Corresponding Month",
+    "Last Month (MoM Preceding Target Slice)",
+    "2-Month Rolling Historical Average Window",
+    "3-Month Rolling Historical Average Window",
+    "4-Month Rolling Historical Average Window",
+    "5-Month Rolling Historical Average Window",
+    "Global Consolidated Database Average Day Matrix"
+]
+for period in available_periods:
+    baseline_modes.append(f"Static Custom Timeline Snapshot: {format_period_label(period)}")
+
+selected_baseline_strategy = st.sidebar.selectbox("Select Baseline Strategy Rule Target", baseline_modes)
+
+# ==========================================
+# MATHEMATICAL ANALYTICAL COMPUTATION PIPELINE
+# ==========================================
+if daily_file:
+    daily_df = pd.read_csv(daily_file)
+    
+    # Target Parsing Verification Engine
+    cid_col = cname_col = rev_col = traf_col = sd_col = ed_col = None
+    for col in daily_df.columns:
+        c_l = str(col).strip().lower()
+        if "customer id" in c_l or "cust id" in c_l: cid_col = col
+        elif "customer name" in c_l or "cutomer name" in c_l: cname_col = col
+        elif "revenue" in c_l or "amount" in c_l: rev_col = col
+        elif "traffic" in c_l or "article" in c_l: traf_col = col
+        elif "start" in c_l: sd_col = col
+        elif "end" in c_l: ed_col = col
+
+    missing_keys = [k for k, v in [("ID", cid_col), ("Name", cname_col), ("Revenue", rev_col), ("Traffic", traf_col)] if v is None]
+    if missing_keys:
+        st.error(f"Target upload validation structure failure. Columns mapping error for attributes: {missing_keys}")
+        st.stop()
+
+    # Timeline Normalization Engine
+    u_days = 30
+    analysis_period_str = "Custom Evaluation Base"
+    target_range_str = "Variable Selection Framework"
+    active_month_key = prev_year_month_key = preceding_month_key = None
+
+    if sd_col and ed_col and len(daily_df) > 0:
+        raw_start = str(daily_df[sd_col].iloc[0]).strip()
+        raw_end = str(daily_df[ed_col].iloc[0]).strip()
+        
+        u_start = pd.to_datetime(raw_start, dayfirst=True, errors="coerce")
+        u_end = pd.to_datetime(raw_end, dayfirst=True, errors="coerce")
+        
+        if pd.notna(u_start) and pd.notna(u_end):
+            u_days = (u_end - u_start).days + 1
+            analysis_period_str = f"{u_start.strftime('%B %Y')}"
+            target_range_str = f"{u_start.strftime('%d/%m/%Y')} to {u_end.strftime('%d/%m/%Y')}"
+            active_month_key = f"{u_start.year}-{u_start.month:02d}"
+            prev_year_month_key = f"{u_start.year - 1}-{u_start.month:02d}"
+            preceding_month_key = f"{u_start.year - 1}-12" if u_start.month == 1 else f"{u_start.year}-{u_start.month - 1:02d}"
+
+    # KPI Interface Header Banner Panel
+    st.markdown("### 📊 Operational Execution Summary Context")
+    grid1, grid2, grid3, grid4 = st.columns(4)
+    with grid1:
+        st.markdown("<div class='metric-card-header'>ANALYSIS PERIOD</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='metric-card-body'>{analysis_period_str}</div>", unsafe_allow_html=True)
+    with grid2:
+        st.markdown("<div class='metric-card-header'>TARGET PERIOD RANGE</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='metric-card-body' style='font-size:16px; color:#2f3343;'>{target_range_str}</div>", unsafe_allow_html=True)
+    with grid3:
+        st.markdown("<div class='metric-card-header'>TARGET PERIOD AVERAGE NUMBER OF CALENDAR DAYS</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='metric-card-body'>{u_days} Days</div>", unsafe_allow_html=True)
+    with grid4:
+        st.markdown("<div class='metric-card-header'>COMPARISON BASELINE STRATEGY LAYER</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='metric-card-body' style='font-size:13px; color:#1a73e8;'>{selected_baseline_strategy.split(':')[0]}</div>", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Cross Evaluation Engine Pipeline Loop Execution
+    eval_records = []
+    master_db["CLEAN_ID"] = master_db["CUSTOMER ID"].astype(str).str.strip()
+
+    for _, row in daily_df.iterrows
