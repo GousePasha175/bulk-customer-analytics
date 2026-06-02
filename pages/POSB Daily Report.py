@@ -5,6 +5,45 @@ from io import BytesIO
 import xlsxwriter
 from datetime import date, datetime
 import calendar
+import glob as _glob
+
+import glob as _glob
+
+def _render_nav():
+    st.sidebar.markdown(
+        """<div style='padding:8px 0 4px 0;'>
+        <p style='font-size:12px;font-weight:700;color:#888;
+           text-transform:uppercase;letter-spacing:1px;margin:0 0 4px 0;'>Pages</p>
+        </div>""", unsafe_allow_html=True)
+    st.sidebar.page_link("Analytics_Excel.py", label="\U0001f3e0 Home")
+    _posb = (_glob.glob("pages/POSB Daily Report.py") +
+             _glob.glob("pages/*[Pp][Oo][Ss][Bb]*.py"))
+    if _posb:
+        st.sidebar.page_link(_posb[0].replace("\\", "/"), label="\U0001f4ee POSB Daily Report")
+    _dig = (_glob.glob("pages/1_Digital_Transactions.py") +
+            _glob.glob("pages/*[Dd]igital*.py"))
+    if _dig:
+        st.sidebar.page_link(_dig[0].replace("\\", "/"), label="\U0001f4bb Digital Transactions")
+    st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
+
+
+# ── Auth guard: redirect to Home (login) if not authenticated ─────────────────
+# set_page_config must be the very first Streamlit call
+st.set_page_config(
+    page_title="POSB Accounts Daily Report",
+    page_icon="📊",
+    layout="wide",
+)
+
+if not st.session_state.get("authenticated", False):
+    st.warning("⚠️ You are not logged in.")
+    st.markdown(
+        "Please go to **🏠 Home** in the sidebar to log in.",
+        unsafe_allow_html=False,
+    )
+    with st.sidebar:
+        _render_nav()
+    st.stop()
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 DIVISIONS = [
@@ -398,14 +437,14 @@ def build_scheme_wise(accounts_opened_df: pd.DataFrame) -> pd.DataFrame:
 # ─── Streamlit UI ─────────────────────────────────────────────────────────────
 
 def main():
-    st.set_page_config(
-        page_title="POSB Accounts Daily Report",
-        page_icon="📊",
-        layout="wide",
-    )
+    # set_page_config already called at module level above
 
     # ── Sidebar ──────────────────────────────────────────────────────────────
     with st.sidebar:
+        # ── Navigation ───────────────────────────────────────────────────────
+        _render_nav()
+        # ─────────────────────────────────────────────────────────────────────
+
         st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/3/3c/India_Post_Logo.svg/200px-India_Post_Logo.svg.png", width=80)
         st.title("📮 POSB Daily Report")
         st.markdown("---")
