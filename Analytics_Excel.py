@@ -179,27 +179,4 @@ def parse_master_dataframe(source_input, is_path=False):
 # ==========================================
 def write_grouped_sheet(writer, df, sheet_name, workbook, formats, status_col="Revenue Status"):
     status_order = ["Excellent", "Normal", "Warning", "Critical", "No Historical Data"]
-    header_format = workbook.add_format({"bold": True, "font_size": 12, "bg_color": "#2f3343", "font_color": "#FFFFFF", "border": 1})
-    col_header_fmt = workbook.add_format({"bold": True, "bg_color": "#D9D9D9", "border": 1})
-    plain_fmt = workbook.add_format({"border": 1})
-
-    ws = writer.book.add_worksheet(sheet_name)
-    writer.sheets[sheet_name] = ws
-    cols = list(df.columns)
-    current_row = 0
-
-    for status in status_order:
-        grp = df[df[status_col] == status]
-        if grp.empty: continue
-
-        ws.merge_range(current_row, 0, current_row, len(cols) - 1, f"{status} ({len(grp)})", header_format)
-        current_row += 1
-        for ci, col in enumerate(cols):
-            ws.write(current_row, ci, col, col_header_fmt)
-            ws.set_column(ci, ci, 20)
-        current_row += 1
-
-        rev_ci = cols.index("Revenue Status") if "Revenue Status" in cols else None
-        trf_ci = cols.index("Traffic Status") if "Traffic Status" in cols else None
-
-        for _, data_
+    header_format = workbook
