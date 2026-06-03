@@ -463,7 +463,10 @@ def main():
         _render_nav()
         # ─────────────────────────────────────────────────────────────────────
 
-        st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/3/3c/India_Post_Logo.svg/200px-India_Post_Logo.svg.png", width=80)
+        # ── Logo (use local assets/logo.png if available, else text only) ──────
+        import os as _os
+        if _os.path.exists("assets/logo.png"):
+            st.image("assets/logo.png", width=80)
         st.title("📮 POSB Daily Report")
         st.markdown("---")
         st.subheader("📅 Report Parameters")
