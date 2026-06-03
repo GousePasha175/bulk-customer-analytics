@@ -9,6 +9,7 @@ def _render_nav():
         <p style='font-size:12px;font-weight:700;color:#888;
            text-transform:uppercase;letter-spacing:1px;margin:0 0 4px 0;'>Pages</p>
         </div>""", unsafe_allow_html=True)
+        st.sidebar.page_link("Analytics_Excel.py", label="\U0001f512 Login")
         _bulk = (_glob.glob("pages/Bulk_Analytics.py") +
                  _glob.glob("pages/*[Bb]ulk*.py"))
         if _bulk:
