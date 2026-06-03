@@ -18,7 +18,7 @@ def _render_nav():
             _glob.glob("pages/*[Dd]igital*.py"))
     if _dig:
         st.sidebar.page_link(_dig[0].replace("\\", "/"), label="\U0001f4bb Digital Transactions")
-    st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)*/
+    st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
 
 import pandas as pd
 import io, os, re
