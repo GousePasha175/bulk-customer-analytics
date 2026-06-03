@@ -102,7 +102,7 @@ with hc:
     <h1 style='font-size:24px;margin-bottom:2px;color:#2f3343;font-weight:700;padding-top:4px;'>
     Digital Transaction Status Report</h1>
     <p style='font-size:13px;color:#555;margin:0;'>
-    Headquarter Region – Telangana Postal Circle</p>
+    Headquarters Region – Telangana Postal Circle</p>
     """, unsafe_allow_html=True)
 st.markdown("<hr style='margin:4px 0 8px;border-color:#ddd;'>", unsafe_allow_html=True)
 
