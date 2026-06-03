@@ -35,6 +35,20 @@ st.set_page_config(
     layout="wide",
 )
 
+st.markdown("""<style>
+[data-testid="stSidebarNav"] { display: none !important; }
+[data-testid="collapsedControl"] {
+    display: flex !important; visibility: visible !important; opacity: 1 !important;
+    position: fixed !important; top: 50% !important; left: 0px !important;
+    transform: translateY(-50%) !important; z-index: 999999 !important;
+    background-color: #2f3343 !important; border-radius: 0 8px 8px 0 !important;
+    padding: 12px 7px !important; box-shadow: 3px 0 8px rgba(0,0,0,0.35) !important;
+    cursor: pointer !important;
+}
+[data-testid="collapsedControl"] button { background: transparent !important; border: none !important; padding: 0 !important; }
+[data-testid="collapsedControl"] svg { fill: white !important; color: white !important; }
+</style>""", unsafe_allow_html=True)
+
 if not st.session_state.get("authenticated", False):
     st.warning("⚠️ You are not logged in.")
     st.markdown(
@@ -264,83 +278,87 @@ def build_range_report(division_dfs: dict[str, pd.DataFrame]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def export_range_report_excel(df: pd.DataFrame) -> bytes:
+def export_range_report_excel(df, division_dfs=None):
     output = BytesIO()
     wb = xlsxwriter.Workbook(output, {"in_memory": True})
-    ws = wb.add_worksheet("Range Report")
 
-    # Formats
-    title_fmt = wb.add_format({
-        "bold": True, "font_size": 13, "align": "center",
-        "valign": "vcenter", "bg_color": "#1F3864", "font_color": "white",
-        "border": 1,
-    })
-    header_fmt = wb.add_format({
-        "bold": True, "align": "center", "valign": "vcenter",
-        "bg_color": "#2E75B6", "font_color": "white", "border": 1, "text_wrap": True,
-    })
-    sub_header_fmt = wb.add_format({
-        "bold": True, "align": "center", "valign": "vcenter",
-        "bg_color": "#9DC3E6", "border": 1,
-    })
-    data_fmt = wb.add_format({"align": "center", "border": 1})
-    data_left_fmt = wb.add_format({"align": "left", "border": 1})
-    total_fmt = wb.add_format({
-        "bold": True, "align": "center", "border": 1, "bg_color": "#FFF2CC",
-    })
-    total_left_fmt = wb.add_format({
-        "bold": True, "align": "left", "border": 1, "bg_color": "#FFF2CC",
-    })
+    # ── Shared formats (professional palette) ────────────────────────────────
+    def f(**kw):
+        base = {"border": 1, "valign": "vcenter"}; base.update(kw)
+        return wb.add_format(base)
+    title_fmt     = f(bold=True, font_size=13, align="center",   bg_color="#1F3864", font_color="#FFFFFF")
+    header_fmt    = f(bold=True, align="center", text_wrap=True, bg_color="#2E75B6", font_color="#FFFFFF")
+    sub_hdr_fmt   = f(bold=True, align="center",                 bg_color="#9DC3E6", font_color="#000000")
+    div_title_fmt = f(bold=True, font_size=11, align="left",     bg_color="#2E75B6", font_color="#FFFFFF")
+    data_fmt      = f(align="center")
+    data_left_fmt = f(align="left")
+    total_fmt     = f(bold=True, align="center", bg_color="#FFF2CC", font_color="#000000")
+    total_left_fmt= f(bold=True, align="left",   bg_color="#FFF2CC", font_color="#000000")
+    range_color   = {"0":"#D9D9D9","1-10":"#DDEBF7","11-25":"#E2EFDA","26-50":"#FFF2CC","50+":"#FCE4D6"}
 
-    num_ranges = len(RANGES)
-    total_cols = 3 + num_ranges  # Sl.No, Division, Total, + ranges
+    # ── Sheet 1: Range Summary ────────────────────────────────────────────────
+    ws = wb.add_worksheet("Range Summary")
+    nr = len(RANGES); tc = 3 + nr
+    ws.merge_range(0,0,0,tc-1, "Office wise Range of Accounts Opened – Division wise Report", title_fmt)
+    ws.write(1,0,"Sl. No",header_fmt); ws.write(1,1,"Division",header_fmt)
+    ws.write(1,2,"Total Accounts\nOpened",header_fmt)
+    ws.merge_range(1,3,1,3+nr-1,"Office wise Range of Accounts Opened",header_fmt)
+    ws.write(2,0,"",sub_hdr_fmt); ws.write(2,1,"",sub_hdr_fmt); ws.write(2,2,"",sub_hdr_fmt)
+    for i,r in enumerate(RANGES): ws.write(2,3+i,r,sub_hdr_fmt)
+    ws.set_column(0,0,6); ws.set_column(1,1,26); ws.set_column(2,2,18)
+    ws.set_column(3,3+nr-1,10)
+    ri=3
+    for _,row in df.iterrows():
+        ws.write(ri,0,row["Sl. No"],data_fmt); ws.write(ri,1,row["Division"],data_left_fmt)
+        ws.write(ri,2,row["Total Accounts Opened"],data_fmt)
+        for i,r in enumerate(RANGES): ws.write(ri,3+i,row[r],data_fmt)
+        ri+=1
+    ws.write(ri,0,"",total_fmt); ws.write(ri,1,"TOTAL",total_left_fmt)
+    ws.write(ri,2,df["Total Accounts Opened"].sum(),total_fmt)
+    for i,r in enumerate(RANGES): ws.write(ri,3+i,df[r].sum(),total_fmt)
 
-    # Row 0: Title
-    ws.merge_range(0, 0, 0, total_cols - 1,
-                   "Office wise Range of Accounts Opened – Division wise Report", title_fmt)
+    # ── Sheet 2: Detailed Office-wise Breakdown ───────────────────────────────
+    if division_dfs:
+        ws2 = wb.add_worksheet("Office-wise Breakdown")
+        det_cols = ["Sl. No","Office Name","Office Type"] + ACCOUNT_COLS + ["Total Accounts","Range"]
+        nc2 = len(det_cols)
+        ws2.merge_range(0,0,0,nc2-1,"Detailed Office-wise Breakdown – All Divisions",title_fmt)
+        ws2.set_row(0,22)
+        ws2.set_column(0,0,6); ws2.set_column(1,1,35); ws2.set_column(2,2,10)
+        ws2.set_column(3,3+len(ACCOUNT_COLS)-1,8)
+        ws2.set_column(3+len(ACCOUNT_COLS),3+len(ACCOUNT_COLS),14)
+        ws2.set_column(3+len(ACCOUNT_COLS)+1,3+len(ACCOUNT_COLS)+1,8)
+        cur_row = 1; overall_sl = 1
+        for div_name, div_df in division_dfs.items():
+            ws2.merge_range(cur_row,0,cur_row,nc2-1,f"{div_name} Division",div_title_fmt)
+            ws2.set_row(cur_row,18); cur_row+=1
+            for ci,col in enumerate(det_cols): ws2.write(cur_row,ci,col,sub_hdr_fmt)
+            cur_row+=1
+            div_df = div_df.copy()
+            div_df["_total_ac"] = div_df[ACCOUNT_COLS].sum(axis=1)
+            div_df["_range"]    = div_df["_total_ac"].apply(classify_range)
+            div_df["_otype"]    = div_df["Name"].apply(classify_office)
+            div_sl=1
+            for _,orow in div_df.iterrows():
+                rng = orow["_range"]
+                rc  = range_color.get(rng,"#FFFFFF")
+                rng_fmt = f(align="center",bg_color=rc)
+                ws2.write(cur_row,0,div_sl,data_fmt)
+                ws2.write(cur_row,1,str(orow["Name"]),data_left_fmt)
+                ws2.write(cur_row,2,str(orow["_otype"]),data_fmt)
+                for ci,col in enumerate(ACCOUNT_COLS): ws2.write(cur_row,3+ci,int(orow.get(col,0)),data_fmt)
+                ws2.write(cur_row,3+len(ACCOUNT_COLS),  int(orow["_total_ac"]),data_fmt)
+                ws2.write(cur_row,3+len(ACCOUNT_COLS)+1,rng,rng_fmt)
+                cur_row+=1; div_sl+=1; overall_sl+=1
+            # subtotal row
+            ws2.write(cur_row,0,"",total_fmt); ws2.write(cur_row,1,f"Sub-total – {div_name}",total_left_fmt)
+            ws2.write(cur_row,2,"",total_fmt)
+            for ci,col in enumerate(ACCOUNT_COLS): ws2.write(cur_row,3+ci,int(div_df[col].sum()),total_fmt)
+            ws2.write(cur_row,3+len(ACCOUNT_COLS),int(div_df["_total_ac"].sum()),total_fmt)
+            ws2.write(cur_row,3+len(ACCOUNT_COLS)+1,"",total_fmt)
+            cur_row+=2
 
-    # Row 1: Main headers (merge for range group)
-    ws.write(1, 0, "Sl. No", header_fmt)
-    ws.write(1, 1, "Division", header_fmt)
-    ws.write(1, 2, "Total Accounts\nOpened", header_fmt)
-    ws.merge_range(1, 3, 1, 3 + num_ranges - 1,
-                   "Office wise Range of Accounts Opened", header_fmt)
-
-    # Row 2: Sub-headers for ranges
-    ws.write(2, 0, "", sub_header_fmt)
-    ws.write(2, 1, "", sub_header_fmt)
-    ws.write(2, 2, "", sub_header_fmt)
-    for i, r in enumerate(RANGES):
-        ws.write(2, 3 + i, r, sub_header_fmt)
-
-    # Col widths
-    ws.set_column(0, 0, 6)
-    ws.set_column(1, 1, 26)
-    ws.set_column(2, 2, 18)
-    ws.set_column(3, 3 + num_ranges - 1, 10)
-
-    # Data
-    row_idx = 3
-    for _, row in df.iterrows():
-        ws.write(row_idx, 0, row["Sl. No"], data_fmt)
-        ws.write(row_idx, 1, row["Division"], data_left_fmt)
-        ws.write(row_idx, 2, row["Total Accounts Opened"], data_fmt)
-        for i, r in enumerate(RANGES):
-            ws.write(row_idx, 3 + i, row[r], data_fmt)
-        row_idx += 1
-
-    # Total row
-    ws.write(row_idx, 0, "", total_fmt)
-    ws.write(row_idx, 1, "TOTAL", total_left_fmt)
-    ws.write(row_idx, 2, df["Total Accounts Opened"].sum(), total_fmt)
-    for i, r in enumerate(RANGES):
-        ws.write(row_idx, 3 + i, df[r].sum(), total_fmt)
-
-    wb.close()
-    return output.getvalue()
-
-
-# ─── Report 2 – Daily Summary Table ────────────────────────────────────────────
+    wb.close(); return output.getvalue()
 
 def build_daily_summary(
     accounts_opened_df: pd.DataFrame,
@@ -551,7 +569,7 @@ def main():
                         st.dataframe(df[existing], use_container_width=True, hide_index=True)
 
                 # ── Download ──────────────────────────────────────────────
-                excel_bytes = export_range_report_excel(range_df)
+                excel_bytes = export_range_report_excel(range_df, division_dfs)
                 st.download_button(
                     label="⬇️ Download Range Report as Excel",
                     data=excel_bytes,
@@ -627,7 +645,7 @@ def main():
 
                 styled = (
                     summary_df.style
-                        .applymap(style_pct, subset=[pct_col])
+                        .map(style_pct, subset=[pct_col])
                         .apply(lambda x: [
                             "background-color:#1F3864; color:white; font-weight:bold"
                             if x["Division"] == "Total HQ Region" else ""
