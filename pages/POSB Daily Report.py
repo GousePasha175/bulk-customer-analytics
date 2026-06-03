@@ -231,15 +231,14 @@ def proportionate_target(annual_target: int, month_name: str) -> int:
 
 
 def daily_target(annual_target: int, month_name: str,
-                 report_date: date, accounts_opened_so_far: int) -> float:
+                 report_date: date, accounts_opened_so_far: int) -> int:
     prop_target = proportionate_target(annual_target, month_name)
     remaining = prop_target - accounts_opened_so_far
-    # Days remaining in month including report date (i.e., from report_date to end of month)
     total_days = calendar.monthrange(report_date.year, report_date.month)[1]
     days_remaining = total_days - report_date.day + 1
     if days_remaining <= 0:
-        return remaining
-    return round(remaining / days_remaining, 2) if days_remaining > 0 else 0
+        return int(remaining)
+    return max(0, int(round(remaining / days_remaining)))
 
 
 # ─── Report 1 – Office-wise Range Report ───────────────────────────────────────
@@ -376,15 +375,22 @@ def build_daily_summary(
             accounts_opened_df["Name"].str.contains(div, case=False, na=False)
         ]
         if not ao_row.empty:
-            opened_till_date = int(ao_row[ACCOUNT_COLS].sum(axis=1).iloc[0])
+            # Column 1 (index 1, after Name) = Total accounts opened as on date
+            _ao_cols = [c for c in ao_row.columns if c != "Name"]
+            opened_till_date = int(pd.to_numeric(ao_row[_ao_cols[0]].iloc[0], errors="coerce") or 0) if _ao_cols else 0
         else:
             opened_till_date = 0
 
-        # Net addition from Net Addition sheet (col "Total" = net A/c)
+        # Net addition — column 3 (index 2 after Name) = Net a/cs as on date
         net_row = net_addition_df[
             net_addition_df["Name"].str.contains(div, case=False, na=False)
         ]
-        net_ac = int(net_row["Total"].iloc[0]) if not net_row.empty else 0
+        if not net_row.empty:
+            _net_cols = [c for c in net_row.columns if c != "Name"]
+            # 3rd column overall = index 2 in data columns
+            net_ac = int(pd.to_numeric(net_row[_net_cols[2]].iloc[0], errors="coerce") or 0) if len(_net_cols) >= 3 else 0
+        else:
+            net_ac = 0
 
         # Accounts opened on report date – derived from product-wise uploaded files
         # (will be injected later if available, default 0)
@@ -393,7 +399,7 @@ def build_daily_summary(
         daily_tgt = daily_target(annual, month_name, report_date, opened_till_date)
 
         # Net a/cs opened upto date from Net Addition excel
-        shortfall_daily = max(0, round(daily_tgt - opened_today, 0))
+        shortfall_daily = max(0, int(round(daily_tgt - opened_today)))
         shortfall_prop = max(0, prop - net_ac)
         pct_prop = round((net_ac / prop * 100), 0) if prop > 0 else 0
 
@@ -500,11 +506,17 @@ def main():
 
         st.markdown("---")
         st.subheader("📂 Upload Summary Files")
+        st.caption(
+            "Upload the as-on-date files for Division-wise Summary Report. "
+            "Column 1 = Total Accounts Opened; Column 3 = Net Accounts."
+        )
         ao_file = st.file_uploader(
-            "Accounts Opened Details", type=["xlsx", "xls"], key="ao_file"
+            f"Accounts Opened Details (as on {report_date.strftime('%d.%m.%Y')})",
+            type=["xlsx", "xls"], key="ao_file"
         )
         net_file = st.file_uploader(
-            "Net Addition of Accounts", type=["xlsx", "xls"], key="net_file"
+            f"Net Addition of Accounts (as on {report_date.strftime('%d.%m.%Y')})",
+            type=["xlsx", "xls"], key="net_file"
         )
 
     # ── Main Area ─────────────────────────────────────────────────────────────
@@ -517,7 +529,7 @@ def main():
     # TAB 1 – Range Report
     # ════════════════════════════════════════════════════════════════════════
     with tab1:
-        st.header("Office-wise Range of Accounts Opened")
+        st.header(f"Office-wise Range of Accounts Opened – as on {report_date.strftime('%d.%m.%Y')}")
         st.info(
             "Upload the **Product Wise A/C Report** for each Division in the sidebar. "
             "The report counts only account category groups (MIS, PPFGP, SSA, RD, SBBAS, SBSGP, SCSS, TD). "
@@ -586,10 +598,14 @@ def main():
     with tab2:
         st.header("Division-wise Summary Reports")
 
+        st.info(
+            "📋 **Tab 1** (Office-wise Range Report) uses the Division-wise Product files uploaded in the sidebar.  \n"
+            "📋 **Tab 2** (Division-wise Summary Reports) uses the Accounts Opened Details and Net Addition files below."
+        )
         if ao_file is None or net_file is None:
             st.warning(
                 "Please upload both **Accounts Opened Details** and **Net Addition of Accounts** "
-                "files from the sidebar."
+                f"files (as on {report_date.strftime('%d.%m.%Y')}) from the sidebar."
             )
         else:
             accounts_opened_df = parse_summary_excel(ao_file, ACCOUNT_COLS + CERT_COLS)
@@ -627,7 +643,7 @@ def main():
                 col_daily_tgt = f"Daily Target upto {report_date.strftime('%d.%m.%Y')}"
                 summary_df["Shortfall on daily target"] = (
                     summary_df[col_daily_tgt] - summary_df[col_today]
-                ).clip(lower=0).round(0)
+                ).clip(lower=0).round(0).astype(int)
 
                 # Style table
                 def style_pct(val):
