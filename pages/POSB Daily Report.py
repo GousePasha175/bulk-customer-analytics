@@ -671,26 +671,36 @@ def main():
                 # ── Column-wrapping CSS for compact one-page view ──────────
                 st.markdown("""
 <style>
-/* Wrap column headers in daily summary table */
+/* Daily summary table: wrap headers fully visible in 2-3 lines */
+div[data-testid="stDataFrame"] table thead tr {
+    height: auto !important;
+    min-height: 72px !important;
+}
 div[data-testid="stDataFrame"] table thead th {
     white-space: normal !important;
-    word-wrap: break-word !important;
-    max-width: 90px !important;
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
+    overflow: visible !important;
+    max-width: 100px !important;
+    min-width: 72px !important;
     font-size: 11px !important;
     text-align: center !important;
     vertical-align: bottom !important;
-    line-height: 1.2 !important;
+    line-height: 1.35 !important;
+    padding: 6px 4px !important;
+    height: auto !important;
 }
 div[data-testid="stDataFrame"] table tbody td {
     font-size: 12px !important;
     text-align: center !important;
-    white-space: normal !important;
-    word-wrap: break-word !important;
+    padding: 5px 4px !important;
+    white-space: nowrap !important;
 }
 div[data-testid="stDataFrame"] table tbody td:first-child {
     text-align: left !important;
     font-weight: 600 !important;
-    min-width: 140px !important;
+    min-width: 145px !important;
+    white-space: normal !important;
 }
 </style>""", unsafe_allow_html=True)
 
@@ -743,9 +753,17 @@ div[data-testid="stDataFrame"] table tbody td:first-child {
                         ], axis=1)
                 )
 
+                # Column widths: Division left-aligned wider, numeric cols medium
+                col_cfg = {"Division": st.column_config.Column(width="medium")}
+                for c in display_df.columns:
+                    if c == "Division": continue
+                    if "%" in c:
+                        col_cfg[c] = st.column_config.Column(width="small")
+                    else:
+                        col_cfg[c] = st.column_config.Column(width="medium")
+
                 st.dataframe(styled, use_container_width=True, hide_index=True,
-                             column_config={c: st.column_config.Column(width="small")
-                                            for c in display_df.columns if c != "Division"})
+                             column_config=col_cfg)
 
                 st.caption("🟢 ≥100%  🟡 75–99%  🟠 50–74%  🔴 <50% of proportionate target")
 
