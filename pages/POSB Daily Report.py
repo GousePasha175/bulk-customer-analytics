@@ -15,13 +15,15 @@ def _render_nav():
         <p style='font-size:12px;font-weight:700;color:#888;
            text-transform:uppercase;letter-spacing:1px;margin:0 0 4px 0;'>Pages</p>
         </div>""", unsafe_allow_html=True)
-    st.sidebar.page_link("Analytics_Excel.py", label="\U0001f512 Login")
-    _bulk = (_glob.glob("pages/Bulk_Analytics.py") + _glob.glob("pages/*[Bb]ulk*.py"))
-    if _bulk: st.sidebar.page_link(_bulk[0].replace("\\","/"), label="\U0001f4ca Bulk Customer Analytics")
-    _posb = (_glob.glob("pages/POSB Daily Report.py") + _glob.glob("pages/*[Pp][Oo][Ss][Bb]*.py"))
-    if _posb: st.sidebar.page_link(_posb[0].replace("\\","/"), label="\U0001f4ee POSB Daily Report")
-    _dig  = (_glob.glob("pages/1_Digital_Transactions.py") + _glob.glob("pages/*[Dd]igital*.py"))
-    if _dig:  st.sidebar.page_link(_dig[0].replace("\\","/"),  label="\U0001f4bb Digital Transactions")
+    st.sidebar.page_link("Analytics_Excel.py", label="\U0001f3e0 Home")
+    _posb = (_glob.glob("pages/POSB Daily Report.py") +
+             _glob.glob("pages/*[Pp][Oo][Ss][Bb]*.py"))
+    if _posb:
+        st.sidebar.page_link(_posb[0].replace("\\", "/"), label="\U0001f4ee POSB Daily Report")
+    _dig = (_glob.glob("pages/1_Digital_Transactions.py") +
+            _glob.glob("pages/*[Dd]igital*.py"))
+    if _dig:
+        st.sidebar.page_link(_dig[0].replace("\\", "/"), label="\U0001f4bb Digital Transactions")
     st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
 
 
@@ -241,19 +243,15 @@ def daily_target(annual_target: int, month_name: str,
 
 # ─── Report 1 – Office-wise Range Report ───────────────────────────────────────
 
-RANGES = ["0", "1-10", "11-25", "26-50", "50+"]
+RANGES = ["0", "1-10", "11-25", "26-50", "51-100", "100+"]
 
 def classify_range(total: int) -> str:
-    if total == 0:
-        return "0"
-    elif 1 <= total <= 10:
-        return "1-10"
-    elif 11 <= total <= 25:
-        return "11-25"
-    elif 26 <= total <= 50:
-        return "26-50"
-    else:
-        return "50+"
+    if total == 0:      return "0"
+    elif total <= 10:   return "1-10"
+    elif total <= 25:   return "11-25"
+    elif total <= 50:   return "26-50"
+    elif total <= 100:  return "51-100"
+    else:               return "100+"
 
 
 def build_range_report(division_dfs: dict[str, pd.DataFrame]) -> pd.DataFrame:
@@ -291,7 +289,7 @@ def export_range_report_excel(df, division_dfs=None):
     data_left_fmt = f(align="left")
     total_fmt     = f(bold=True, align="center", bg_color="#FFF2CC", font_color="#000000")
     total_left_fmt= f(bold=True, align="left",   bg_color="#FFF2CC", font_color="#000000")
-    range_color   = {"0":"#D9D9D9","1-10":"#DDEBF7","11-25":"#E2EFDA","26-50":"#FFF2CC","50+":"#FCE4D6"}
+    range_color   = {"0":"#D9D9D9","1-10":"#DDEBF7","11-25":"#E2EFDA","26-50":"#FFF2CC","51-100":"#FCE4D6","100+":"#F4CCCC"}
 
     # ── Sheet 1: Range Summary ────────────────────────────────────────────────
     ws = wb.add_worksheet("Range Summary")
@@ -357,49 +355,41 @@ def export_range_report_excel(df, division_dfs=None):
 
     wb.close(); return output.getvalue()
 
+def _col2(df, div):
+    """Return value in 2nd data column (after Name) for a division row."""
+    row = df[df["Name"].str.contains(div, case=False, na=False)]
+    if row.empty: return 0
+    dcols = [c for c in row.columns if c != "Name"]
+    if not dcols: return 0
+    return max(0, int(pd.to_numeric(row[dcols[0]].iloc[0], errors="coerce") or 0))
+
+
 def build_daily_summary(
-    accounts_opened_df: pd.DataFrame,
-    net_addition_df: pd.DataFrame,
+    ao_date_df,      # accounts opened ON report date
+    ao_cumul_df,     # accounts opened UP TO report date (cumulative)
+    net_date_df,     # net accounts ON report date
+    net_cumul_df,    # net accounts UP TO report date (cumulative FY)
     report_date: date,
     month_name: str,
+    working_days_left: int,
 ) -> pd.DataFrame:
     rows = []
     for div in DIVISIONS:
         annual = TARGETS_FY[div]
-        prop = proportionate_target(annual, month_name)
+        prop   = proportionate_target(annual, month_name)
 
-        # Accounts opened (account cols only, no certs) from Accounts Opened Details
-        ao_row = accounts_opened_df[
-            accounts_opened_df["Name"].str.contains(div, case=False, na=False)
-        ]
-        if not ao_row.empty:
-            # Column 1 (index 1, after Name) = Total accounts opened as on date
-            _ao_cols = [c for c in ao_row.columns if c != "Name"]
-            opened_till_date = int(pd.to_numeric(ao_row[_ao_cols[0]].iloc[0], errors="coerce") or 0) if _ao_cols else 0
-        else:
-            opened_till_date = 0
+        opened_today     = _col2(ao_date_df,  div) if ao_date_df  is not None else 0
+        opened_till_date = _col2(ao_cumul_df, div) if ao_cumul_df is not None else 0
+        net_today        = _col2(net_date_df, div) if net_date_df is not None else 0
+        net_till_date    = _col2(net_cumul_df,div) if net_cumul_df is not None else 0
 
-        # Net addition — column 3 (index 2 after Name) = Net a/cs as on date
-        net_row = net_addition_df[
-            net_addition_df["Name"].str.contains(div, case=False, na=False)
-        ]
-        if not net_row.empty:
-            _net_cols = [c for c in net_row.columns if c != "Name"]
-            # 3rd column overall = index 2 in data columns
-            net_ac = int(pd.to_numeric(net_row[_net_cols[2]].iloc[0], errors="coerce") or 0) if len(_net_cols) >= 3 else 0
-        else:
-            net_ac = 0
+        # Daily target = (Proportionate target − Net addition cumulative) ÷ working days left
+        balance   = max(0, prop - net_till_date)
+        daily_tgt = max(0, int(round(balance / working_days_left))) if working_days_left > 0 else balance
 
-        # Accounts opened on report date – derived from product-wise uploaded files
-        # (will be injected later if available, default 0)
-        opened_today = 0  # placeholder; overridden if per-division files loaded
-
-        daily_tgt = daily_target(annual, month_name, report_date, opened_till_date)
-
-        # Net a/cs opened upto date from Net Addition excel
-        shortfall_daily = max(0, int(round(daily_tgt - opened_today)))
-        shortfall_prop = max(0, prop - net_ac)
-        pct_prop = round((net_ac / prop * 100), 0) if prop > 0 else 0
+        shortfall_daily = max(0, daily_tgt - opened_today)
+        shortfall_prop  = max(0, prop - net_till_date)
+        pct_prop        = round((net_till_date / prop * 100), 0) if prop > 0 else 0
 
         rows.append({
             "Division": div,
@@ -408,23 +398,25 @@ def build_daily_summary(
             f"Daily Target upto {report_date.strftime('%d.%m.%Y')}": daily_tgt,
             f"No. of Accounts Opened on {report_date.strftime('%d.%m.%Y')}": opened_today,
             f"No. of Accounts Opened up to {report_date.strftime('%d.%m.%Y')}": opened_till_date,
-            f"Net no. of a/cs opened on {report_date.strftime('%d.%m.%Y')}": net_ac,
-            f"Net no. of a/cs opened upto {report_date.strftime('%d.%m.%Y')}": net_ac,
+            f"Net no. of a/cs opened on {report_date.strftime('%d.%m.%Y')}": net_today,
+            f"Net no. of a/cs opened upto {report_date.strftime('%d.%m.%Y')}": net_till_date,
             "Shortfall on daily target": shortfall_daily,
             "Shortfall on proportionate target": shortfall_prop,
-            "% achievement of proportionate Target": pct_prop,
+            "% achievement of proportionate Target": int(pct_prop),
         })
 
     total_row = {"Division": "Total HQ Region"}
     for col in rows[0]:
-        if col == "Division":
-            continue
+        if col == "Division": continue
         if "%" in col:
-            vals = [r[col] for r in rows]
             prop_sum = sum(proportionate_target(TARGETS_FY[d], month_name) for d in DIVISIONS)
-            net_sum = sum(rows[i][f"Net no. of a/cs opened upto {report_date.strftime('%d.%m.%Y')}"]
-                         for i in range(len(rows)))
-            total_row[col] = round(net_sum / prop_sum * 100, 0) if prop_sum else 0
+            net_sum  = sum(r[f"Net no. of a/cs opened upto {report_date.strftime('%d.%m.%Y')}"] for r in rows)
+            total_row[col] = int(round(net_sum / prop_sum * 100, 0)) if prop_sum else 0
+        elif "Daily Target" in col:
+            # Sum of individual daily targets is meaningless; recompute for total
+            total_balance   = max(0, sum(proportionate_target(TARGETS_FY[d], month_name) for d in DIVISIONS)
+                                   - sum(r[f"Net no. of a/cs opened upto {report_date.strftime('%d.%m.%Y')}"] for r in rows))
+            total_row[col]  = max(0, int(round(total_balance / working_days_left))) if working_days_left > 0 else total_balance
         else:
             total_row[col] = sum(r[col] for r in rows)
     rows.append(total_row)
@@ -493,6 +485,20 @@ def main():
         )
 
         st.markdown("---")
+        st.subheader("⚙️ Daily Target Settings")
+        import calendar as _cal
+        _days_in_month = _cal.monthrange(report_date.year, report_date.month)[1]
+        _days_remaining_cal = _days_in_month - report_date.day + 1
+        working_days_left = st.number_input(
+            "Working days left in month",
+            min_value=1, max_value=31,
+            value=max(1, _days_remaining_cal),
+            step=1,
+            help="Enter the number of working days remaining including today. "
+                 "Daily target = (Proportionate Target – Net Addition as on date) ÷ working days left"
+        )
+
+        st.markdown("---")
         st.subheader("📂 Upload Division Files")
         st.caption("Product Wise A/C Report – one per Division")
 
@@ -505,15 +511,23 @@ def main():
         st.markdown("---")
         st.subheader("📂 Upload Summary Files")
         st.caption(
-            "Upload the as-on-date files for Division-wise Summary Report. "
-            "Column 1 = Total Accounts Opened; Column 3 = Net Accounts."
+            "Upload four files for the Division-wise Summary Report. "
+            "Each file: Column 1 = Name, Column 2 = Accounts Opened / Net Accounts."
+        )
+        ao_date_file = st.file_uploader(
+            f"Accounts Opened on {report_date.strftime('%d.%m.%Y')} (daily)",
+            type=["xlsx", "xls"], key="ao_date_file"
         )
         ao_file = st.file_uploader(
-            f"Accounts Opened Details (as on {report_date.strftime('%d.%m.%Y')})",
+            f"Accounts Opened up to {report_date.strftime('%d.%m.%Y')} (cumulative)",
             type=["xlsx", "xls"], key="ao_file"
         )
+        net_date_file = st.file_uploader(
+            f"Net Accounts on {report_date.strftime('%d.%m.%Y')} (daily)",
+            type=["xlsx", "xls"], key="net_date_file"
+        )
         net_file = st.file_uploader(
-            f"Net Addition of Accounts (as on {report_date.strftime('%d.%m.%Y')})",
+            f"Net Accounts up to {report_date.strftime('%d.%m.%Y')} (cumulative FY)",
             type=["xlsx", "xls"], key="net_file"
         )
 
@@ -600,48 +614,30 @@ def main():
             "📋 **Tab 1** (Office-wise Range Report) uses the Division-wise Product files uploaded in the sidebar.  \n"
             "📋 **Tab 2** (Division-wise Summary Reports) uses the Accounts Opened Details and Net Addition files below."
         )
-        if ao_file is None or net_file is None:
-            st.warning(
-                "Please upload both **Accounts Opened Details** and **Net Addition of Accounts** "
-                f"files (as on {report_date.strftime('%d.%m.%Y')}) from the sidebar."
-            )
+        # Parse whichever files were uploaded (all optional; show partial results)
+        def _parse_or_none(f):
+            if f is None: return None
+            df = parse_summary_excel(f, ACCOUNT_COLS + CERT_COLS + ["A/c Opened","A/c Closed","Total"])
+            return df
+
+        ao_date_df  = _parse_or_none(ao_date_file)
+        ao_cumul_df = _parse_or_none(ao_file)
+        net_date_df = _parse_or_none(net_date_file)
+        net_cumul_df= _parse_or_none(net_file)
+
+        any_summary_file = any(f is not None for f in [ao_date_file, ao_file, net_date_file, net_file])
+        if not any_summary_file:
+            st.warning("Please upload at least one Summary file from the sidebar to generate this report.")
         else:
-            accounts_opened_df = parse_summary_excel(ao_file, ACCOUNT_COLS + CERT_COLS)
-            net_addition_df    = parse_summary_excel(net_file, ["A/c Opened", "A/c Closed", "Total"])
-
-            if accounts_opened_df is None or net_addition_df is None:
-                st.error("Failed to parse summary files.")
-            else:
-                # ── Inject opened_today from division files if available ──
-                opened_today_map = {}
-                for div, f in div_files.items():
-                    if f is not None:
-                        df_div = parse_product_report(f, div)
-                        if df_div is not None:
-                            opened_today_map[div] = int(df_div[ACCOUNT_COLS].values.sum())
-
                 # ── Table 1: Daily Summary ─────────────────────────────────
                 st.subheader(
                     f"POSB Accounts Daily Report dated {report_date.strftime('%d.%m.%Y')}"
                 )
 
                 summary_df = build_daily_summary(
-                    accounts_opened_df, net_addition_df, report_date, report_month
+                    ao_date_df, ao_cumul_df, net_date_df, net_cumul_df,
+                    report_date, report_month, working_days_left
                 )
-
-                # Override "opened on date" with per-division file totals if uploaded
-                for div in DIVISIONS:
-                    if div in opened_today_map:
-                        col_today = f"No. of Accounts Opened on {report_date.strftime('%d.%m.%Y')}"
-                        mask = summary_df["Division"] == div
-                        summary_df.loc[mask, col_today] = opened_today_map[div]
-
-                # Re-compute shortfall on daily target with updated today figure
-                col_today = f"No. of Accounts Opened on {report_date.strftime('%d.%m.%Y')}"
-                col_daily_tgt = f"Daily Target upto {report_date.strftime('%d.%m.%Y')}"
-                summary_df["Shortfall on daily target"] = (
-                    summary_df[col_daily_tgt] - summary_df[col_today]
-                ).clip(lower=0).round(0).astype(int)
 
                 # Style table
                 def style_pct(val):
@@ -677,7 +673,7 @@ def main():
                 # ── Table 2: Scheme-wise Status ───────────────────────────
                 st.subheader(f"Scheme wise status – up to {report_date.strftime('%d.%m.%Y')}")
 
-                scheme_df = build_scheme_wise(accounts_opened_df)
+                scheme_df = build_scheme_wise(ao_cumul_df if ao_cumul_df is not None else pd.DataFrame())
 
                 # Rename columns to full names for display
                 scheme_display = scheme_df.rename(columns={k: k for k in ACCOUNT_COLS})
@@ -785,7 +781,8 @@ def main():
                     wb.close()
                     return output.getvalue()
 
-                excel_bytes2 = build_summary_excel(summary_df, scheme_df, report_date, report_month)
+                scheme_df_for_dl = scheme_df if 'scheme_df' in dir() else pd.DataFrame()
+                excel_bytes2 = build_summary_excel(summary_df, scheme_df_for_dl, report_date, report_month)
                 st.download_button(
                     label="⬇️ Download Summary Reports as Excel",
                     data=excel_bytes2,
