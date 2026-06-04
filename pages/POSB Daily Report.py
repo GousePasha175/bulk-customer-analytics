@@ -355,13 +355,42 @@ def export_range_report_excel(df, division_dfs=None):
 
     wb.close(); return output.getvalue()
 
-def _col2(df, div):
-    """Return value in 2nd data column (after Name) for a division row."""
+def _sum_ac_cols(df, div):
+    """
+    For Accounts Opened files: sum MIS+PPFGP+SSA+RD+SBBAS+SBSGP+SCSS+TD
+    (columns at positions 1-8 after Name in the Product Wise A/C Report format).
+    Excludes certificates (PRFTS, KVN, NSC8, MSSC) which are in cols 9+.
+    """
+    if df is None or df.empty: return 0
     row = df[df["Name"].str.contains(div, case=False, na=False)]
     if row.empty: return 0
     dcols = [c for c in row.columns if c != "Name"]
-    if not dcols: return 0
-    return max(0, int(pd.to_numeric(row[dcols[0]].iloc[0], errors="coerce") or 0))
+    total = 0
+    for c in dcols[:8]:   # first 8 data cols = MIS through TD
+        v = pd.to_numeric(row[c].iloc[0], errors="coerce")
+        if not pd.isna(v): total += int(v)
+    return max(0, total)
+
+
+def _net_total_col(df, div):
+    """
+    For Net Addition files: read the first 'Total' column = A/c Opened - A/c Closed.
+    Column index 3 in the raw file (after Name, A/c Opened, A/c Closed).
+    The de-duplicated header names it 'Total' (first occurrence).
+    """
+    if df is None or df.empty: return 0
+    row = df[df["Name"].str.contains(div, case=False, na=False)]
+    if row.empty: return 0
+    # 'Total' is the first occurrence after deduplication in parse_summary_excel
+    if "Total" in df.columns:
+        v = pd.to_numeric(row["Total"].iloc[0], errors="coerce")
+        return int(v) if not pd.isna(v) else 0
+    # Positional fallback: 3rd data col after Name
+    dcols = [c for c in row.columns if c != "Name"]
+    if len(dcols) >= 3:
+        v = pd.to_numeric(row[dcols[2]].iloc[0], errors="coerce")
+        return int(v) if not pd.isna(v) else 0
+    return 0
 
 
 def build_daily_summary(
@@ -378,10 +407,10 @@ def build_daily_summary(
         annual = TARGETS_FY[div]
         prop   = proportionate_target(annual, month_name)
 
-        opened_today     = _col2(ao_date_df,  div) if ao_date_df  is not None else 0
-        opened_till_date = _col2(ao_cumul_df, div) if ao_cumul_df is not None else 0
-        net_today        = _col2(net_date_df, div) if net_date_df is not None else 0
-        net_till_date    = _col2(net_cumul_df,div) if net_cumul_df is not None else 0
+        opened_today     = _sum_ac_cols(ao_date_df,  div) if ao_date_df  is not None else 0
+        opened_till_date = _sum_ac_cols(ao_cumul_df, div) if ao_cumul_df is not None else 0
+        net_today        = _net_total_col(net_date_df, div) if net_date_df is not None else 0
+        net_till_date    = _net_total_col(net_cumul_df, div) if net_cumul_df is not None else 0
 
         # Daily target = (Proportionate target − Net addition cumulative) ÷ working days left
         balance   = max(0, prop - net_till_date)
@@ -639,6 +668,32 @@ def main():
                     report_date, report_month, working_days_left
                 )
 
+                # ── Column-wrapping CSS for compact one-page view ──────────
+                st.markdown("""
+<style>
+/* Wrap column headers in daily summary table */
+div[data-testid="stDataFrame"] table thead th {
+    white-space: normal !important;
+    word-wrap: break-word !important;
+    max-width: 90px !important;
+    font-size: 11px !important;
+    text-align: center !important;
+    vertical-align: bottom !important;
+    line-height: 1.2 !important;
+}
+div[data-testid="stDataFrame"] table tbody td {
+    font-size: 12px !important;
+    text-align: center !important;
+    white-space: normal !important;
+    word-wrap: break-word !important;
+}
+div[data-testid="stDataFrame"] table tbody td:first-child {
+    text-align: left !important;
+    font-weight: 600 !important;
+    min-width: 140px !important;
+}
+</style>""", unsafe_allow_html=True)
+
                 # Style table
                 def style_pct(val):
                     try:
@@ -656,9 +711,31 @@ def main():
 
                 pct_col = "% achievement of proportionate Target"
 
+                # Rename columns to short wrapped-friendly names for display
+                col_rename = {
+                    "Target FY 2026-27": "Annual Target",
+                    f"Proportionate Target upto {report_month}, {report_date.year}":
+                        f"Prop. Target upto {report_month[:3]} {report_date.year}",
+                    f"Daily Target upto {report_date.strftime('%d.%m.%Y')}":
+                        f"Daily Target ({report_date.strftime('%d.%m.%Y')})",
+                    f"No. of Accounts Opened on {report_date.strftime('%d.%m.%Y')}":
+                        f"A/cs Opened on {report_date.strftime('%d.%m')}",
+                    f"No. of Accounts Opened up to {report_date.strftime('%d.%m.%Y')}":
+                        f"A/cs Opened upto {report_date.strftime('%d.%m')}",
+                    f"Net no. of a/cs opened on {report_date.strftime('%d.%m.%Y')}":
+                        f"Net A/cs on {report_date.strftime('%d.%m')}",
+                    f"Net no. of a/cs opened upto {report_date.strftime('%d.%m.%Y')}":
+                        f"Net A/cs upto {report_date.strftime('%d.%m')}",
+                    "Shortfall on daily target": "Shortfall Daily",
+                    "Shortfall on proportionate target": "Shortfall Prop.",
+                    "% achievement of proportionate Target": "% Prop. Achievement",
+                }
+                display_df = summary_df.rename(columns=col_rename)
+                new_pct_col = col_rename.get(pct_col, pct_col)
+
                 styled = (
-                    summary_df.style
-                        .map(style_pct, subset=[pct_col])
+                    display_df.style
+                        .map(style_pct, subset=[new_pct_col])
                         .apply(lambda x: [
                             "background-color:#1F3864; color:white; font-weight:bold"
                             if x["Division"] == "Total HQ Region" else ""
@@ -666,7 +743,9 @@ def main():
                         ], axis=1)
                 )
 
-                st.dataframe(styled, use_container_width=True, hide_index=True)
+                st.dataframe(styled, use_container_width=True, hide_index=True,
+                             column_config={c: st.column_config.Column(width="small")
+                                            for c in display_df.columns if c != "Division"})
 
                 st.caption("🟢 ≥100%  🟡 75–99%  🟠 50–74%  🔴 <50% of proportionate target")
 
