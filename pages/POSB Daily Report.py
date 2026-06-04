@@ -668,103 +668,85 @@ def main():
                     report_date, report_month, working_days_left
                 )
 
-                # ── Column-wrapping CSS for compact one-page view ──────────
-                st.markdown("""
-<style>
-/* Daily summary table: wrap headers fully visible in 2-3 lines */
-div[data-testid="stDataFrame"] table thead tr {
-    height: auto !important;
-    min-height: 72px !important;
-}
-div[data-testid="stDataFrame"] table thead th {
-    white-space: normal !important;
-    word-break: break-word !important;
-    overflow-wrap: break-word !important;
-    overflow: visible !important;
-    max-width: 100px !important;
-    min-width: 72px !important;
-    font-size: 11px !important;
-    text-align: center !important;
-    vertical-align: bottom !important;
-    line-height: 1.35 !important;
-    padding: 6px 4px !important;
-    height: auto !important;
-}
-div[data-testid="stDataFrame"] table tbody td {
-    font-size: 12px !important;
-    text-align: center !important;
-    padding: 5px 4px !important;
-    white-space: nowrap !important;
-}
-div[data-testid="stDataFrame"] table tbody td:first-child {
-    text-align: left !important;
-    font-weight: 600 !important;
-    min-width: 145px !important;
-    white-space: normal !important;
-}
-</style>""", unsafe_allow_html=True)
-
-                # Style table
-                def style_pct(val):
-                    try:
-                        v = float(val)
-                        if v < 50:
-                            return "background-color:#FF0000; color:white; font-weight:bold"
-                        elif v < 75:
-                            return "background-color:#FFC000; font-weight:bold"
-                        elif v < 100:
-                            return "background-color:#FFFF00; font-weight:bold"
-                        else:
-                            return "background-color:#70AD47; color:white; font-weight:bold"
-                    except Exception:
-                        return ""
-
+                # ── Render daily summary as HTML table (full column width control) ──
                 pct_col = "% achievement of proportionate Target"
 
-                # Rename columns to short wrapped-friendly names for display
-                col_rename = {
-                    "Target FY 2026-27": "Annual Target",
+                # Short header labels
+                col_labels = {
+                    "Division":                                                  "Division",
+                    "Target FY 2026-27":                                         "Annual<br>Target",
                     f"Proportionate Target upto {report_month}, {report_date.year}":
-                        f"Prop. Target upto {report_month[:3]} {report_date.year}",
-                    f"Daily Target upto {report_date.strftime('%d.%m.%Y')}":
-                        f"Daily Target ({report_date.strftime('%d.%m.%Y')})",
+                                                                                 f"Prop.<br>Target<br>{report_month[:3]} {report_date.year}",
+                    f"Daily Target upto {report_date.strftime('%d.%m.%Y')}":     f"Daily<br>Target<br>{report_date.strftime('%d.%m')}",
                     f"No. of Accounts Opened on {report_date.strftime('%d.%m.%Y')}":
-                        f"A/cs Opened on {report_date.strftime('%d.%m')}",
+                                                                                 f"A/cs<br>Opened<br>on {report_date.strftime('%d.%m')}",
                     f"No. of Accounts Opened up to {report_date.strftime('%d.%m.%Y')}":
-                        f"A/cs Opened upto {report_date.strftime('%d.%m')}",
+                                                                                 f"A/cs<br>Opened<br>upto {report_date.strftime('%d.%m')}",
                     f"Net no. of a/cs opened on {report_date.strftime('%d.%m.%Y')}":
-                        f"Net A/cs on {report_date.strftime('%d.%m')}",
+                                                                                 f"Net A/cs<br>on {report_date.strftime('%d.%m')}",
                     f"Net no. of a/cs opened upto {report_date.strftime('%d.%m.%Y')}":
-                        f"Net A/cs upto {report_date.strftime('%d.%m')}",
-                    "Shortfall on daily target": "Shortfall Daily",
-                    "Shortfall on proportionate target": "Shortfall Prop.",
-                    "% achievement of proportionate Target": "% Prop. Achievement",
+                                                                                 f"Net A/cs<br>upto {report_date.strftime('%d.%m')}",
+                    "Shortfall on daily target":                                 "Shortfall<br>Daily",
+                    "Shortfall on proportionate target":                         "Shortfall<br>Prop.",
+                    "% achievement of proportionate Target":                     "% Prop.<br>Achiev.",
                 }
-                display_df = summary_df.rename(columns=col_rename)
-                new_pct_col = col_rename.get(pct_col, pct_col)
 
-                styled = (
-                    display_df.style
-                        .map(style_pct, subset=[new_pct_col])
-                        .apply(lambda x: [
-                            "background-color:#1F3864; color:white; font-weight:bold"
-                            if x["Division"] == "Total HQ Region" else ""
-                            for _ in x
-                        ], axis=1)
-                )
+                def _pct_style(val):
+                    try:
+                        v = float(val)
+                        if v < 50:   return "background:#FF0000;color:white;font-weight:700"
+                        elif v < 75: return "background:#FFC000;font-weight:700"
+                        elif v < 100:return "background:#FFFF00;font-weight:700"
+                        else:        return "background:#70AD47;color:white;font-weight:700"
+                    except: return ""
 
-                # Column widths: Division left-aligned wider, numeric cols medium
-                col_cfg = {"Division": st.column_config.Column(width="medium")}
-                for c in display_df.columns:
+                cols = list(summary_df.columns)
+                pct_idx = cols.index(pct_col)
+
+                # Column pixel widths
+                col_widths = {"Division": 150}
+                for c in cols:
                     if c == "Division": continue
-                    if "%" in c:
-                        col_cfg[c] = st.column_config.Column(width="small")
-                    else:
-                        col_cfg[c] = st.column_config.Column(width="medium")
+                    col_widths[c] = 62 if "%" in c else 75
 
-                st.dataframe(styled, use_container_width=True, hide_index=True,
-                             column_config=col_cfg)
+                # Build HTML
+                hdr_style = ("background:#2E75B6;color:white;font-size:11px;font-weight:700;"
+                             "text-align:center;vertical-align:bottom;padding:5px 3px;"
+                             "white-space:normal;line-height:1.3;border:1px solid #ccc;")
+                num_style  = "font-size:12px;text-align:right;padding:4px 6px;border:1px solid #e0e0e0;"
+                div_style  = "font-size:12px;text-align:left;padding:4px 6px;border:1px solid #e0e0e0;font-weight:600;"
+                tot_style  = "background:#1F3864;color:white;font-weight:700;font-size:12px;text-align:right;padding:4px 6px;border:1px solid #555;"
+                tot_div_st = "background:#1F3864;color:white;font-weight:700;font-size:12px;text-align:left;padding:4px 6px;border:1px solid #555;"
 
+                html = ["<div style='overflow-x:auto;'>",
+                        "<table style='border-collapse:collapse;width:100%;table-layout:fixed;'>",
+                        "<colgroup>"]
+                for c in cols:
+                    html.append(f"<col style='width:{col_widths.get(c,75)}px;'>")
+                html.append("</colgroup><thead><tr>")
+                for c in cols:
+                    lbl = col_labels.get(c, c)
+                    html.append(f"<th style='{hdr_style}'>{lbl}</th>")
+                html.append("</tr></thead><tbody>")
+
+                for _, row in summary_df.iterrows():
+                    is_total = (row["Division"] == "Total HQ Region")
+                    html.append("<tr>")
+                    for ci, c in enumerate(cols):
+                        val = row[c]
+                        disp = f"{int(val):,}" if isinstance(val, (int, float)) and not isinstance(val, bool) else str(val)
+                        if c == "Division":
+                            html.append(f"<td style='{tot_div_st if is_total else div_style}'>{val}</td>")
+                        elif c == pct_col:
+                            cell_style = (tot_style if is_total else
+                                          num_style + ";" + _pct_style(val))
+                            html.append(f"<td style='{cell_style}'>{disp}</td>")
+                        else:
+                            html.append(f"<td style='{tot_style if is_total else num_style}'>{disp}</td>")
+                    html.append("</tr>")
+
+                html.append("</tbody></table></div>")
+                st.markdown("".join(html), unsafe_allow_html=True)
                 st.caption("🟢 ≥100%  🟡 75–99%  🟠 50–74%  🔴 <50% of proportionate target")
 
                 # ── Table 2: Scheme-wise Status ───────────────────────────
