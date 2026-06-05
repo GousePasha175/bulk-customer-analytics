@@ -51,7 +51,8 @@ PALETTE={"title_bg":"#1F3864","title_fg":"#FFFFFF","header_bg":"#2E75B6","header
          "critical":"#FF0000","critical_fg":"#FFFFFF","no_hist":"#D3D3D3","no_hist_fg":"#000000",
          "total_bg":"#FFF2CC","total_fg":"#000000"}
 STATUS_ORDER=["Excellent","Normal","Warning","Critical","No Historical Data"]
-MASTER_FOLDER="master"
+# CSVs live in data/ folder (named "Bulk Month Year.csv")
+DATA_FOLDER="data"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def fmt_indian(n):
@@ -101,13 +102,19 @@ def detect_cols(df):
 def get_fy(year,month):
     return year if month>=4 else year-1
 
-# ── Load all CSVs from master/ folder ────────────────────────────────────────
+# ── Load all CSVs from data/ folder ─────────────────────────────────────────
 def load_master():
     """
-    Reads all CSVs from master/ folder (named 'Bulk Month Year' format).
+    Reads all CSVs from data/ folder (named 'Bulk Month Year.csv').
+    Also falls back to master/ if data/ has none.
     Returns pivoted DataFrame keyed by CUSTOMER ID with columns YYYY-MM REVENUE, YYYY-MM TRAFFIC.
     """
-    files=sorted(_glob.glob(f"{MASTER_FOLDER}/*.csv")+_glob.glob(f"{MASTER_FOLDER}/*.CSV"))
+    files=sorted(
+        _glob.glob(f"{DATA_FOLDER}/[Bb]ulk*.csv") +
+        _glob.glob(f"{DATA_FOLDER}/[Bb]ulk*.CSV") +
+        _glob.glob("master/[Bb]ulk*.csv") +
+        _glob.glob("master/[Bb]ulk*.CSV")
+    )
     if not files: return pd.DataFrame(), []
     pieces=[]; periods=[]
     for fp in files:
@@ -255,22 +262,46 @@ st.sidebar.header("Upload Files")
 daily_file  =st.sidebar.file_uploader("Daily / Period File (CSV)",type=["csv"])
 master_file =st.sidebar.file_uploader("Master Data File (optional – overrides master/ folder)",type=["xlsx","xls","csv"])
 
-_xl_cands  =_glob.glob("data/[Mm]aster.xlsx")+_glob.glob("data/[Mm]aster.xls")
-DEFAULT_XL =_xl_cands[0] if _xl_cands else None
-_fcsvs     =sorted(_glob.glob(f"{MASTER_FOLDER}/*.csv")+_glob.glob(f"{MASTER_FOLDER}/*.CSV"))
+# Scan data/ for Bulk CSVs; also accept master.xlsx in data/
+_xl_cands  = (_glob.glob("data/[Mm]aster.xlsx") + _glob.glob("data/[Mm]aster.xls") +
+              _glob.glob("data/master") + [])
+DEFAULT_XL = _xl_cands[0] if _xl_cands and os.path.isfile(_xl_cands[0]) else None
+_fcsvs     = sorted(
+    _glob.glob("data/[Bb]ulk*.csv")  + _glob.glob("data/[Bb]ulk*.CSV") +
+    _glob.glob("master/[Bb]ulk*.csv")+ _glob.glob("master/[Bb]ulk*.CSV")
+)
 
-if master_file:    st.sidebar.success("✅ Using uploaded master file")
-elif _fcsvs:       st.sidebar.success(f"📂 master/ folder: {len(_fcsvs)} file(s) found")
-elif DEFAULT_XL:   st.sidebar.info("📂 Using default master Excel")
-else:              st.sidebar.warning("⚠️ No master data source found.")
+if master_file:  st.sidebar.success("✅ Using uploaded master file")
+elif _fcsvs:     st.sidebar.success(f"📂 {len(_fcsvs)} monthly CSV(s) found in data/ folder")
+elif DEFAULT_XL: st.sidebar.info(f"📂 Using {os.path.basename(DEFAULT_XL)}")
+else:            st.sidebar.warning("⚠️ No master data found in data/ folder.")
 
 sd_pct=st.sidebar.slider("Deviation % threshold",min_value=1,max_value=50,value=10)
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("📊 Comparison Options")
-cmp_prev_month =st.sidebar.checkbox("Also compare: Previous month",value=False)
-cmp_highest    =st.sidebar.checkbox("Also compare: Highest month per customer",value=False)
-show_avg_deep  =st.sidebar.checkbox("Show average-based analysis for No Historical Data",value=False)
+st.sidebar.caption(
+    "Default comparison: **Previous month**.\n\n"
+    "Check options below to add more comparisons."
+)
+cmp_last_fy    = st.sidebar.checkbox(
+    "Also compare: Last FY same month",
+    value=False,
+    help="Adds a column comparing against the same month in the previous financial year (e.g. May 2026 vs May 2025)"
+)
+cmp_highest    = st.sidebar.checkbox(
+    "Also compare: Highest month per customer",
+    value=False,
+    help="Adds a column showing each customer's best month from all available data"
+)
+show_avg_deep  = st.sidebar.checkbox(
+    "Analyse No Historical Data using average",
+    value=False,
+    help=(
+        "For customers with no previous month data: use last FY average.\n"
+        "For customers with no last FY data: use all available months average."
+    )
+)
 
 # ── Load master ───────────────────────────────────────────────────────────────
 hist_df=pd.DataFrame(); avail_months=[]
@@ -342,19 +373,23 @@ hist_df["_CID"]=hist_df[hist_cid_col].astype(str).str.replace(".0","",regex=Fals
 all_rev_cols=[c for c in hist_df.columns if c.endswith(" REVENUE")]
 all_trf_cols=[c for c in hist_df.columns if c.endswith(" TRAFFIC")]
 
-# ── Default comparison: previous FY corresponding month ──────────────────────
-def_yr=up_yr-1; def_mo=up_mo
-def_rk=f"{def_yr}-{def_mo:02d} REVENUE"; def_tk=f"{def_yr}-{def_mo:02d} TRAFFIC"
-def_label=f"{calendar.month_name[def_mo]} {def_yr}"
-has_def=(def_rk in hist_df.columns)
-days_def=calendar.monthrange(def_yr,def_mo)[1]
+# ── Default comparison: PREVIOUS MONTH ───────────────────────────────────────
+prev_mo   = up_mo-1 if up_mo>1 else 12
+prev_yr   = up_yr   if up_mo>1 else up_yr-1
+prev_rk   = f"{prev_yr}-{prev_mo:02d} REVENUE"
+prev_tk   = f"{prev_yr}-{prev_mo:02d} TRAFFIC"
+prev_label= f"{calendar.month_name[prev_mo]} {prev_yr}"
+has_prev  = (prev_rk in hist_df.columns)
+days_prev = calendar.monthrange(prev_yr, prev_mo)[1]
 
-# ── Previous month comparison ─────────────────────────────────────────────────
-prev_mo=up_mo-1 if up_mo>1 else 12; prev_yr=up_yr if up_mo>1 else up_yr-1
-prev_rk=f"{prev_yr}-{prev_mo:02d} REVENUE"; prev_tk=f"{prev_yr}-{prev_mo:02d} TRAFFIC"
-prev_label=f"{calendar.month_name[prev_mo]} {prev_yr}"
-has_prev=(prev_rk in hist_df.columns)
-days_prev=calendar.monthrange(prev_yr,prev_mo)[1]
+# ── Last FY same month ────────────────────────────────────────────────────────
+lfy_yr    = up_yr - 1
+lfy_mo    = up_mo
+lfy_rk    = f"{lfy_yr}-{lfy_mo:02d} REVENUE"
+lfy_tk    = f"{lfy_yr}-{lfy_mo:02d} TRAFFIC"
+lfy_label = f"{calendar.month_name[lfy_mo]} {lfy_yr}"
+has_lfy   = (lfy_rk in hist_df.columns)
+days_lfy  = calendar.monthrange(lfy_yr, lfy_mo)[1]
 
 # ── Variance helpers ──────────────────────────────────────────────────────────
 def var(actual, expected):
@@ -415,10 +450,13 @@ total_custs=daily_df[cid_c].nunique()
 banner_parts=[
     f"<b>Period:</b> {upload_start.strftime('%d %b %Y')} → {upload_end.strftime('%d %b %Y')}",
     f"<b>Days:</b> {up_days}",
-    f"<b>Default comparison:</b> {def_label} (prev FY same month)",
+    f"<b>Default comparison:</b> {prev_label} (previous month)",
 ]
-if not has_def: banner_parts.append(f"<span style='color:#c00;'>⚠ {def_label} not in master — fallback to FY {last_fy} average</span>")
-if cmp_prev_month: banner_parts.append(f"<b>+ Previous month:</b> {prev_label}")
+if not has_prev:
+    banner_parts.append(f"<span style='color:#c00;'>⚠ {prev_label} not in master — fallback to last FY average</span>")
+if cmp_last_fy:
+    if has_lfy: banner_parts.append(f"<b>+ Last FY same month:</b> {lfy_label}")
+    else:       banner_parts.append(f"<span style='color:#c00;'>⚠ {lfy_label} not in master</span>")
 if cmp_highest:    banner_parts.append("<b>+ Highest month per customer</b>")
 st.markdown(f"""<div style='background:#f0f7ff;border-left:4px solid #1a73e8;padding:8px 16px;
 border-radius:6px;margin-bottom:12px;font-size:15px;'>{"&nbsp;&nbsp;|&nbsp;&nbsp;".join(banner_parts)}</div>""",
@@ -450,15 +488,18 @@ for _,row in daily_df.iterrows():
 
     hr=hm.iloc[0]
 
-    # ── Default: prev FY same month; fallback to last-FY average ────
-    exp_r_def=exp_t_def=None; def_used=def_label; def_n=None
-    if has_def:
-        exp_r_def,exp_t_def=expected_from_month(hr,def_rk,def_tk,up_days,days_def)
+    # ── Default: previous month; fallback to last-FY average ─────────────────
+    exp_r_def=exp_t_def=None; def_used=prev_label
+    if has_prev:
+        exp_r_def,exp_t_def=expected_from_month(hr,prev_rk,prev_tk,up_days,days_prev)
     if exp_r_def is None:
-        # Fallback: average of last FY months
+        # Fallback: last FY average
         exp_r_def,exp_t_def,n_r,n_t=avg_expected(hr,up_days,'last')
-        def_used=f"Last FY avg ({n_r} mo)" if n_r else "No Historical Data"
-        def_n=n_r
+        def_used=(f"Last FY avg ({n_r} mo)" if n_r else "No Historical Data")
+    if exp_r_def is None:
+        # Ultimate fallback: all available months average
+        exp_r_def,exp_t_def,n_r,n_t=avg_expected(hr,up_days,None)
+        def_used=(f"All months avg ({n_r} mo)" if n_r else "No Historical Data")
 
     rv_def=var(rev,exp_r_def); rs_def=classify(rv_def,sd_pct)
     tv_def=var(trf,exp_t_def); ts_def=classify(tv_def,sd_pct)
@@ -473,21 +514,22 @@ for _,row in daily_df.iterrows():
          "Traffic Status":ts_def,
          "Comparison Used":def_used}
 
-    # ── Optional: previous month ──────────────────────────────────
-    if cmp_prev_month:
-        exp_r_pm=exp_t_pm=None
-        if has_prev:
-            exp_r_pm,exp_t_pm=expected_from_month(hr,prev_rk,prev_tk,up_days,days_prev)
-        if exp_r_pm is None:
-            # fallback: current FY average
-            exp_r_pm,exp_t_pm,_,_=avg_expected(hr,up_days,'current')
-        rv_pm=var(rev,exp_r_pm); tv_pm=var(trf,exp_t_pm)
-        rec[f"Exp Rev ({prev_label})"]=round(exp_r_pm) if exp_r_pm else ""
-        rec[f"Rev Var % ({prev_label})"]=rv_pm if not pd.isna(rv_pm) else ""
-        rec[f"Rev Status ({prev_label})"]=classify(rv_pm,sd_pct)
-        rec[f"Exp Trf ({prev_label})"]=round(exp_t_pm) if exp_t_pm else ""
-        rec[f"Trf Var % ({prev_label})"]=tv_pm if not pd.isna(tv_pm) else ""
-        rec[f"Trf Status ({prev_label})"]=classify(tv_pm,sd_pct)
+    # ── Optional: last FY same month ──────────────────────────────────────────
+    if cmp_last_fy:
+        exp_r_lfy=exp_t_lfy=None; lfy_used=lfy_label
+        if has_lfy:
+            exp_r_lfy,exp_t_lfy=expected_from_month(hr,lfy_rk,lfy_tk,up_days,days_lfy)
+        if exp_r_lfy is None:
+            # Fallback: any last FY month average
+            exp_r_lfy,exp_t_lfy,n_r,n_t=avg_expected(hr,up_days,'last')
+            lfy_used=(f"Last FY avg ({n_r} mo)" if n_r else "No Historical Data")
+        rv_lfy=var(rev,exp_r_lfy); tv_lfy=var(trf,exp_t_lfy)
+        rec[f"Exp Rev ({lfy_label})"]=round(exp_r_lfy) if exp_r_lfy else ""
+        rec[f"Rev Var % ({lfy_label})"]=rv_lfy if not pd.isna(rv_lfy) else ""
+        rec[f"Rev Status ({lfy_label})"]=classify(rv_lfy,sd_pct)
+        rec[f"Exp Trf ({lfy_label})"]=round(exp_t_lfy) if exp_t_lfy else ""
+        rec[f"Trf Var % ({lfy_label})"]=tv_lfy if not pd.isna(tv_lfy) else ""
+        rec[f"Trf Status ({lfy_label})"]=classify(tv_lfy,sd_pct)
 
     # ── Optional: highest month per customer ──────────────────────
     if cmp_highest:
@@ -539,7 +581,10 @@ if show_avg_deep and not no_hist_df.empty:
         rev_v=float(row["Actual Revenue"]); trf_v=float(row["Actual Traffic"])
         hm=hist_df[hist_df["_CID"]==cid]
         if hm.empty: continue
-        exp_r,exp_t,n_r,n_t=avg_expected(hm.iloc[0],up_days,None)
+        # Try last FY average first; then fall back to all months
+        exp_r,exp_t,n_r,n_t=avg_expected(hm.iloc[0],up_days,'last')
+        if not exp_r:
+            exp_r,exp_t,n_r,n_t=avg_expected(hm.iloc[0],up_days,None)
         if not exp_r and not exp_t: continue
         rv=var(rev_v,exp_r); tv=var(trf_v,exp_t)
         avg_rows.append({"Customer ID":cid,"Customer Name":cnam,
