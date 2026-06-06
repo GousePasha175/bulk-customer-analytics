@@ -142,8 +142,8 @@ def load_master():
     for _,row in combined.iterrows():
         cid=row["_cid"]; key=f"{int(row['_yr'])}-{int(row['_mo']):02d}"
         if cid not in master: master[cid]={"CUSTOMER ID":cid,"CUSTOMER NAME":str(row["_cn"])}
-        master[cid][f"{key} REVENUE"]=row["rev"]
-        master[cid][f"{key} TRAFFIC"]=row["trf"]
+        master[cid][f"{key} REVENUE"]=round(float(row["rev"]),2)
+        master[cid][f"{key} TRAFFIC"]=int(round(float(row["trf"])))
     df_out=pd.DataFrame(list(master.values()))
     labels=[f"{calendar.month_name[m]} {y}" for y,m in sorted(set(periods))]
     return df_out, labels
@@ -256,99 +256,258 @@ Bulk Customer Business Analytics</h1>
     unsafe_allow_html=True)
 st.markdown("<hr style='margin:4px 0 10px 0;border-color:#ddd;'>",unsafe_allow_html=True)
 
+# ── Scan data/ folder for monthly CSVs ───────────────────────────────────────
+_fcsvs = sorted(
+    _glob.glob("data/[Bb]ulk*.csv") + _glob.glob("data/[Bb]ulk*.CSV") +
+    _glob.glob("master/[Bb]ulk*.csv") + _glob.glob("master/[Bb]ulk*.CSV")
+)
+
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 _render_nav()
 st.sidebar.header("Upload Files")
-daily_file  =st.sidebar.file_uploader("Daily / Period File (CSV)",type=["csv"])
-master_file =st.sidebar.file_uploader("Master Data File (optional – overrides master/ folder)",type=["xlsx","xls","csv"])
+daily_file = st.sidebar.file_uploader("Daily / Period File (CSV)", type=["csv"])
 
-# Scan data/ for Bulk CSVs; also accept master.xlsx in data/
-_xl_cands  = (_glob.glob("data/[Mm]aster.xlsx") + _glob.glob("data/[Mm]aster.xls") +
-              _glob.glob("data/master") + [])
-DEFAULT_XL = _xl_cands[0] if _xl_cands and os.path.isfile(_xl_cands[0]) else None
-_fcsvs     = sorted(
-    _glob.glob("data/[Bb]ulk*.csv")  + _glob.glob("data/[Bb]ulk*.CSV") +
-    _glob.glob("master/[Bb]ulk*.csv")+ _glob.glob("master/[Bb]ulk*.CSV")
+st.sidebar.markdown("---")
+st.sidebar.subheader("📂 Upload Master Data (optional)")
+st.sidebar.caption(
+    "Accepts any Excel or CSV. App auto-detects columns for "
+    "Customer ID/Name, Traffic, Revenue, and Period."
+)
+master_file = st.sidebar.file_uploader(
+    "Upload Master File",
+    type=["xlsx", "xls", "xlsm", "csv", "tsv"],
+    help="Excel (any format) or CSV/TSV. Multi-sheet Excel supported."
 )
 
-if master_file:  st.sidebar.success("✅ Using uploaded master file")
-elif _fcsvs:     st.sidebar.success(f"📂 {len(_fcsvs)} monthly CSV(s) found in data/ folder")
-elif DEFAULT_XL: st.sidebar.info(f"📂 Using {os.path.basename(DEFAULT_XL)}")
-else:            st.sidebar.warning("⚠️ No master data found in data/ folder.")
+if master_file:    st.sidebar.success(f"✅ Uploaded: {master_file.name}")
+elif _fcsvs:       st.sidebar.success(f"📂 data/ folder: {len(_fcsvs)} monthly CSV(s) found")
+else:              st.sidebar.warning("⚠️ No master data. Add Bulk CSVs to data/ folder or upload a file.")
 
-sd_pct=st.sidebar.slider("Deviation % threshold",min_value=1,max_value=50,value=10)
+sd_pct = st.sidebar.slider("Deviation % threshold", min_value=1, max_value=50, value=10)
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("📊 Comparison Options")
-st.sidebar.caption(
-    "Default comparison: **Previous month**.\n\n"
-    "Check options below to add more comparisons."
+st.sidebar.caption("Default: **Previous month**. Check below for more comparisons.")
+cmp_last_fy = st.sidebar.checkbox(
+    "Also compare: Last FY same month", value=False,
+    help="E.g. May 2026 vs May 2025"
 )
-cmp_last_fy    = st.sidebar.checkbox(
-    "Also compare: Last FY same month",
-    value=False,
-    help="Adds a column comparing against the same month in the previous financial year (e.g. May 2026 vs May 2025)"
+cmp_highest = st.sidebar.checkbox(
+    "Also compare: Highest month per customer", value=False,
+    help="Each customer's best month from all available data"
 )
-cmp_highest    = st.sidebar.checkbox(
-    "Also compare: Highest month per customer",
-    value=False,
-    help="Adds a column showing each customer's best month from all available data"
+show_avg_deep = st.sidebar.checkbox(
+    "Analyse No Historical Data using average", value=False,
+    help="Last FY average first; falls back to all-months average if needed."
 )
-show_avg_deep  = st.sidebar.checkbox(
-    "Analyse No Historical Data using average",
-    value=False,
-    help=(
-        "For customers with no previous month data: use last FY average.\n"
-        "For customers with no last FY data: use all available months average."
-    )
-)
+
+
+def _smart_detect_cols(df):
+    """
+    Flexible column detector — works on any file format.
+    Returns (cid_col, name_col, rev_col, trf_col, start_col, end_col).
+    """
+    cid = cname = rev = trf = sd = ed = None
+    cols_lower = {c: str(c).strip().lower() for c in df.columns}
+
+    cid_kw   = ['customer id','cust id','customerid','custid','client id','acct no','account no']
+    name_kw  = ['customer name','cust name','client name','cutomer name','customer  name',
+                'name','party name','firm name']
+    rev_kw   = ['total amount','total amt','revenue','amount','rev','turnover','value',
+                'billing','invoice amount','net amount']
+    trf_kw   = ['article count','articles','traffic','article','count','qty',
+                'quantity','items','pieces','shipments','bookings']
+    start_kw = ['start date','start','from date','period start','month','date',
+                'booking date','period']
+    end_kw   = ['end date','end','to date','period end']
+
+    def first_match(kws, skip=None):
+        for kw in kws:
+            for col, cl in cols_lower.items():
+                if col == skip: continue
+                if kw in cl: return col
+        return None
+
+    cid   = first_match(cid_kw)
+    cname = first_match(name_kw, skip=cid)
+    rev   = first_match(rev_kw)
+    trf   = first_match(trf_kw)
+    sd    = first_match(start_kw)
+    ed    = first_match(end_kw)
+
+    # Fallback by dtype if rev/trf not found
+    if rev is None or trf is None:
+        num_cols = df.select_dtypes(include='number').columns.tolist()
+        num_cols = [c for c in num_cols if c not in (cid, rev, trf)]
+        if num_cols:
+            means = {c: df[c].mean() for c in num_cols}
+            sm = sorted(means, key=means.get, reverse=True)
+            if rev is None and sm: rev = sm[0]
+            if trf is None and len(sm) > 1: trf = sm[1]
+
+    return cid, cname, rev, trf, sd, ed
+
+
+def _read_any_file(uploaded_file):
+    """Read any uploaded file — CSV/TSV or Excel (single or multi-sheet)."""
+    name = uploaded_file.name.lower() if hasattr(uploaded_file, 'name') else ''
+    uploaded_file.seek(0)
+    if name.endswith('.csv') or name.endswith('.tsv'):
+        sep = '\t' if name.endswith('.tsv') else ','
+        try:
+            return pd.read_csv(uploaded_file, sep=sep)
+        except Exception:
+            uploaded_file.seek(0)
+            return pd.read_csv(uploaded_file, sep=None, engine='python')
+    # Excel
+    try:
+        uploaded_file.seek(0)
+        xl = pd.ExcelFile(uploaded_file)
+        if len(xl.sheet_names) == 1:
+            return xl.parse(xl.sheet_names[0])
+        # Multi-sheet: concat sheets that have recognisable ID+revenue cols
+        pieces = []
+        for sheet in xl.sheet_names:
+            try:
+                df_s = xl.parse(sheet)
+                cid_, _, rev_, _, _, _ = _smart_detect_cols(df_s)
+                if cid_ and rev_: pieces.append(df_s)
+            except Exception:
+                continue
+        return pd.concat(pieces, ignore_index=True) if pieces else xl.parse(xl.sheet_names[0])
+    except Exception:
+        return None
+
+
+def _pivot_to_master(raw_df):
+    """
+    Convert any flat/wide file into the standard pivoted master DataFrame
+    with columns YYYY-MM REVENUE and YYYY-MM TRAFFIC keyed by CUSTOMER ID.
+    Returns (pivoted_df, available_month_labels).
+    """
+    import re as _re
+    if raw_df is None or raw_df.empty:
+        return pd.DataFrame(), []
+
+    cid_c, cn_c, rev_c, trf_c, sd_c, ed_c = _smart_detect_cols(raw_df)
+
+    # Case 1: Long format (each row = one customer + one period)
+    if cid_c and rev_c and sd_c:
+        raw_df = raw_df.copy()
+        raw_df[sd_c] = parse_dates(raw_df[sd_c])
+        raw_df["_yr"]  = raw_df[sd_c].dt.year
+        raw_df["_mo"]  = raw_df[sd_c].dt.month
+        raw_df["_cid"] = raw_df[cid_c].astype(str).str.replace(".0","",regex=False).str.strip()
+        raw_df["_rev"] = pd.to_numeric(raw_df[rev_c], errors="coerce").fillna(0)
+        raw_df["_trf"] = pd.to_numeric(raw_df[trf_c], errors="coerce").fillna(0) if trf_c else 0
+        raw_df["_cn"]  = raw_df[cn_c].astype(str) if cn_c else ""
+
+        grouped = (raw_df.groupby(["_cid","_yr","_mo"])
+                   .agg(_cn=("_cn","first"), rev=("_rev","sum"), trf=("_trf","sum"))
+                   .reset_index())
+        name_map = raw_df.groupby("_cid")["_cn"].first().to_dict()
+
+        master_d = {}
+        for _, row in grouped.iterrows():
+            cid  = row["_cid"]
+            key  = f"{int(row['_yr'])}-{int(row['_mo']):02d}"
+            if cid not in master_d:
+                master_d[cid] = {"CUSTOMER ID": cid,
+                                  "CUSTOMER NAME": str(name_map.get(cid,""))}
+            master_d[cid][f"{key} REVENUE"] = row["rev"]
+            master_d[cid][f"{key} TRAFFIC"] = row["trf"]
+
+        result = pd.DataFrame(list(master_d.values()))
+        all_mo = sorted({(int(r["_yr"]),int(r["_mo"])) for _,r in grouped.iterrows()})
+        labels = [f"{calendar.month_name[m]} {y}" for y,m in all_mo]
+        return result, labels
+
+    # Case 2: Wide/pivot format (month columns)
+    if cid_c:
+        mon_map = {'jan':1,'feb':2,'mar':3,'apr':4,'may':5,'jun':6,
+                   'jul':7,'aug':8,'sep':9,'oct':10,'nov':11,'dec':12}
+        master_d = {}; labels_set = set()
+        for _, row in raw_df.iterrows():
+            cid = str(row[cid_c]).replace(".0","").strip()
+            try: int(cid)
+            except: continue
+            cname = str(row[cn_c]).strip() if cn_c and cn_c in raw_df.columns else ""
+            if cname.lower() == 'nan': cname = ""
+            if cid not in master_d:
+                master_d[cid] = {"CUSTOMER ID": cid, "CUSTOMER NAME": cname}
+            for col in raw_df.columns:
+                if col in (cid_c, cn_c): continue
+                cl = str(col).strip().lower()
+                m = _re.search(r'([a-z]{3})[\s\-]?(\d{2,4})', cl)
+                if not m:
+                    m2 = _re.search(r'(\d{4})[\-/](\d{1,2})', cl)
+                    if m2: yr, mo = int(m2.group(1)), int(m2.group(2))
+                    else:  continue
+                else:
+                    mo  = mon_map.get(m.group(1))
+                    if not mo: continue
+                    yr_s = m.group(2)
+                    yr   = 2000+int(yr_s) if len(yr_s)==2 else int(yr_s)
+                key = f"{yr}-{mo:02d}"
+                val = pd.to_numeric(row[col], errors="coerce")
+                if pd.isna(val): continue
+                # Classify traffic vs revenue
+                if any(k in cl for k in ['traf','art','count','qty','piece','book']):
+                    field = "TRAFFIC"
+                elif any(k in cl for k in ['rev','amt','amount','val','turn','bill']):
+                    field = "REVENUE"
+                else:
+                    field = "REVENUE" if float(val) > 5000 else "TRAFFIC"
+                master_d[cid][f"{key} {field}"] = master_d[cid].get(f"{key} {field}", 0) + float(val)
+                labels_set.add((yr, mo))
+
+        result = pd.DataFrame(list(master_d.values()))
+        labels = [f"{calendar.month_name[m]} {y}" for y,m in sorted(labels_set)]
+        return result, labels
+
+    return raw_df, []
+
 
 # ── Load master ───────────────────────────────────────────────────────────────
-hist_df=pd.DataFrame(); avail_months=[]
+hist_df = pd.DataFrame(); avail_months = []
+
 with st.spinner("Loading master data..."):
     if master_file:
-        nm=master_file.name if hasattr(master_file,"name") else ""
-        if nm.lower().endswith(".csv"):
-            try:
-                master_file.seek(0)
-                tmp=pd.read_csv(master_file)
-                cid,cn,rev,trf,sd,_=detect_cols(tmp)
-                if all([cid,rev,sd]):
-                    master_file.seek(0)
-                    # Parse as single-month daily format
-                    df2=pd.read_csv(master_file)
-                    df2[sd]=parse_dates(df2[sd])
-                    yr=int(df2[sd].dt.year.iloc[0]); mo=int(df2[sd].dt.month.iloc[0])
-                    df2["_cid"]=df2[cid].astype(str).str.replace(".0","",regex=False).str.strip()
-                    grp=df2.groupby("_cid").agg(rev=(rev,"sum"),trf=(trf,"sum") if trf else (rev,"sum")).reset_index()
-                    master={}
-                    for _,row in grp.iterrows():
-                        k=f"{yr}-{mo:02d}"
-                        if row["_cid"] not in master: master[row["_cid"]]={"CUSTOMER ID":row["_cid"],"CUSTOMER NAME":""}
-                        master[row["_cid"]][f"{k} REVENUE"]=row["rev"]
-                        master[row["_cid"]][f"{k} TRAFFIC"]=row.get("trf",0)
-                    hist_df=pd.DataFrame(list(master.values()))
-                    avail_months=[f"{calendar.month_name[mo]} {yr}"]
-                else:
-                    master_file.seek(0); hist_df=pd.read_csv(master_file)
-            except: pass
-        else:
-            hist_df=parse_master_excel(master_file)
+        raw = _read_any_file(master_file)
+        if raw is not None and not raw.empty:
+            cid_d, cn_d, rev_d, trf_d, sd_d, _ = _smart_detect_cols(raw)
+            with st.sidebar.expander("🔍 Detected columns in uploaded file", expanded=True):
+                st.markdown(
+                    f"| Field | Detected Column |\n|---|---|\n"
+                    f"| Customer ID | `{cid_d or 'not found'}` |\n"
+                    f"| Customer Name | `{cn_d or 'not found'}` |\n"
+                    f"| Revenue / Amount | `{rev_d or 'not found'}` |\n"
+                    f"| Traffic / Articles | `{trf_d or 'not found'}` |\n"
+                    f"| Start Date / Period | `{sd_d or 'not found'}` |\n"
+                )
+                st.caption("All columns: " + ", ".join(f"`{c}`" for c in raw.columns[:20]))
+            hist_df, avail_months = _pivot_to_master(raw)
+        if hist_df.empty:
+            st.sidebar.error("Could not parse uploaded file. Check column names above.")
     elif _fcsvs:
-        hist_df,avail_months=load_master()
-    elif DEFAULT_XL and os.path.exists(DEFAULT_XL):
-        hist_df=parse_master_excel(DEFAULT_XL)
+        hist_df, avail_months = load_master()
 
 if avail_months:
-    st.sidebar.caption(f"Months in master: {', '.join(avail_months)}")
+    st.sidebar.caption(f"Months loaded: {', '.join(avail_months)}")
 
 # ── Gate on daily file ────────────────────────────────────────────────────────
 if not daily_file:
     st.info("Please upload the Daily / Period CSV file in the sidebar to begin.")
     st.stop()
 if hist_df.empty:
-    st.info("Please add monthly CSVs to the **master/** folder or upload a Master Data file.")
+    st.info(
+        "No master data loaded.  \n"
+        "- Place monthly CSVs named **'Bulk Month Year.csv'** in the **data/** folder, or  \n"
+        "- Upload a master file using the sidebar uploader above."
+    )
     st.stop()
+
+
 
 # ── Parse daily ───────────────────────────────────────────────────────────────
 daily_df=pd.read_csv(daily_file)
@@ -394,7 +553,7 @@ days_lfy  = calendar.monthrange(lfy_yr, lfy_mo)[1]
 # ── Variance helpers ──────────────────────────────────────────────────────────
 def var(actual, expected):
     if expected is None or expected==0: return np.nan
-    return round(((actual-expected)/expected)*100, 2)
+    return round(((actual-expected)/expected)*100, 1)
 
 def expected_from_month(hist_row, rk, tk, period_days, month_days):
     """Scale monthly figure to uploaded period length."""
@@ -506,10 +665,10 @@ for _,row in daily_df.iterrows():
 
     rec={"Customer ID":cid,"Customer Name":cnam,
          "Actual Revenue":round(rev),"Actual Traffic":round(trf),
-         f"Expected Rev ({def_used})":round(exp_r_def) if exp_r_def else "",
+         f"Expected Rev ({def_used})":int(round(exp_r_def)) if exp_r_def else "",
          "Revenue Variance %":rv_def if not pd.isna(rv_def) else "",
          "Revenue Status":rs_def,
-         f"Expected Trf ({def_used})":round(exp_t_def) if exp_t_def else "",
+         f"Expected Trf ({def_used})":int(round(exp_t_def)) if exp_t_def else "",
          "Traffic Variance %":tv_def if not pd.isna(tv_def) else "",
          "Traffic Status":ts_def,
          "Comparison Used":def_used}
@@ -524,10 +683,10 @@ for _,row in daily_df.iterrows():
             exp_r_lfy,exp_t_lfy,n_r,n_t=avg_expected(hr,up_days,'last')
             lfy_used=(f"Last FY avg ({n_r} mo)" if n_r else "No Historical Data")
         rv_lfy=var(rev,exp_r_lfy); tv_lfy=var(trf,exp_t_lfy)
-        rec[f"Exp Rev ({lfy_label})"]=round(exp_r_lfy) if exp_r_lfy else ""
+        rec[f"Exp Rev ({lfy_label})"]=int(round(exp_r_lfy)) if exp_r_lfy else ""
         rec[f"Rev Var % ({lfy_label})"]=rv_lfy if not pd.isna(rv_lfy) else ""
         rec[f"Rev Status ({lfy_label})"]=classify(rv_lfy,sd_pct)
-        rec[f"Exp Trf ({lfy_label})"]=round(exp_t_lfy) if exp_t_lfy else ""
+        rec[f"Exp Trf ({lfy_label})"]=int(round(exp_t_lfy)) if exp_t_lfy else ""
         rec[f"Trf Var % ({lfy_label})"]=tv_lfy if not pd.isna(tv_lfy) else ""
         rec[f"Trf Status ({lfy_label})"]=classify(tv_lfy,sd_pct)
 
@@ -541,10 +700,10 @@ for _,row in daily_df.iterrows():
             exp_r_h,exp_t_h=expected_from_month(hr,h_rk,h_tk,up_days,h_days)
             rv_h=var(rev,exp_r_h); tv_h=var(trf,exp_t_h)
             rec[f"Highest month"]=h_lbl
-            rec[f"Exp Rev (Highest)"]=round(exp_r_h) if exp_r_h else ""
+            rec[f"Exp Rev (Highest)"]=int(round(exp_r_h)) if exp_r_h else ""
             rec[f"Rev Var % (Highest)"]=rv_h if not pd.isna(rv_h) else ""
             rec[f"Rev Status (Highest)"]=classify(rv_h,sd_pct)
-            rec[f"Exp Trf (Highest)"]=round(exp_t_h) if exp_t_h else ""
+            rec[f"Exp Trf (Highest)"]=int(round(exp_t_h)) if exp_t_h else ""
             rec[f"Trf Var % (Highest)"]=tv_h if not pd.isna(tv_h) else ""
             rec[f"Trf Status (Highest)"]=classify(tv_h,sd_pct)
         else:
@@ -588,9 +747,9 @@ if show_avg_deep and not no_hist_df.empty:
         if not exp_r and not exp_t: continue
         rv=var(rev_v,exp_r); tv=var(trf_v,exp_t)
         avg_rows.append({"Customer ID":cid,"Customer Name":cnam,
-            "Actual Revenue":round(rev_v),"Expected Revenue":round(exp_r) if exp_r else "",
+            "Actual Revenue":int(round(rev_v)),"Expected Revenue":int(round(exp_r)) if exp_r else "",
             "Revenue Variance %":rv if not pd.isna(rv) else "","Revenue Status":classify(rv,sd_pct),
-            "Actual Traffic":round(trf_v),"Expected Traffic":round(exp_t) if exp_t else "",
+            "Actual Traffic":int(round(trf_v)),"Expected Traffic":int(round(exp_t)) if exp_t else "",
             "Traffic Variance %":tv if not pd.isna(tv) else "","Traffic Status":classify(tv,sd_pct),
             "Months Avg (Rev)":n_r,"Months Avg (Trf)":n_t})
     avg_df=pd.DataFrame(avg_rows)
