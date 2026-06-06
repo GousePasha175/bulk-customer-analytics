@@ -9,13 +9,15 @@ def _render_nav():
         <p style='font-size:12px;font-weight:700;color:#888;
            text-transform:uppercase;letter-spacing:1px;margin:0 0 4px 0;'>Pages</p>
         </div>""", unsafe_allow_html=True)
-    st.sidebar.page_link("Analytics_Excel.py", label="\U0001f512 Login")
-    _bulk = (_glob.glob("pages/Bulk_Analytics.py") + _glob.glob("pages/*[Bb]ulk*.py"))
-    if _bulk: st.sidebar.page_link(_bulk[0].replace("\\","/"), label="\U0001f4ca Bulk Customer Analytics")
-    _posb = (_glob.glob("pages/POSB Daily Report.py") + _glob.glob("pages/*[Pp][Oo][Ss][Bb]*.py"))
-    if _posb: st.sidebar.page_link(_posb[0].replace("\\","/"), label="\U0001f4ee POSB Daily Report")
-    _dig  = (_glob.glob("pages/1_Digital_Transactions.py") + _glob.glob("pages/*[Dd]igital*.py"))
-    if _dig:  st.sidebar.page_link(_dig[0].replace("\\","/"),  label="\U0001f4bb Digital Transactions")
+    st.sidebar.page_link("Analytics_Excel.py", label="\U0001f3e0 Home")
+    _posb = (_glob.glob("pages/POSB Daily Report.py") +
+             _glob.glob("pages/*[Pp][Oo][Ss][Bb]*.py"))
+    if _posb:
+        st.sidebar.page_link(_posb[0].replace("\\", "/"), label="\U0001f4ee POSB Daily Report")
+    _dig = (_glob.glob("pages/1_Digital_Transactions.py") +
+            _glob.glob("pages/*[Dd]igital*.py"))
+    if _dig:
+        st.sidebar.page_link(_dig[0].replace("\\", "/"), label="\U0001f4bb Digital Transactions")
     st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
 
 import pandas as pd
@@ -102,7 +104,7 @@ with hc:
     <h1 style='font-size:24px;margin-bottom:2px;color:#2f3343;font-weight:700;padding-top:4px;'>
     Digital Transaction Status Report</h1>
     <p style='font-size:13px;color:#555;margin:0;'>
-    Headquarters Region – Telangana Postal Circle</p>
+    Headquarter Region – Telangana Postal Circle</p>
     """, unsafe_allow_html=True)
 st.markdown("<hr style='margin:4px 0 8px;border-color:#ddd;'>", unsafe_allow_html=True)
 
@@ -244,8 +246,12 @@ def process_cod(df_raw):
     cols = [c.lower().strip() for c in df.columns]
 
     # Detect office-id column (handle variations)
-    id_col   = next((c for c in df.columns if c.lower().strip() in ('office-id','office_id','office id')), None)
-    name_col = next((c for c in df.columns if c.lower().strip() in ('office-name','office_name','office name')), None)
+    id_col = next((c for c in df.columns if c.lower().strip() in
+                   ('office-id','office_id','office id')), None)
+    # Accept "Division Name", "Division_Name", "Office Name" etc.
+    _name_kws = ('office-name','office_name','office name',
+                 'division name','division_name','div name','division')
+    name_col = next((c for c in df.columns if c.lower().strip() in _name_kws), None)
     dig_col  = next((c for c in df.columns if 'digital' in c.lower() and 'count' in c.lower()), None)
     cash_col = next((c for c in df.columns if 'cash' in c.lower() and 'count' in c.lower()), None)
 
