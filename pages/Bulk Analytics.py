@@ -715,42 +715,51 @@ result_df =pd.DataFrame(results)
 no_hist_df=pd.DataFrame(no_hist_list)
 
 
+def _fmt_val(val, col):
+    """Format a single cell value for display — integers clean, variance 1dp."""
+    if val == "" or val is None or (isinstance(val, float) and np.isnan(val)):
+        return ""
+    try:
+        f = float(val)
+        if "Variance" in col or (col.endswith("%") and "Status" not in col):
+            return round(f, 1)
+        if any(k in col for k in ["Revenue","Traffic","Expected","Actual"]):
+            return int(round(f))
+        return val
+    except (ValueError, TypeError):
+        return val
+
+
 def _clean_df(df):
     """
-    Fix dtypes after DataFrame construction:
-    - Numeric columns that contain "" (empty string) get cast to object by pandas.
-    - Replace "" with pd.NA, cast to Int64 or float, so Streamlit renders
-      clean integers/1dp floats instead of 7-decimal floats.
+    Apply formatting cell-by-cell via applymap so dtype stays object
+    (preserving empty strings) but displayed values are clean ints / 1dp floats.
+    This avoids the Int64/column_config conflict that suppresses Styler colours.
     """
     if df.empty: return df
     df = df.copy()
     for col in df.columns:
-        if "Status" in col or "Customer" in col or "Comparison" in col or "month" in col.lower():
+        if "Status" in col or "Customer" in col or "Comparison" in col                 or "month" in col.lower() or "ID" in col:
             continue
-        # Try converting to numeric
-        converted = pd.to_numeric(df[col].replace("", pd.NA), errors="coerce")
-        if converted.notna().any():
-            # Variance % columns: keep 1 decimal
-            if "Variance" in col or "%" in col:
-                df[col] = converted.round(1)
-            else:
-                # Revenue/Traffic/Expected: store as Int64 (nullable integer)
-                df[col] = converted.round(0).astype("Int64")
+        df[col] = df[col].apply(lambda v: _fmt_val(v, col))
     return df
 
 
+def _style_status(val):
+    """Cell-level colour for any Status column."""
+    return color_status(val)
+
+
 def _show_df(df, status_cols):
-    """Display a cleaned DataFrame with column_config for numeric formatting."""
+    """Display a cleaned DataFrame with colour coding on all Status columns."""
     df = _clean_df(df)
-    col_cfg = {}
-    for col in df.columns:
-        if "Variance" in col or "%" in col:
-            col_cfg[col] = st.column_config.NumberColumn(col, format="%.1f")
-        elif any(k in col for k in ["Revenue","Traffic","Expected","Actual"]):
-            col_cfg[col] = st.column_config.NumberColumn(col, format="%d")
-    styled = df.style.map(color_status, subset=[c for c in status_cols if c in df.columns])
-    st.dataframe(styled, use_container_width=True, hide_index=True,
-                 column_config=col_cfg if col_cfg else None)
+    # Detect ALL status columns present in this specific df
+    active_status_cols = [c for c in df.columns if "Status" in c]
+    styled = (
+        df.style
+          .map(_style_status, subset=active_status_cols)
+    )
+    st.dataframe(styled, use_container_width=True, hide_index=True)
 
 
 # ── Status columns list ───────────────────────────────────────────────────────
