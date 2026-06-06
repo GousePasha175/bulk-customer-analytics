@@ -714,6 +714,45 @@ for _,row in daily_df.iterrows():
 result_df =pd.DataFrame(results)
 no_hist_df=pd.DataFrame(no_hist_list)
 
+
+def _clean_df(df):
+    """
+    Fix dtypes after DataFrame construction:
+    - Numeric columns that contain "" (empty string) get cast to object by pandas.
+    - Replace "" with pd.NA, cast to Int64 or float, so Streamlit renders
+      clean integers/1dp floats instead of 7-decimal floats.
+    """
+    if df.empty: return df
+    df = df.copy()
+    for col in df.columns:
+        if "Status" in col or "Customer" in col or "Comparison" in col or "month" in col.lower():
+            continue
+        # Try converting to numeric
+        converted = pd.to_numeric(df[col].replace("", pd.NA), errors="coerce")
+        if converted.notna().any():
+            # Variance % columns: keep 1 decimal
+            if "Variance" in col or "%" in col:
+                df[col] = converted.round(1)
+            else:
+                # Revenue/Traffic/Expected: store as Int64 (nullable integer)
+                df[col] = converted.round(0).astype("Int64")
+    return df
+
+
+def _show_df(df, status_cols):
+    """Display a cleaned DataFrame with column_config for numeric formatting."""
+    df = _clean_df(df)
+    col_cfg = {}
+    for col in df.columns:
+        if "Variance" in col or "%" in col:
+            col_cfg[col] = st.column_config.NumberColumn(col, format="%.1f")
+        elif any(k in col for k in ["Revenue","Traffic","Expected","Actual"]):
+            col_cfg[col] = st.column_config.NumberColumn(col, format="%d")
+    styled = df.style.map(color_status, subset=[c for c in status_cols if c in df.columns])
+    st.dataframe(styled, use_container_width=True, hide_index=True,
+                 column_config=col_cfg if col_cfg else None)
+
+
 # ── Status columns list ───────────────────────────────────────────────────────
 status_cols=[c for c in (result_df.columns if not result_df.empty else []) if "Status" in c]
 
@@ -724,12 +763,11 @@ for status in STATUS_ORDER[:4]:
         grp=result_df[result_df["Revenue Status"]==status]
         if not grp.empty:
             st.markdown(f"### {status} ({len(grp)})")
-            st.dataframe(grp.style.map(color_status,subset=status_cols),
-                         use_container_width=True,hide_index=True)
+            _show_df(grp, status_cols)
 
 if not no_hist_df.empty:
     st.markdown(f"### No Historical Data ({len(no_hist_df)})")
-    st.dataframe(no_hist_df,use_container_width=True,hide_index=True)
+    _show_df(no_hist_df, [])
 
 # ── Average-based deep analysis ───────────────────────────────────────────────
 if show_avg_deep and not no_hist_df.empty:
@@ -759,8 +797,7 @@ if show_avg_deep and not no_hist_df.empty:
             grp=avg_df[avg_df["Revenue Status"]==status]
             if not grp.empty:
                 st.markdown(f"### {status} ({len(grp)})")
-                st.dataframe(grp.style.map(color_status,subset=avg_sc),
-                             use_container_width=True,hide_index=True)
+                _show_df(grp, avg_sc)
 
 # ── Excel download ────────────────────────────────────────────────────────────
 out=io.BytesIO()
