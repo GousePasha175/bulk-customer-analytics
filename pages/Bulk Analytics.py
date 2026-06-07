@@ -648,30 +648,53 @@ for _,row in daily_df.iterrows():
     hr=hm.iloc[0]
 
     # ── Default: previous month; fallback to last-FY average ─────────────────
-    exp_r_def=exp_t_def=None; def_used=prev_label
+    # Use FIXED column names so the table structure is always consistent.
+    # The actual source used is recorded in "Comparison Used".
+    exp_r_def=exp_t_def=None; def_used=prev_label; def_src=prev_label
+
     if has_prev:
         exp_r_def,exp_t_def=expected_from_month(hr,prev_rk,prev_tk,up_days,days_prev)
-    if exp_r_def is None:
-        # Fallback: last FY average
+        def_src=prev_label
+
+    # If revenue OR traffic is still None, try last-FY average
+    if exp_r_def is None and exp_t_def is None:
         exp_r_def,exp_t_def,n_r,n_t=avg_expected(hr,up_days,'last')
-        def_used=(f"Last FY avg ({n_r} mo)" if n_r else "No Historical Data")
-    if exp_r_def is None:
-        # Ultimate fallback: all available months average
+        if n_r or n_t:
+            def_src=f"Last FY avg ({max(n_r,n_t)} mo)"
+
+    # Ultimate fallback: all available months
+    if exp_r_def is None and exp_t_def is None:
         exp_r_def,exp_t_def,n_r,n_t=avg_expected(hr,up_days,None)
-        def_used=(f"All months avg ({n_r} mo)" if n_r else "No Historical Data")
+        if n_r or n_t:
+            def_src=f"All months avg ({max(n_r,n_t)} mo)"
 
-    rv_def=var(rev,exp_r_def); rs_def=classify(rv_def,sd_pct)
-    tv_def=var(trf,exp_t_def); ts_def=classify(tv_def,sd_pct)
+    # Independent revenue/traffic fallbacks:
+    # If only one of rev/trf is None, try to fill it separately
+    if exp_r_def is None and exp_t_def is not None:
+        tmp_r,_,nr2,_=avg_expected(hr,up_days,'last')
+        if tmp_r is None: tmp_r,_,nr2,_=avg_expected(hr,up_days,None)
+        exp_r_def=tmp_r
+    if exp_t_def is None and exp_r_def is not None:
+        _,tmp_t,_,nt2=avg_expected(hr,up_days,'last')
+        if tmp_t is None: _,tmp_t,_,nt2=avg_expected(hr,up_days,None)
+        exp_t_def=tmp_t
 
+    # Variance — only compute when expected value exists
+    rv_def = var(rev, exp_r_def) if exp_r_def else np.nan
+    tv_def = var(trf, exp_t_def) if exp_t_def else np.nan
+    rs_def = classify(rv_def, sd_pct)
+    ts_def = classify(tv_def, sd_pct)
+
+    # Fixed column names keyed to prev_label (always "Expected Rev (April 2026)" etc.)
     rec={"Customer ID":cid,"Customer Name":cnam,
          "Actual Revenue":round(rev),"Actual Traffic":round(trf),
-         f"Expected Rev ({def_used})":int(round(exp_r_def)) if exp_r_def else "",
-         "Revenue Variance %":rv_def if not pd.isna(rv_def) else "",
+         f"Expected Rev ({prev_label})":int(round(exp_r_def)) if exp_r_def else "",
+         "Revenue Variance %":round(rv_def,1) if not pd.isna(rv_def) else "",
          "Revenue Status":rs_def,
-         f"Expected Trf ({def_used})":int(round(exp_t_def)) if exp_t_def else "",
-         "Traffic Variance %":tv_def if not pd.isna(tv_def) else "",
+         f"Expected Trf ({prev_label})":int(round(exp_t_def)) if exp_t_def else "",
+         "Traffic Variance %":round(tv_def,1) if not pd.isna(tv_def) else "",
          "Traffic Status":ts_def,
-         "Comparison Used":def_used}
+         "Comparison Used":def_src}
 
     # ── Optional: last FY same month ──────────────────────────────────────────
     if cmp_last_fy:
