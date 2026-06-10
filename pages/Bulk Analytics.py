@@ -553,7 +553,7 @@ days_lfy  = calendar.monthrange(lfy_yr, lfy_mo)[1]
 # ── Variance helpers ──────────────────────────────────────────────────────────
 def var(actual, expected):
     if expected is None or expected==0: return np.nan
-    return round(((actual-expected)/expected)*100, 1)
+    return int(round(((actual-expected)/expected)*100))
 
 def expected_from_month(hist_row, rk, tk, period_days, month_days):
     """Scale monthly figure to uploaded period length."""
@@ -689,10 +689,10 @@ for _,row in daily_df.iterrows():
     rec={"Customer ID":cid,"Customer Name":cnam,
          "Actual Revenue":round(rev),"Actual Traffic":round(trf),
          f"Expected Rev ({prev_label})":int(round(exp_r_def)) if exp_r_def else "",
-         "Revenue Variance %":round(rv_def,1) if not pd.isna(rv_def) else "",
+         "Revenue Variance %":int(round(rv_def)) if not pd.isna(rv_def) else "",
          "Revenue Status":rs_def,
          f"Expected Trf ({prev_label})":int(round(exp_t_def)) if exp_t_def else "",
-         "Traffic Variance %":round(tv_def,1) if not pd.isna(tv_def) else "",
+         "Traffic Variance %":int(round(tv_def)) if not pd.isna(tv_def) else "",
          "Traffic Status":ts_def,
          "Comparison Used":def_src}
 
@@ -707,10 +707,10 @@ for _,row in daily_df.iterrows():
             lfy_used=(f"Last FY avg ({n_r} mo)" if n_r else "No Historical Data")
         rv_lfy=var(rev,exp_r_lfy); tv_lfy=var(trf,exp_t_lfy)
         rec[f"Exp Rev ({lfy_label})"]=int(round(exp_r_lfy)) if exp_r_lfy else ""
-        rec[f"Rev Var % ({lfy_label})"]=rv_lfy if not pd.isna(rv_lfy) else ""
+        rec[f"Rev Var % ({lfy_label})"]=int(round(rv_lfy)) if not pd.isna(rv_lfy) else ""
         rec[f"Rev Status ({lfy_label})"]=classify(rv_lfy,sd_pct)
         rec[f"Exp Trf ({lfy_label})"]=int(round(exp_t_lfy)) if exp_t_lfy else ""
-        rec[f"Trf Var % ({lfy_label})"]=tv_lfy if not pd.isna(tv_lfy) else ""
+        rec[f"Trf Var % ({lfy_label})"]=int(round(tv_lfy)) if not pd.isna(tv_lfy) else ""
         rec[f"Trf Status ({lfy_label})"]=classify(tv_lfy,sd_pct)
 
     # ── Optional: highest month per customer ──────────────────────
@@ -724,10 +724,10 @@ for _,row in daily_df.iterrows():
             rv_h=var(rev,exp_r_h); tv_h=var(trf,exp_t_h)
             rec[f"Highest month"]=h_lbl
             rec[f"Exp Rev (Highest)"]=int(round(exp_r_h)) if exp_r_h else ""
-            rec[f"Rev Var % (Highest)"]=rv_h if not pd.isna(rv_h) else ""
+            rec[f"Rev Var % (Highest)"]=int(round(rv_h)) if not pd.isna(rv_h) else ""
             rec[f"Rev Status (Highest)"]=classify(rv_h,sd_pct)
             rec[f"Exp Trf (Highest)"]=int(round(exp_t_h)) if exp_t_h else ""
-            rec[f"Trf Var % (Highest)"]=tv_h if not pd.isna(tv_h) else ""
+            rec[f"Trf Var % (Highest)"]=int(round(tv_h)) if not pd.isna(tv_h) else ""
             rec[f"Trf Status (Highest)"]=classify(tv_h,sd_pct)
         else:
             rec["Highest month"]="No data"
@@ -745,7 +745,7 @@ def _fmt_val(val, col):
     try:
         f = float(val)
         if "Variance" in col or (col.endswith("%") and "Status" not in col):
-            return round(f, 1)
+            return int(round(f))
         if any(k in col for k in ["Revenue","Traffic","Expected","Actual"]):
             return int(round(f))
         return val
@@ -790,9 +790,25 @@ status_cols=[c for c in (result_df.columns if not result_df.empty else []) if "S
 
 # ── Display ───────────────────────────────────────────────────────────────────
 st.subheader("Customer Analytics")
+
+# Merge any "No Historical Data" rows from result_df into no_hist_df
+# (customers matched in master but with no usable data for any period)
+if not result_df.empty:
+    nhd_in_results = result_df[result_df["Revenue Status"] == "No Historical Data"]
+    if not nhd_in_results.empty:
+        # Keep only basic cols to unify with no_hist_df
+        nhd_basic = nhd_in_results[["Customer ID","Customer Name",
+                                     "Actual Revenue","Actual Traffic",
+                                     "Revenue Status","Traffic Status"]].copy()
+        no_hist_df = pd.concat([no_hist_df, nhd_basic], ignore_index=True)
+        result_df  = result_df[result_df["Revenue Status"] != "No Historical Data"]
+
+# Total count check
+total_shown = (len(result_df) if not result_df.empty else 0) + len(no_hist_df)
+
 for status in STATUS_ORDER[:4]:
     if not result_df.empty:
-        grp=result_df[result_df["Revenue Status"]==status]
+        grp = result_df[result_df["Revenue Status"] == status]
         if not grp.empty:
             st.markdown(f"### {status} ({len(grp)})")
             _show_df(grp, status_cols)
@@ -818,9 +834,9 @@ if show_avg_deep and not no_hist_df.empty:
         rv=var(rev_v,exp_r); tv=var(trf_v,exp_t)
         avg_rows.append({"Customer ID":cid,"Customer Name":cnam,
             "Actual Revenue":int(round(rev_v)),"Expected Revenue":int(round(exp_r)) if exp_r else "",
-            "Revenue Variance %":rv if not pd.isna(rv) else "","Revenue Status":classify(rv,sd_pct),
+            "Revenue Variance %":int(round(rv)) if not pd.isna(rv) else "","Revenue Status":classify(rv,sd_pct),
             "Actual Traffic":int(round(trf_v)),"Expected Traffic":int(round(exp_t)) if exp_t else "",
-            "Traffic Variance %":tv if not pd.isna(tv) else "","Traffic Status":classify(tv,sd_pct),
+            "Traffic Variance %":int(round(tv)) if not pd.isna(tv) else "","Traffic Status":classify(tv,sd_pct),
             "Months Avg (Rev)":n_r,"Months Avg (Trf)":n_t})
     avg_df=pd.DataFrame(avg_rows)
     if not avg_df.empty:
