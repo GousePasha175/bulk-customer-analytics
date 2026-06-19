@@ -15,10 +15,10 @@ def _render_nav():
            text-transform:uppercase;letter-spacing:1px;margin:0 0 4px 0;'>Pages</p>
         </div>""", unsafe_allow_html=True)
     st.sidebar.page_link("Analytics_Excel.py", label="\U0001f512 Login")
-    for pat,lbl in [("pages/Bulk_Analytics.py|pages/*[Bb]ulk*.py","\U0001f4ca Bulk Customer Analytics"),
+    for pat,lbl in [("pages/Bulk Analytics.py|pages/*[Bb]ulk*.py","\U0001f4ca Bulk Customer Analytics"),
                     ("pages/POSB Daily Report.py|pages/*[Pp][Oo][Ss][Bb]*.py","\U0001f4ee POSB Daily Report"),
                     ("pages/1_Digital_Transactions.py|pages/*[Dd]igital*.py","\U0001f4bb Digital Transactions"),
-                    ("pages/Delivery_Productivity.py|pages/*[Dd]elivery*.py", "\U0001f4e6 Delivery Productivity")]:
+                    ("pages/Delivery Productivity.py|pages/*[Dd]elivery*.py", "\U0001f4e6 Delivery Productivity")]:
         hits=[]
         for p in pat.split("|"): hits+=_glob.glob(p)
         if hits: st.sidebar.page_link(hits[0].replace("\\","/"),label=lbl)
