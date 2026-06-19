@@ -17,7 +17,8 @@ def _render_nav():
     st.sidebar.page_link("Analytics_Excel.py", label="\U0001f512 Login")
     for pat,lbl in [("pages/Bulk_Analytics.py|pages/*[Bb]ulk*.py","\U0001f4ca Bulk Customer Analytics"),
                     ("pages/POSB Daily Report.py|pages/*[Pp][Oo][Ss][Bb]*.py","\U0001f4ee POSB Daily Report"),
-                    ("pages/1_Digital_Transactions.py|pages/*[Dd]igital*.py","\U0001f4bb Digital Transactions")]:
+                    ("pages/1_Digital_Transactions.py|pages/*[Dd]igital*.py","\U0001f4bb Digital Transactions"),
+                    ("pages/Delivery Productivity.py|pages/*[Dd]el*.py","\U0001f4cc Delivery Productivity")]:
         hits=[]
         for p in pat.split("|"): hits+=_glob.glob(p)
         if hits: st.sidebar.page_link(hits[0].replace("\\","/"),label=lbl)
