@@ -10,6 +10,10 @@ def _render_nav():
            text-transform:uppercase;letter-spacing:1px;margin:0 0 4px 0;'>Pages</p>
         </div>""", unsafe_allow_html=True)
     st.sidebar.page_link("Analytics_Excel.py", label="\U0001f3e0 Home")
+    _bulk = (_glob.glob("pages/Bulk Analytics.py") +
+             _glob.glob("pages/*[Bb]ulk*.py"))
+    if _bulk:
+        st.sidebar.page_link(_bulk[0].replace("\\", "/"), label="\U0001f4ca Bulk Customer Analytics")
     _posb = (_glob.glob("pages/POSB Daily Report.py") +
              _glob.glob("pages/*[Pp][Oo][Ss][Bb]*.py"))
     if _posb:
