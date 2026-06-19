@@ -19,6 +19,11 @@ def _render_nav():
     if _dig:
         st.sidebar.page_link(_dig[0].replace("\\", "/"), label="\U0001f4bb Digital Transactions")
     st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
+    _del = (_glob.glob("pages/Delivery_Productivity.py") +
+            _glob.glob("pages/*[Dd]elivery*.py"))
+    if _del:
+        st.sidebar.page_link(_del[0].replace("\\", "/"), label="\U0001f4e6 Delivery Productivity")
+    st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
 
 import pandas as pd
 import io, os, re
