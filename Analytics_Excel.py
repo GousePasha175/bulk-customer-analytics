@@ -27,6 +27,7 @@ def _render_nav():
             _glob.glob("pages/*[Dd]elivery*.py"))
     if _del:
         st.sidebar.page_link(_del[0].replace("\\", "/"), label="\U0001f4e6 Delivery Productivity")
+        st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
 
 from PIL import Image
 
