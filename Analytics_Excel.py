@@ -10,7 +10,7 @@ def _render_nav():
            text-transform:uppercase;letter-spacing:1px;margin:0 0 4px 0;'>Pages</p>
         </div>""", unsafe_allow_html=True)
     st.sidebar.page_link("Analytics_Excel.py", label="\U0001f512 Login")
-    _bulk = (_glob.glob("pages/Bulk_Analytics.py") +
+    _bulk = (_glob.glob("pages/Bulk Analytics.py") +
              _glob.glob("pages/*[Bb]ulk*.py"))
     if _bulk:
         st.sidebar.page_link(_bulk[0].replace("\\", "/"), label="\U0001f4ca Bulk Customer Analytics")
@@ -23,7 +23,7 @@ def _render_nav():
     if _dig:
         st.sidebar.page_link(_dig[0].replace("\\", "/"), label="\U0001f4bb Digital Transactions")
     st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
-    _del = (_glob.glob("pages/Delivery_Productivity.py") +
+    _del = (_glob.glob("pages/Delivery Productivity.py") +
             _glob.glob("pages/*[Dd]elivery*.py"))
     if _del:
         st.sidebar.page_link(_del[0].replace("\\", "/"), label="\U0001f4e6 Delivery Productivity")
