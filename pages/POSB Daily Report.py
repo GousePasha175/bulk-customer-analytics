@@ -662,7 +662,7 @@ def main():
         st.header("Division-wise Summary Reports")
         st.subheader("📂 Upload Summary Files")
 
-        col1, col2 = st.columns(2)
+        col1, col2, col3, col4 = st.columns(4)
 
         with col1:
             ao_date_file = st.file_uploader(
@@ -677,8 +677,6 @@ def main():
                 type=["xlsx", "xls"],
                 key="net_date"
             )
-        
-        col3, col4 = st.columns(2)
         
         with col3:
             ao_file = st.file_uploader(
