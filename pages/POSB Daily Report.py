@@ -503,7 +503,7 @@ def main():
 
         report_option = st.radio(
             "Select Report",
-            ["Office wise Range Report", "Division wise Summary Reports"]
+            ["Division wise Summary Reports", "Office wise Range Report"]
         )
     
         st.markdown("---")
