@@ -613,7 +613,31 @@ def main():
             # ── Display Table ─────────────────────────────────────────
             elif report_option == "Division wise Summary Reports":
                 st.subheader(f"Division-wise Summary — {len(division_dfs)} Division(s) loaded")
-    
+                st.subheader("📂 Upload Summary Files")
+            
+                ao_date_file = st.file_uploader(
+                    "1. Account opened on Date",
+                    type=["xlsx", "xls"],
+                    key="ao_date"
+                )
+            
+                net_date_file = st.file_uploader(
+                    "2. Net Accounts on Date",
+                    type=["xlsx", "xls"],
+                    key="net_date"
+                )
+            
+                ao_file = st.file_uploader(
+                    "3. Accounts opened up to Date",
+                    type=["xlsx", "xls"],
+                    key="ao_upto"
+                )
+            
+                net_file = st.file_uploader(
+                    "4. Net Accounts opened up to Date",
+                    type=["xlsx", "xls"],
+                    key="net_upto"
+                )
                 # Styled display
                 display_df = range_df.copy()
                 total_row = {
