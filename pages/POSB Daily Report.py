@@ -666,28 +666,28 @@ def main():
         date_str = report_date.strftime('%d.%m.%Y')
         with col1:
             ao_date_file = st.file_uploader(
-                f"1. Account opened on Date",
+                f"1. Account opened on {date_str}",
                 type=["xlsx", "xls"],
                 key="ao_date"
             )
         
         with col2:
             net_date_file = st.file_uploader(
-                f"2. Net Accounts on Date",
+                f"2. Net Accounts on {date_str}",
                 type=["xlsx", "xls"],
                 key="net_date"
             )
         
         with col3:
             ao_file = st.file_uploader(
-                f"3. Accounts opened up to Date",
+                f"3. Accounts opened up to {date_str}",
                 type=["xlsx", "xls"],
                 key="ao_upto"
             )
         
         with col4:
             net_file = st.file_uploader(
-                f"4. Net Accounts opened up to Date",
+                f"4. Net Accounts opened up to {date_str}",
                 type=["xlsx", "xls"],
                 key="net_upto"
             )
