@@ -536,38 +536,38 @@ def main():
                  "Daily target = (Proportionate Target – Net Addition as on date) ÷ working days left"
         )
 
-        st.markdown("---")
-        st.subheader("📂 Upload Division Files")
-        st.caption("Product Wise A/C Report – one per Division")
+        # st.markdown("---")
+        # st.subheader("📂 Upload Division Files")
+        # st.caption("Product Wise A/C Report – one per Division")
 
-        div_files = {}
-        for div in DIVISIONS:
-            div_files[div] = st.file_uploader(
-                f"{div}", type=["xlsx", "xls"], key=f"div_{div}"
-            )
+        # div_files = {}
+        # for div in DIVISIONS:
+        #     div_files[div] = st.file_uploader(
+        #         f"{div}", type=["xlsx", "xls"], key=f"div_{div}"
+        #     )
 
-        st.markdown("---")
-        st.subheader("📂 Upload Summary Files")
-        st.caption(
-            "Upload four files for the Division-wise Summary Report. "
-            "Each file: Column 1 = Name, Column 2 = Accounts Opened / Net Accounts."
-        )
-        ao_date_file = st.file_uploader(
-            f"Accounts Opened on {report_date.strftime('%d.%m.%Y')} (daily)",
-            type=["xlsx", "xls"], key="ao_date_file"
-        )
-        ao_file = st.file_uploader(
-            f"Accounts Opened up to {report_date.strftime('%d.%m.%Y')} (cumulative)",
-            type=["xlsx", "xls"], key="ao_file"
-        )
-        net_date_file = st.file_uploader(
-            f"Net Accounts on {report_date.strftime('%d.%m.%Y')} (daily)",
-            type=["xlsx", "xls"], key="net_date_file"
-        )
-        net_file = st.file_uploader(
-            f"Net Accounts up to {report_date.strftime('%d.%m.%Y')} (cumulative FY)",
-            type=["xlsx", "xls"], key="net_file"
-        )
+        # st.markdown("---")
+        # st.subheader("📂 Upload Summary Files")
+        # st.caption(
+        #     "Upload four files for the Division-wise Summary Report. "
+        #     "Each file: Column 1 = Name, Column 2 = Accounts Opened / Net Accounts."
+        # )
+        # ao_date_file = st.file_uploader(
+        #     f"Accounts Opened on {report_date.strftime('%d.%m.%Y')} (daily)",
+        #     type=["xlsx", "xls"], key="ao_date_file"
+        # )
+        # ao_file = st.file_uploader(
+        #     f"Accounts Opened up to {report_date.strftime('%d.%m.%Y')} (cumulative)",
+        #     type=["xlsx", "xls"], key="ao_file"
+        # )
+        # net_date_file = st.file_uploader(
+        #     f"Net Accounts on {report_date.strftime('%d.%m.%Y')} (daily)",
+        #     type=["xlsx", "xls"], key="net_date_file"
+        # )
+        # net_file = st.file_uploader(
+        #     f"Net Accounts up to {report_date.strftime('%d.%m.%Y')} (cumulative FY)",
+        #     type=["xlsx", "xls"], key="net_file"
+        # )
 
     # ── Main Area ─────────────────────────────────────────────────────────────
     st.title("📊 POSB Accounts Daily Report")
