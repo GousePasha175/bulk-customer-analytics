@@ -493,11 +493,6 @@ def main():
     with st.sidebar:
         # ── Navigation ───────────────────────────────────────────────────────
         _render_nav()
-        report_option = st.radio(
-            "Select Report",
-            ["Office wise Range Report", "Division wise Summary Reports"]
-            )
-    
         # ─────────────────────────────────────────────────────────────────────
 
         # ── Logo (use local assets/logo.png if available, else text only) ──────
@@ -505,7 +500,13 @@ def main():
         if _os.path.exists("assets/logo.png"):
             st.image("assets/logo.png", width=80)
         st.title("📮 POSB Daily Report")
-        st.markdown("---")
+
+        report_option = st.radio(
+            "Select Report",
+            ["Office wise Range Report", "Division wise Summary Reports"]
+            )
+    
+                st.markdown("---")
         st.subheader("📅 Report Parameters")
 
         report_date = st.date_input("Report Date", value=date.today())
@@ -613,34 +614,34 @@ def main():
             if division_dfs:
                 range_df = build_range_report(division_dfs)
 
-            # ── Display Table ─────────────────────────────────────────
-            elif report_option == "Division wise Summary Reports":
-                st.subheader(f"Division-wise Summary — {len(division_dfs)} Division(s) loaded")
-                st.subheader("📂 Upload Summary Files")
+            # # ── Display Table ─────────────────────────────────────────
+            # elif report_option == "Division wise Summary Reports":
+            #     st.subheader(f"Division-wise Summary — {len(division_dfs)} Division(s) loaded")
+            #     st.subheader("📂 Upload Summary Files")
             
-                ao_date_file = st.file_uploader(
-                    "1. Account opened on Date",
-                    type=["xlsx", "xls"],
-                    key="ao_date"
-                )
+            #     ao_date_file = st.file_uploader(
+            #         "1. Account opened on Date",
+            #         type=["xlsx", "xls"],
+            #         key="ao_date"
+            #     )
             
-                net_date_file = st.file_uploader(
-                    "2. Net Accounts on Date",
-                    type=["xlsx", "xls"],
-                    key="net_date"
-                )
+            #     net_date_file = st.file_uploader(
+            #         "2. Net Accounts on Date",
+            #         type=["xlsx", "xls"],
+            #         key="net_date"
+            #     )
             
-                ao_file = st.file_uploader(
-                    "3. Accounts opened up to Date",
-                    type=["xlsx", "xls"],
-                    key="ao_upto"
-                )
+            #     ao_file = st.file_uploader(
+            #         "3. Accounts opened up to Date",
+            #         type=["xlsx", "xls"],
+            #         key="ao_upto"
+            #     )
             
-                net_file = st.file_uploader(
-                    "4. Net Accounts opened up to Date",
-                    type=["xlsx", "xls"],
-                    key="net_upto"
-                )
+            #     net_file = st.file_uploader(
+            #         "4. Net Accounts opened up to Date",
+            #         type=["xlsx", "xls"],
+            #         key="net_upto"
+            #     )
                 # Styled display
                 display_df = range_df.copy()
                 total_row = {
