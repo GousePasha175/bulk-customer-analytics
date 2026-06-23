@@ -611,48 +611,48 @@ def main():
                 range_df = build_range_report(division_dfs)
 
             # ── Display Table ─────────────────────────────────────────
-        elif report_option == "Division wise Summary Reports":
-            st.subheader(f"Division-wise Summary — {len(division_dfs)} Division(s) loaded")
-
-            # Styled display
-            display_df = range_df.copy()
-            total_row = {
-                "Sl. No": "",
-                "Division": "TOTAL",
-                "Total Accounts Opened": display_df["Total Accounts Opened"].sum(),
-            }
-            for r in RANGES:
-                total_row[r] = display_df[r].sum()
-            display_df = pd.concat([display_df, pd.DataFrame([total_row])], ignore_index=True)
-
-            st.dataframe(
-                display_df.style
-                    .set_properties(**{"text-align": "center"})
-                    .apply(lambda x: ["background-color: #FFF2CC; font-weight: bold"
-                                      if x.name == len(display_df) - 1 else ""
-                                      for _ in x], axis=1),
-                use_container_width=True,
-                hide_index=True,
-            )
-
-            # ── Per-division detailed breakdown ───────────────────────
-            with st.expander("🔍 Detailed Office-wise Breakdown per Division"):
-                for div, df in division_dfs.items():
-                    st.markdown(f"**{div} Division**")
-                    df["Total Accounts"] = df[ACCOUNT_COLS].sum(axis=1)
-                    df["Range"] = df["Total Accounts"].apply(classify_range)
-                    show_cols = ["Name"] + ACCOUNT_COLS + ["Total Accounts", "Range"]
-                    existing = [c for c in show_cols if c in df.columns]
-                    st.dataframe(df[existing], use_container_width=True, hide_index=True)
-
-            # ── Download ──────────────────────────────────────────────
-            excel_bytes = export_range_report_excel(range_df, division_dfs)
-            st.download_button(
-                label="⬇️ Download Range Report as Excel",
-                data=excel_bytes,
-                file_name=f"Office_Range_Report_{report_date.strftime('%d%m%Y')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
+            elif report_option == "Division wise Summary Reports":
+                st.subheader(f"Division-wise Summary — {len(division_dfs)} Division(s) loaded")
+    
+                # Styled display
+                display_df = range_df.copy()
+                total_row = {
+                    "Sl. No": "",
+                    "Division": "TOTAL",
+                    "Total Accounts Opened": display_df["Total Accounts Opened"].sum(),
+                }
+                for r in RANGES:
+                    total_row[r] = display_df[r].sum()
+                display_df = pd.concat([display_df, pd.DataFrame([total_row])], ignore_index=True)
+    
+                st.dataframe(
+                    display_df.style
+                        .set_properties(**{"text-align": "center"})
+                        .apply(lambda x: ["background-color: #FFF2CC; font-weight: bold"
+                                          if x.name == len(display_df) - 1 else ""
+                                          for _ in x], axis=1),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+    
+                # ── Per-division detailed breakdown ───────────────────────
+                with st.expander("🔍 Detailed Office-wise Breakdown per Division"):
+                    for div, df in division_dfs.items():
+                        st.markdown(f"**{div} Division**")
+                        df["Total Accounts"] = df[ACCOUNT_COLS].sum(axis=1)
+                        df["Range"] = df["Total Accounts"].apply(classify_range)
+                        show_cols = ["Name"] + ACCOUNT_COLS + ["Total Accounts", "Range"]
+                        existing = [c for c in show_cols if c in df.columns]
+                        st.dataframe(df[existing], use_container_width=True, hide_index=True)
+    
+                # ── Download ──────────────────────────────────────────────
+                excel_bytes = export_range_report_excel(range_df, division_dfs)
+                st.download_button(
+                    label="⬇️ Download Range Report as Excel",
+                    data=excel_bytes,
+                    file_name=f"Office_Range_Report_{report_date.strftime('%d%m%Y')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
 
     # ════════════════════════════════════════════════════════════════════════
     # TAB 2 – Division-wise Summary Reports
