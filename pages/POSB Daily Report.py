@@ -504,9 +504,9 @@ def main():
         report_option = st.radio(
             "Select Report",
             ["Office wise Range Report", "Division wise Summary Reports"]
-            )
+        )
     
-                st.markdown("---")
+        st.markdown("---")
         st.subheader("📅 Report Parameters")
 
         report_date = st.date_input("Report Date", value=date.today())
