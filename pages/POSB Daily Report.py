@@ -580,25 +580,35 @@ def main():
     # TAB 1 – Range Report
     # ════════════════════════════════════════════════════════════════════════
     #with tab1:#
-    st.header(f"Office-wise Range of Accounts Opened – as on {report_date.strftime('%d.%m.%Y')}")
-    st.info(
-        "Upload the **Product Wise A/C Report** for each Division in the sidebar. "
-        "The report counts only account category groups (MIS, PPFGP, SSA, RD, SBBAS, SBSGP, SCSS, TD). "
-        "DC offices are excluded."
-    )
-
-    uploaded_divs = {d: f for d, f in div_files.items() if f is not None}
-    if not uploaded_divs:
-        st.warning("Please upload at least one Division file from the sidebar to generate this report.")
-    else:
-        division_dfs = {}
-        for div, f in uploaded_divs.items():
-            df = parse_product_report(f, div)
-            if df is not None:
-                division_dfs[div] = df
-
-        if division_dfs:
-            range_df = build_range_report(division_dfs)
+    if report_option == "Office wise Range Report":
+        st.header(f"Office-wise Range of Accounts Opened – as on {report_date.strftime('%d.%m.%Y')}")
+        st.subheader("📂 Upload Division Files")
+        div_files = {}
+    
+        for div in DIVISIONS:
+            div_files[div] = st.file_uploader(
+                f"Upload {div}",
+                type=["xlsx", "xls"],
+                key=f"div_{div}"
+            )
+        st.info(
+            "Upload the **Product Wise A/C Report** for each Division in the sidebar. "
+            "The report counts only account category groups (MIS, PPFGP, SSA, RD, SBBAS, SBSGP, SCSS, TD). "
+            "DC offices are excluded."
+        )
+    
+        uploaded_divs = {d: f for d, f in div_files.items() if f is not None}
+        if not uploaded_divs:
+            st.warning("Please upload at least one Division file from the sidebar to generate this report.")
+        else:
+            division_dfs = {}
+            for div, f in uploaded_divs.items():
+                df = parse_product_report(f, div)
+                if df is not None:
+                    division_dfs[div] = df
+    
+            if division_dfs:
+                range_df = build_range_report(division_dfs)
 
             # ── Display Table ─────────────────────────────────────────
             st.subheader(f"Division-wise Summary — {len(division_dfs)} Division(s) loaded")
