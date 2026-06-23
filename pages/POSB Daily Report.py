@@ -684,7 +684,8 @@ def main():
     # ════════════════════════════════════════════════════════════════════════
     # TAB 2 – Division-wise Summary Reports
     # ════════════════════════════════════════════════════════════════════════
-    #with tab2:#
+    # TAB 2 – Division-wise Summary Reports
+    elif report_option == "Division wise Summary Reports":
     st.header("Division-wise Summary Reports")
 
     st.info(
