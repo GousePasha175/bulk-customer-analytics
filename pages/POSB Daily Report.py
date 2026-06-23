@@ -662,29 +662,37 @@ def main():
         st.header("Division-wise Summary Reports")
         st.subheader("📂 Upload Summary Files")
 
-        ao_date_file = st.file_uploader(
-            "1. Account opened on Date",
-            type=["xlsx", "xls"],
-            key="ao_date"
-        )
+        col1, col2 = st.columns(2)
 
-        net_date_file = st.file_uploader(
-            "2. Net Accounts on Date",
-            type=["xlsx", "xls"],
-            key="net_date"
-        )
-
-        ao_file = st.file_uploader(
-            "3. Accounts opened up to Date",
-            type=["xlsx", "xls"],
-            key="ao_upto"
-        )
-
-        net_file = st.file_uploader(
-            "4. Net Accounts opened up to Date",
-            type=["xlsx", "xls"],
-            key="net_upto"
-        )
+        with col1:
+            ao_date_file = st.file_uploader(
+                "1. Account opened on Date",
+                type=["xlsx", "xls"],
+                key="ao_date"
+            )
+        
+        with col2:
+            net_date_file = st.file_uploader(
+                "2. Net Accounts on Date",
+                type=["xlsx", "xls"],
+                key="net_date"
+            )
+        
+        col3, col4 = st.columns(2)
+        
+        with col3:
+            ao_file = st.file_uploader(
+                "3. Accounts opened up to Date",
+                type=["xlsx", "xls"],
+                key="ao_upto"
+            )
+        
+        with col4:
+            net_file = st.file_uploader(
+                "4. Net Accounts opened up to Date",
+                type=["xlsx", "xls"],
+                key="net_upto"
+            )
     
         # st.info(
         #     "📋 **Tab 1** (Office-wise Range Report) uses the Division-wise Product files uploaded in the sidebar.  \n"
