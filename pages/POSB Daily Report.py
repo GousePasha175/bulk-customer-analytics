@@ -686,10 +686,10 @@ def main():
             key="net_upto"
         )
     
-        st.info(
-            "📋 **Tab 1** (Office-wise Range Report) uses the Division-wise Product files uploaded in the sidebar.  \n"
-            "📋 **Tab 2** (Division-wise Summary Reports) uses the Accounts Opened Details and Net Addition files below."
-        )
+        # st.info(
+        #     "📋 **Tab 1** (Office-wise Range Report) uses the Division-wise Product files uploaded in the sidebar.  \n"
+        #     "📋 **Tab 2** (Division-wise Summary Reports) uses the Accounts Opened Details and Net Addition files below."
+        # )
         # Parse whichever files were uploaded (all optional; show partial results)
         def _parse_or_none(f):
             if f is None: return None
