@@ -590,11 +590,16 @@ def main():
         div_files = {}
     
         for div in DIVISIONS:
-            div_files[div] = st.file_uploader(
-                f"Upload {div}",
-                type=["xlsx", "xls"],
-                key=f"div_{div}"
-            )
+            div_files = {}
+            cols = st.columns(len(DIVISIONS))   # one column per division
+            
+            for i, div in enumerate(DIVISIONS):
+                with cols[i]:
+                    div_files[div] = st.file_uploader(
+                        div,   # shorter label looks better
+                        type=["xlsx", "xls"],
+                        key=f"div_{div}"
+                    )
         st.info(
             "Upload the **Product Wise A/C Report** for each Division in the sidebar. "
             "The report counts only account category groups (MIS, PPFGP, SSA, RD, SBBAS, SBSGP, SCSS, TD). "
