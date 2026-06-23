@@ -663,7 +663,7 @@ def main():
         st.subheader("📂 Upload Summary Files")
 
         col1, col2, col3, col4 = st.columns(4)
-
+        date_str = report_date.strftime('%d.%m.%Y')
         with col1:
             ao_date_file = st.file_uploader(
                 "1. Account opened on Date",
