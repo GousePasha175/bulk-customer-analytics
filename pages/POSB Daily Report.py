@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from io import BytesIO
 import xlsxwriter
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import calendar
 import glob as _glob
 
@@ -509,7 +509,13 @@ def main():
         st.markdown("---")
         st.subheader("📅 Report Parameters")
 
-        report_date = st.date_input("Report Date", value=date.today())
+        today = date.today()
+
+        if today.weekday() == 0:   # Monday = 0
+            default_report_date = today - timedelta(days=2)   # Saturday
+        else:
+            default_report_date = today - timedelta(days=1)
+        report_date = st.date_input("Report Date", value=default_report_date)
 
         month_options = list(MONTH_TO_IDX.keys())
         # Default to report_date month name
