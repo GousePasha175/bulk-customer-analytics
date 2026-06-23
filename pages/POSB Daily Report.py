@@ -490,6 +490,11 @@ def main():
     with st.sidebar:
         # ── Navigation ───────────────────────────────────────────────────────
         _render_nav()
+             report_option = st.radio(
+            "Select Report",
+            ["Office wise Range Report", "Division wise Summary Reports"]
+        )
+    
         # ─────────────────────────────────────────────────────────────────────
 
         # ── Logo (use local assets/logo.png if available, else text only) ──────
