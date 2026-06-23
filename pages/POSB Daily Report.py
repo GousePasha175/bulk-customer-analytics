@@ -485,7 +485,10 @@ def build_scheme_wise(accounts_opened_df: pd.DataFrame) -> pd.DataFrame:
 
 def main():
     # set_page_config already called at module level above
-
+    ao_date_file = None
+    net_date_file = None
+    ao_file = None
+    net_file = None
     # ── Sidebar ──────────────────────────────────────────────────────────────
     with st.sidebar:
         # ── Navigation ───────────────────────────────────────────────────────
