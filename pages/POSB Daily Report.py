@@ -611,6 +611,7 @@ def main():
                 range_df = build_range_report(division_dfs)
 
             # ── Display Table ─────────────────────────────────────────
+        elif report_option == "Division wise Summary Reports":
             st.subheader(f"Division-wise Summary — {len(division_dfs)} Division(s) loaded")
 
             # Styled display
