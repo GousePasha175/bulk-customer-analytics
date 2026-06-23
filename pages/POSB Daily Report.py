@@ -603,7 +603,7 @@ def main():
     
         uploaded_divs = {d: f for d, f in div_files.items() if f is not None}
         if not uploaded_divs:
-            st.warning("Please upload at least one Division file from the sidebar to generate this report.")
+            st.warning("Please upload at least one Division file above to generate this report.")
         else:
             division_dfs = {}
             for div, f in uploaded_divs.items():
@@ -614,35 +614,7 @@ def main():
             if division_dfs:
                 range_df = build_range_report(division_dfs)
 
-            # # ── Display Table ─────────────────────────────────────────
-            # elif report_option == "Division wise Summary Reports":
-            #     st.subheader(f"Division-wise Summary — {len(division_dfs)} Division(s) loaded")
-            #     st.subheader("📂 Upload Summary Files")
-            
-            #     ao_date_file = st.file_uploader(
-            #         "1. Account opened on Date",
-            #         type=["xlsx", "xls"],
-            #         key="ao_date"
-            #     )
-            
-            #     net_date_file = st.file_uploader(
-            #         "2. Net Accounts on Date",
-            #         type=["xlsx", "xls"],
-            #         key="net_date"
-            #     )
-            
-            #     ao_file = st.file_uploader(
-            #         "3. Accounts opened up to Date",
-            #         type=["xlsx", "xls"],
-            #         key="ao_upto"
-            #     )
-            
-            #     net_file = st.file_uploader(
-            #         "4. Net Accounts opened up to Date",
-            #         type=["xlsx", "xls"],
-            #         key="net_upto"
-            #     )
-                # Styled display
+            # Styled display
                 display_df = range_df.copy()
                 total_row = {
                     "Sl. No": "",
@@ -688,6 +660,31 @@ def main():
     # TAB 2 – Division-wise Summary Reports
     elif report_option == "Division wise Summary Reports":
         st.header("Division-wise Summary Reports")
+        st.subheader("📂 Upload Summary Files")
+
+        ao_date_file = st.file_uploader(
+            "1. Account opened on Date",
+            type=["xlsx", "xls"],
+            key="ao_date"
+        )
+
+        net_date_file = st.file_uploader(
+            "2. Net Accounts on Date",
+            type=["xlsx", "xls"],
+            key="net_date"
+        )
+
+        ao_file = st.file_uploader(
+            "3. Accounts opened up to Date",
+            type=["xlsx", "xls"],
+            key="ao_upto"
+        )
+
+        net_file = st.file_uploader(
+            "4. Net Accounts opened up to Date",
+            type=["xlsx", "xls"],
+            key="net_upto"
+        )
     
         st.info(
             "📋 **Tab 1** (Office-wise Range Report) uses the Division-wise Product files uploaded in the sidebar.  \n"
@@ -706,7 +703,7 @@ def main():
     
         any_summary_file = any(f is not None for f in [ao_date_file, ao_file, net_date_file, net_file])
         if not any_summary_file:
-            st.warning("Please upload at least one Summary file from the sidebar to generate this report.")
+            st.warning("Please upload at least one Summary file above to generate this report.")
         else:
                 # ── Table 1: Daily Summary ─────────────────────────────────
                 st.subheader(
