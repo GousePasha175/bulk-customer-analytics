@@ -278,6 +278,9 @@ st.dataframe(
 st.subheader(
     f"List of offices not marked attendance in AEBAS portal as on {report_date.strftime('%d.%m.%Y')}"
 )
+summary_df["% Implemented AEBAS"] = summary_df["% Implemented AEBAS"].map(
+    lambda x: f"{x:.2f}"
+)
 st.dataframe(
     pending_df,
     use_container_width=True,
