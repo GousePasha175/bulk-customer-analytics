@@ -190,6 +190,22 @@ office_master["division"] = office_master["division"].replace({
     "SECUNDERABAD Dvn": "Secunderabad Division",
     "Hyderabad South East": "Hyderabad South East Division"
 })
+problem_rows = office_master[
+    office_master["division"].isna() |
+    (office_master["division"].astype(str).str.strip() == "") |
+    (office_master["division"].astype(str).str.lower().str.strip() == "undefined")
+]
+
+st.subheader("Debug: Problem Division Rows")
+st.dataframe(
+    problem_rows[[
+        "office-name",
+        "division",
+        "division-office-name"
+    ]],
+    use_container_width=True,
+    hide_index=True
+)
 # ================= READ AEBAS =================
 aebas = pd.read_csv(aebas_file)
 aebas.columns = [c.strip() for c in aebas.columns]
