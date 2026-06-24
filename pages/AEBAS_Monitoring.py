@@ -157,7 +157,10 @@ office_master["division"] = office_master["office_norm"].map(division_map)
 office_master["division"] = office_master["division"].fillna(
     office_master["division-office-name"]
 )
-
+office_master["division"] = office_master["division"].replace({
+    "SECUNDERABAD Dvn": "Secunderabad Division",
+    "Hyderabad South East": "Hyderabad South East Division"
+})
 # ================= READ AEBAS =================
 aebas = pd.read_csv(aebas_file)
 aebas.columns = [c.strip() for c in aebas.columns]
