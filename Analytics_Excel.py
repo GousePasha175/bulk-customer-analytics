@@ -20,7 +20,7 @@ def _render_nav():
         st.sidebar.page_link(_aebas[0].replace("\\", "/"),label="🖐 AEBAS Monitoring")
     _posb = (_glob.glob("pages/POSB Daily Report.py") +
              _glob.glob("pages/*[Pp][Oo][Ss][Bb]*.py"))
-        if _posb:
+    if _posb:
         st.sidebar.page_link(_posb[0].replace("\\", "/"), label="\U0001f4ee POSB Daily Report")
     _dig = (_glob.glob("pages/1_Digital_Transactions.py") +
             _glob.glob("pages/*[Dd]igital*.py"))
