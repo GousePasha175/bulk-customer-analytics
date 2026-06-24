@@ -4,6 +4,7 @@ import glob as _glob
 from datetime import date, timedelta
 from difflib import get_close_matches
 from io import BytesIO
+from rapidfuzz import process, fuzz
 
 st.set_page_config(page_title="AEBAS Monitoring",layout="wide",initial_sidebar_state="expanded")
 st.markdown("""
@@ -88,9 +89,15 @@ def normalize(x):
 
 
 def fuzzy_match(name, candidates):
-    match = get_close_matches(name, candidates, n=1, cutoff=0.50)
-    return match[0] if match else None
+    result = process.extractOne(
+        name,
+        candidates,
+        scorer=fuzz.partial_ratio
+    )
 
+    if result and result[1] >= 40:
+        return result[0]
+    return None
 
 def export_excel(summary_df, pending_df):
     output = BytesIO()
