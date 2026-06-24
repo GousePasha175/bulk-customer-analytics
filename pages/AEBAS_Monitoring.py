@@ -263,12 +263,10 @@ def highlight_rows(row):
 
 styled_summary = (
     summary_df.style
+    .format({"% Implemented AEBAS": "{:.2f}"})
     .apply(highlight_rows, axis=1)
-    .set_properties(**{
-        'text-align': 'center'
-    })
+    .set_properties(**{"text-align": "center"})
 )
-
 st.dataframe(
     styled_summary,
     use_container_width=True,
@@ -278,9 +276,7 @@ st.dataframe(
 st.subheader(
     f"List of offices not marked attendance in AEBAS portal as on {report_date.strftime('%d.%m.%Y')}"
 )
-summary_df["% Implemented AEBAS"] = summary_df["% Implemented AEBAS"].map(
-    lambda x: f"{x:.2f}"
-)
+
 st.dataframe(
     pending_df,
     use_container_width=True,
