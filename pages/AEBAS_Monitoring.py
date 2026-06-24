@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from difflib import get_close_matches
 from io import BytesIO
 
-st.set_page_config(page_title="AEBAS Monitoring", layout="wide")
+st.set_page_config(page_title="AEBAS Monitoring",layout="wide",initial_sidebar_state="expanded")
 
 
 # ================= NAVIGATION =================
@@ -66,7 +66,7 @@ def normalize(x):
 
 
 def fuzzy_match(name, candidates):
-    match = get_close_matches(name, candidates, n=1, cutoff=0.85)
+    match = get_close_matches(name, candidates, n=1, cutoff=0.50)
     return match[0] if match else None
 
 
@@ -221,11 +221,27 @@ pending_df.insert(0, "Sl No", range(1, len(pending_df) + 1))
 
 # ================= DISPLAY =================
 st.subheader(f"AEBAS Report dated {report_date.strftime('%d.%m.%Y')}")
-st.dataframe(
-    summary_df,
-    use_container_width=True,
-    hide_index=True
-)
+    def highlight_rows(row):
+        if row["Division"] == "TOTAL HQ REGION":
+            return ['background-color: #FFF2CC; font-weight: bold'] * len(row)
+        elif row["% Implemented AEBAS"] < 80:
+            return ['background-color: #FDEDEC'] * len(row)
+        else:
+            return ['background-color: #E8F8F5'] * len(row)
+    
+    styled_summary = (
+        summary_df.style
+        .apply(highlight_rows, axis=1)
+        .set_properties(**{
+            'text-align': 'center'
+        })
+    )
+    
+    st.dataframe(
+        styled_summary,
+        use_container_width=True,
+        hide_index=True
+    )
 
 st.subheader(
     f"List of offices not marked attendance in AEBAS portal as on {report_date.strftime('%d.%m.%Y')}"
