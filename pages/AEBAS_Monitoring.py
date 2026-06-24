@@ -6,6 +6,28 @@ from difflib import get_close_matches
 from io import BytesIO
 
 st.set_page_config(page_title="AEBAS Monitoring",layout="wide",initial_sidebar_state="expanded")
+st.markdown("""
+<style>
+[data-testid="stSidebarNav"] {
+    display: none !important;
+}
+
+[data-testid="collapsedControl"] {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: fixed !important;
+    top: 50% !important;
+    left: 0px !important;
+    transform: translateY(-50%) !important;
+    z-index: 999999 !important;
+    background-color: #2f3343 !important;
+    border-radius: 0 8px 8px 0 !important;
+    padding: 12px 7px !important;
+    box-shadow: 3px 0 8px rgba(0,0,0,0.35) !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
 
 # ================= NAVIGATION =================
