@@ -239,7 +239,7 @@ summary_df["percent"] = (
 ).round(2)
 
 summary_df.columns = [
-    "Division",
+    "Division/Unit",
     "Total Units",
     "Marked Attendance",
     "Not Marked",
@@ -264,7 +264,7 @@ summary_df = pd.concat([summary_df, total_row], ignore_index=True)
 pending_df = office_master[~office_master["Marked"]].copy()
 
 pending_df = pending_df[["division", "office-name"]]
-pending_df.columns = ["Division", "Office"]
+pending_df.columns = ["Division/Unit", "Office"]
 pending_df.insert(0, "Sl No", range(1, len(pending_df) + 1))
 
 # ================= DISPLAY =================
