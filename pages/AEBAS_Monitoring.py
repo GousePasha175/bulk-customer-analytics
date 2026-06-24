@@ -221,27 +221,27 @@ pending_df.insert(0, "Sl No", range(1, len(pending_df) + 1))
 
 # ================= DISPLAY =================
 st.subheader(f"AEBAS Report dated {report_date.strftime('%d.%m.%Y')}")
-    def highlight_rows(row):
-        if row["Division"] == "TOTAL HQ REGION":
-            return ['background-color: #FFF2CC; font-weight: bold'] * len(row)
-        elif row["% Implemented AEBAS"] < 80:
-            return ['background-color: #FDEDEC'] * len(row)
-        else:
-            return ['background-color: #E8F8F5'] * len(row)
-    
-    styled_summary = (
-        summary_df.style
-        .apply(highlight_rows, axis=1)
-        .set_properties(**{
-            'text-align': 'center'
-        })
-    )
-    
-    st.dataframe(
-        styled_summary,
-        use_container_width=True,
-        hide_index=True
-    )
+def highlight_rows(row):
+    if row["Division"] == "TOTAL HQ REGION":
+        return ['background-color: #FFF2CC; font-weight: bold'] * len(row)
+    elif row["% Implemented AEBAS"] < 80:
+        return ['background-color: #FDEDEC'] * len(row)
+    else:
+        return ['background-color: #E8F8F5'] * len(row)
+
+styled_summary = (
+    summary_df.style
+    .apply(highlight_rows, axis=1)
+    .set_properties(**{
+        'text-align': 'center'
+    })
+)
+
+st.dataframe(
+    styled_summary,
+    use_container_width=True,
+    hide_index=True
+)
 
 st.subheader(
     f"List of offices not marked attendance in AEBAS portal as on {report_date.strftime('%d.%m.%Y')}"
