@@ -499,6 +499,7 @@ def main():
         
     # ── Main Area ─────────────────────────────────────────────────────────────
     st.title("📊 POSB Accounts Daily Report")
+    st.caption(f"Hyderabad HQ Region  |  Report Date: **{report_date.strftime('%d.%m.%Y')}**  |  Month: **{report_month}**")
     col1, col2, col3 = st.columns(3)
 
     with col1:
@@ -531,7 +532,7 @@ def main():
             max_value=31,
             value=max(1, _days_remaining_cal)
         )
-    st.caption(f"Hyderabad HQ Region  |  Report Date: **{report_date.strftime('%d.%m.%Y')}**  |  Month: **{report_month}**")
+    
 
     # ════════════════════════════════════════════════════════════════════════
     # TAB 1 – Range Report
@@ -544,10 +545,21 @@ def main():
              "The report counts only account category groups (MIS, PPFGP, SSA, RD, SBBAS, SBSGP, SCSS, TD). "
              "DC offices are excluded."
          )
-        
+        div_files = {}
+        cols = st.columns(6)
+    
+        for i, div in enumerate(DIVISIONS):
+            with cols[i]:
+                div_files[div] = st.file_uploader(
+                    label=div,
+                    type=["xlsx", "xls"],
+                    key=f"div_{div}",
+                    label_visibility="collapsed"
+                )
+                st.caption(div)
         uploaded_divs = {d: f for d, f in div_files.items() if f is not None}
         if not uploaded_divs:
-            st.warning("Please upload at least one Division file from the sidebar to generate this report.")
+            st.warning("Please upload at least one Division file above to generate this report.")
         else:
             division_dfs = {}
             for div, f in uploaded_divs.items():
