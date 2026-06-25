@@ -578,6 +578,7 @@ def main():
     # TAB 1 – Range Report
     # ════════════════════════════════════════════════════════════════════════
     # with tab1:
+if report_option == "Office wise Range Report":
     st.header(f"Office-wise Range of Accounts Opened – as on {report_date.strftime('%d.%m.%Y')}")
     st.info(
          "Upload the **Product Wise A/C Report** for each Division in the sidebar. "
@@ -645,6 +646,7 @@ def main():
         # TAB 2 – Division-wise Summary Reports
         # ════════════════════════════════════════════════════════════════════════
         # with tab2:
+elif report_option == "Division wise Summary Reports":
     st.header("Division-wise Summary Reports")
     
     st.info(
