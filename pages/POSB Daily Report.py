@@ -534,7 +534,7 @@ def main():
         # ── Navigation ───────────────────────────────────────────────────────
         _render_nav()
         # ─────────────────────────────────────────────────────────────────────
-        report_option = st.radio("Select Report",["Division wise Summary Reports","Office wise Range Report"])
+        report_option = st.radio("Select Report",["Daily Target monitoring","Office wise Range Report"])
         
     # ── Main Area ─────────────────────────────────────────────────────────────
     st.title("📊 POSB Accounts Daily Report")
@@ -654,11 +654,11 @@ def main():
                 )
         
             # ════════════════════════════════════════════════════════════════════════
-            # TAB 2 – Division-wise Summary Reports
+            # TAB 2 – Daily Target monitoring
             # ════════════════════════════════════════════════════════════════════════
             # with tab2:
-    elif report_option == "Division wise Summary Reports":
-        st.header("Division-wise Summary Reports")
+    elif report_option == "Daily Target monitoring":
+        st.header("Daily Target monitoring")
         col1, col2, col3, col4 = st.columns(4)
 
     with col1:
