@@ -20,13 +20,13 @@ def _render_nav():
                     ("pages/POSB Daily Report.py|pages/*[Pp][Oo][Ss][Bb]*.py","\U0001f4ee POSB Daily Report"),
                     ("pages/1_Digital_Transactions.py|pages/*[Dd]igital*.py","\U0001f4bb Digital Transactions"), 
                     ("pages/Delivery Productivity.py|pages/*[Dd]elivery*.py", "\U0001f4e6 Delivery Productivity")]:
-        st.sidebar.page_link(pat.split("|")[0], label=lbl)
+                    st.sidebar.page_link(pat.split("|")[0], label=lbl)
 
-        if add_line:
-            st.sidebar.markdown(
-                "<hr style='margin:8px 0 12px 0;'>",
-                unsafe_allow_html=True
-            )
+                    if add_line:
+                        st.sidebar.markdown(
+                            "<hr style='margin:8px 0 12px 0;'>",
+                            unsafe_allow_html=True
+                        )
         hits=[]
         for p in pat.split("|"): hits+=_glob.glob(p)
         if hits: st.sidebar.page_link(hits[0].replace("\\","/"),label=lbl)
