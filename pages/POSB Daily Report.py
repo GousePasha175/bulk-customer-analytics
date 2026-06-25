@@ -578,304 +578,304 @@ def main():
     # TAB 1 – Range Report
     # ════════════════════════════════════════════════════════════════════════
     # with tab1:
-     st.header(f"Office-wise Range of Accounts Opened – as on {report_date.strftime('%d.%m.%Y')}")
-     st.info(
-         "Upload the **Product Wise A/C Report** for each Division in the sidebar. "
-         "The report counts only account category groups (MIS, PPFGP, SSA, RD, SBBAS, SBSGP, SCSS, TD). "
-         "DC offices are excluded."
-     )
+ st.header(f"Office-wise Range of Accounts Opened – as on {report_date.strftime('%d.%m.%Y')}")
+ st.info(
+     "Upload the **Product Wise A/C Report** for each Division in the sidebar. "
+     "The report counts only account category groups (MIS, PPFGP, SSA, RD, SBBAS, SBSGP, SCSS, TD). "
+     "DC offices are excluded."
+ )
 
-    uploaded_divs = {d: f for d, f in div_files.items() if f is not None}
-    if not uploaded_divs:
-        st.warning("Please upload at least one Division file from the sidebar to generate this report.")
-    else:
-        division_dfs = {}
-        for div, f in uploaded_divs.items():
-            df = parse_product_report(f, div)
-            if df is not None:
-                division_dfs[div] = df
+uploaded_divs = {d: f for d, f in div_files.items() if f is not None}
+if not uploaded_divs:
+    st.warning("Please upload at least one Division file from the sidebar to generate this report.")
+else:
+    division_dfs = {}
+    for div, f in uploaded_divs.items():
+        df = parse_product_report(f, div)
+        if df is not None:
+            division_dfs[div] = df
 
-        if division_dfs:
-            range_df = build_range_report(division_dfs)
+    if division_dfs:
+        range_df = build_range_report(division_dfs)
 
-            # ── Display Table ─────────────────────────────────────────
-            st.subheader(f"Division-wise Summary — {len(division_dfs)} Division(s) loaded")
+        # ── Display Table ─────────────────────────────────────────
+        st.subheader(f"Division-wise Summary — {len(division_dfs)} Division(s) loaded")
 
-            # Styled display
-            display_df = range_df.copy()
-            total_row = {
-                "Sl. No": "",
-                "Division": "TOTAL",
-                "Total Accounts Opened": display_df["Total Accounts Opened"].sum(),
-            }
-            for r in RANGES:
-                total_row[r] = display_df[r].sum()
-            display_df = pd.concat([display_df, pd.DataFrame([total_row])], ignore_index=True)
+        # Styled display
+        display_df = range_df.copy()
+        total_row = {
+            "Sl. No": "",
+            "Division": "TOTAL",
+            "Total Accounts Opened": display_df["Total Accounts Opened"].sum(),
+        }
+        for r in RANGES:
+            total_row[r] = display_df[r].sum()
+        display_df = pd.concat([display_df, pd.DataFrame([total_row])], ignore_index=True)
 
-            st.dataframe(
-                display_df.style
-                    .set_properties(**{"text-align": "center"})
-                    .apply(lambda x: ["background-color: #FFF2CC; font-weight: bold"
-                                      if x.name == len(display_df) - 1 else ""
-                                      for _ in x], axis=1),
-                use_container_width=True,
-                hide_index=True,
-            )
+        st.dataframe(
+            display_df.style
+                .set_properties(**{"text-align": "center"})
+                .apply(lambda x: ["background-color: #FFF2CC; font-weight: bold"
+                                  if x.name == len(display_df) - 1 else ""
+                                  for _ in x], axis=1),
+            use_container_width=True,
+            hide_index=True,
+        )
 
-            # ── Per-division detailed breakdown ───────────────────────
-            with st.expander("🔍 Detailed Office-wise Breakdown per Division"):
-                for div, df in division_dfs.items():
-                    st.markdown(f"**{div} Division**")
-                    df["Total Accounts"] = df[ACCOUNT_COLS].sum(axis=1)
-                    df["Range"] = df["Total Accounts"].apply(classify_range)
-                    show_cols = ["Name"] + ACCOUNT_COLS + ["Total Accounts", "Range"]
-                    existing = [c for c in show_cols if c in df.columns]
-                    st.dataframe(df[existing], use_container_width=True, hide_index=True)
+        # ── Per-division detailed breakdown ───────────────────────
+        with st.expander("🔍 Detailed Office-wise Breakdown per Division"):
+            for div, df in division_dfs.items():
+                st.markdown(f"**{div} Division**")
+                df["Total Accounts"] = df[ACCOUNT_COLS].sum(axis=1)
+                df["Range"] = df["Total Accounts"].apply(classify_range)
+                show_cols = ["Name"] + ACCOUNT_COLS + ["Total Accounts", "Range"]
+                existing = [c for c in show_cols if c in df.columns]
+                st.dataframe(df[existing], use_container_width=True, hide_index=True)
 
-            # ── Download ──────────────────────────────────────────────
-            excel_bytes = export_range_report_excel(range_df, division_dfs)
-            st.download_button(
-                label="⬇️ Download Range Report as Excel",
-                data=excel_bytes,
-                file_name=f"Office_Range_Report_{report_date.strftime('%d%m%Y')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
+        # ── Download ──────────────────────────────────────────────
+        excel_bytes = export_range_report_excel(range_df, division_dfs)
+        st.download_button(
+            label="⬇️ Download Range Report as Excel",
+            data=excel_bytes,
+            file_name=f"Office_Range_Report_{report_date.strftime('%d%m%Y')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
 
     # ════════════════════════════════════════════════════════════════════════
     # TAB 2 – Division-wise Summary Reports
     # ════════════════════════════════════════════════════════════════════════
     # with tab2:
-     st.header("Division-wise Summary Reports")
+ st.header("Division-wise Summary Reports")
 
-     st.info(
-         "📋 **Tab 1** (Office-wise Range Report) uses the Division-wise Product files uploaded in the sidebar.  \n"
-         "📋 **Tab 2** (Division-wise Summary Reports) uses the Accounts Opened Details and Net Addition files below."
-     )
-    # Parse whichever files were uploaded (all optional; show partial results)
-    def _parse_or_none(f):
-        if f is None: return None
-        df = parse_summary_excel(f, ACCOUNT_COLS + CERT_COLS + ["A/c Opened","A/c Closed","Total"])
-        return df
+ st.info(
+     "📋 **Tab 1** (Office-wise Range Report) uses the Division-wise Product files uploaded in the sidebar.  \n"
+     "📋 **Tab 2** (Division-wise Summary Reports) uses the Accounts Opened Details and Net Addition files below."
+ )
+# Parse whichever files were uploaded (all optional; show partial results)
+def _parse_or_none(f):
+    if f is None: return None
+    df = parse_summary_excel(f, ACCOUNT_COLS + CERT_COLS + ["A/c Opened","A/c Closed","Total"])
+    return df
 
-    ao_date_df  = _parse_or_none(ao_date_file)
-    ao_cumul_df = _parse_or_none(ao_file)
-    net_date_df = _parse_or_none(net_date_file)
-    net_cumul_df= _parse_or_none(net_file)
+ao_date_df  = _parse_or_none(ao_date_file)
+ao_cumul_df = _parse_or_none(ao_file)
+net_date_df = _parse_or_none(net_date_file)
+net_cumul_df= _parse_or_none(net_file)
 
-    any_summary_file = any(f is not None for f in [ao_date_file, ao_file, net_date_file, net_file])
-    if not any_summary_file:
-        st.warning("Please upload at least one Summary file from the sidebar to generate this report.")
-    else:
-            # ── Table 1: Daily Summary ─────────────────────────────────
-            st.subheader(
-                f"POSB Accounts Daily Report dated {report_date.strftime('%d.%m.%Y')}"
-            )
+any_summary_file = any(f is not None for f in [ao_date_file, ao_file, net_date_file, net_file])
+if not any_summary_file:
+    st.warning("Please upload at least one Summary file from the sidebar to generate this report.")
+else:
+        # ── Table 1: Daily Summary ─────────────────────────────────
+        st.subheader(
+            f"POSB Accounts Daily Report dated {report_date.strftime('%d.%m.%Y')}"
+        )
 
-            summary_df = build_daily_summary(
-                ao_date_df, ao_cumul_df, net_date_df, net_cumul_df,
-                report_date, report_month, working_days_left
-            )
+        summary_df = build_daily_summary(
+            ao_date_df, ao_cumul_df, net_date_df, net_cumul_df,
+            report_date, report_month, working_days_left
+        )
 
-            # ── Render daily summary as HTML table (full column width control) ──
-            pct_col = "% achievement of proportionate Target"
+        # ── Render daily summary as HTML table (full column width control) ──
+        pct_col = "% achievement of proportionate Target"
 
-            # Short header labels
-            col_labels = {
-                "Division":                                                  "Division",
-                "Target FY 2026-27":                                         "Annual<br>Target",
-                f"Proportionate Target upto {report_month}, {report_date.year}":
-                                                                             f"Prop.<br>Target<br>{report_month[:3]} {report_date.year}",
-                f"Daily Target upto {report_date.strftime('%d.%m.%Y')}":     f"Daily<br>Target<br>{report_date.strftime('%d.%m')}",
-                f"No. of Accounts Opened on {report_date.strftime('%d.%m.%Y')}":
-                                                                             f"A/cs<br>Opened<br>on {report_date.strftime('%d.%m')}",
-                f"No. of Accounts Opened up to {report_date.strftime('%d.%m.%Y')}":
-                                                                             f"A/cs<br>Opened<br>upto {report_date.strftime('%d.%m')}",
-                f"Net no. of a/cs opened on {report_date.strftime('%d.%m.%Y')}":
-                                                                             f"Net A/cs<br>on {report_date.strftime('%d.%m')}",
-                f"Net no. of a/cs opened upto {report_date.strftime('%d.%m.%Y')}":
-                                                                             f"Net A/cs<br>upto {report_date.strftime('%d.%m')}",
-                "Shortfall on daily target":                                 "Shortfall<br>Daily",
-                "Shortfall on proportionate target":                         "Shortfall<br>Prop.",
-                "% achievement of proportionate Target":                     "% Prop.<br>Achiev.",
-            }
+        # Short header labels
+        col_labels = {
+            "Division":                                                  "Division",
+            "Target FY 2026-27":                                         "Annual<br>Target",
+            f"Proportionate Target upto {report_month}, {report_date.year}":
+                                                                         f"Prop.<br>Target<br>{report_month[:3]} {report_date.year}",
+            f"Daily Target upto {report_date.strftime('%d.%m.%Y')}":     f"Daily<br>Target<br>{report_date.strftime('%d.%m')}",
+            f"No. of Accounts Opened on {report_date.strftime('%d.%m.%Y')}":
+                                                                         f"A/cs<br>Opened<br>on {report_date.strftime('%d.%m')}",
+            f"No. of Accounts Opened up to {report_date.strftime('%d.%m.%Y')}":
+                                                                         f"A/cs<br>Opened<br>upto {report_date.strftime('%d.%m')}",
+            f"Net no. of a/cs opened on {report_date.strftime('%d.%m.%Y')}":
+                                                                         f"Net A/cs<br>on {report_date.strftime('%d.%m')}",
+            f"Net no. of a/cs opened upto {report_date.strftime('%d.%m.%Y')}":
+                                                                         f"Net A/cs<br>upto {report_date.strftime('%d.%m')}",
+            "Shortfall on daily target":                                 "Shortfall<br>Daily",
+            "Shortfall on proportionate target":                         "Shortfall<br>Prop.",
+            "% achievement of proportionate Target":                     "% Prop.<br>Achiev.",
+        }
 
-            def _pct_style(val):
-                try:
-                    v = float(val)
-                    if v < 50:   return "background:#FF0000;color:white;font-weight:700"
-                    elif v < 75: return "background:#FFC000;font-weight:700"
-                    elif v < 100:return "background:#FFFF00;font-weight:700"
-                    else:        return "background:#70AD47;color:white;font-weight:700"
-                except: return ""
+        def _pct_style(val):
+            try:
+                v = float(val)
+                if v < 50:   return "background:#FF0000;color:white;font-weight:700"
+                elif v < 75: return "background:#FFC000;font-weight:700"
+                elif v < 100:return "background:#FFFF00;font-weight:700"
+                else:        return "background:#70AD47;color:white;font-weight:700"
+            except: return ""
 
+        cols = list(summary_df.columns)
+        pct_idx = cols.index(pct_col)
+
+        # Column pixel widths
+        col_widths = {"Division": 150}
+        for c in cols:
+            if c == "Division": continue
+            col_widths[c] = 62 if "%" in c else 75
+
+        # Build HTML
+        hdr_style = ("background:#2E75B6;color:white;font-size:11px;font-weight:700;"
+                     "text-align:center;vertical-align:bottom;padding:5px 3px;"
+                     "white-space:normal;line-height:1.3;border:1px solid #ccc;")
+        num_style  = "font-size:12px;text-align:right;padding:4px 6px;border:1px solid #e0e0e0;"
+        div_style  = "font-size:12px;text-align:left;padding:4px 6px;border:1px solid #e0e0e0;font-weight:600;"
+        tot_style  = "background:#1F3864;color:white;font-weight:700;font-size:12px;text-align:right;padding:4px 6px;border:1px solid #555;"
+        tot_div_st = "background:#1F3864;color:white;font-weight:700;font-size:12px;text-align:left;padding:4px 6px;border:1px solid #555;"
+
+        html = ["<div style='overflow-x:auto;'>",
+                "<table style='border-collapse:collapse;width:100%;table-layout:fixed;'>",
+                "<colgroup>"]
+        for c in cols:
+            html.append(f"<col style='width:{col_widths.get(c,75)}px;'>")
+        html.append("</colgroup><thead><tr>")
+        for c in cols:
+            lbl = col_labels.get(c, c)
+            html.append(f"<th style='{hdr_style}'>{lbl}</th>")
+        html.append("</tr></thead><tbody>")
+
+        for _, row in summary_df.iterrows():
+            is_total = (row["Division"] == "Total HQ Region")
+            html.append("<tr>")
+            for ci, c in enumerate(cols):
+                val = row[c]
+                disp = f"{int(val):,}" if isinstance(val, (int, float)) and not isinstance(val, bool) else str(val)
+                if c == "Division":
+                    html.append(f"<td style='{tot_div_st if is_total else div_style}'>{val}</td>")
+                elif c == pct_col:
+                    cell_style = (tot_style if is_total else
+                                  num_style + ";" + _pct_style(val))
+                    html.append(f"<td style='{cell_style}'>{disp}</td>")
+                else:
+                    html.append(f"<td style='{tot_style if is_total else num_style}'>{disp}</td>")
+            html.append("</tr>")
+
+        html.append("</tbody></table></div>")
+        st.markdown("".join(html), unsafe_allow_html=True)
+        st.caption("🟢 ≥100%  🟡 75–99%  🟠 50–74%  🔴 <50% of proportionate target")
+
+        # ── Table 2: Scheme-wise Status ───────────────────────────
+        st.subheader(f"Scheme wise status – up to {report_date.strftime('%d.%m.%Y')}")
+
+        scheme_df = build_scheme_wise(ao_cumul_df if ao_cumul_df is not None else pd.DataFrame())
+
+        # Rename columns to full names for display
+        scheme_display = scheme_df.rename(columns={k: k for k in ACCOUNT_COLS})
+
+        def style_total_row(df):
+            styles = pd.DataFrame("", index=df.index, columns=df.columns)
+            styles.iloc[-1] = "background-color:#1F3864; color:white; font-weight:bold"
+            return styles
+
+        st.dataframe(
+            scheme_display.style.apply(style_total_row, axis=None),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+        # ── Legend / scheme names ──────────────────────────────────
+        with st.expander("ℹ️ Scheme Code Reference"):
+            legend = pd.DataFrame([
+                {"Code": k, "Full Name": v}
+                for k, v in SCHEME_FULL.items()
+            ])
+            st.dataframe(legend, hide_index=True, use_container_width=False)
+
+        # ── Download both tables ───────────────────────────────────
+        def build_summary_excel(summary_df, scheme_df, report_date, report_month):
+            output = BytesIO()
+            wb = xlsxwriter.Workbook(output, {"in_memory": True})
+
+            title_fmt = wb.add_format({
+                "bold": True, "font_size": 12, "align": "center",
+                "valign": "vcenter", "bg_color": "#1F3864",
+                "font_color": "white", "border": 1,
+            })
+            hdr_fmt = wb.add_format({
+                "bold": True, "align": "center", "valign": "vcenter",
+                "bg_color": "#2E75B6", "font_color": "white",
+                "border": 1, "text_wrap": True,
+            })
+            data_fmt = wb.add_format({"align": "center", "border": 1})
+            data_left = wb.add_format({"align": "left", "border": 1})
+            total_fmt = wb.add_format({
+                "bold": True, "align": "center", "border": 1,
+                "bg_color": "#1F3864", "font_color": "white",
+            })
+            total_left = wb.add_format({
+                "bold": True, "align": "left", "border": 1,
+                "bg_color": "#1F3864", "font_color": "white",
+            })
+            green_fmt = wb.add_format({"align": "center", "border": 1, "bg_color": "#70AD47", "font_color": "white", "bold": True})
+            yellow_fmt = wb.add_format({"align": "center", "border": 1, "bg_color": "#FFFF00", "bold": True})
+            orange_fmt = wb.add_format({"align": "center", "border": 1, "bg_color": "#FFC000", "bold": True})
+            red_fmt = wb.add_format({"align": "center", "border": 1, "bg_color": "#FF0000", "font_color": "white", "bold": True})
+
+            # Sheet 1: Daily Summary
+            ws1 = wb.add_worksheet("Daily Summary")
             cols = list(summary_df.columns)
-            pct_idx = cols.index(pct_col)
-
-            # Column pixel widths
-            col_widths = {"Division": 150}
-            for c in cols:
-                if c == "Division": continue
-                col_widths[c] = 62 if "%" in c else 75
-
-            # Build HTML
-            hdr_style = ("background:#2E75B6;color:white;font-size:11px;font-weight:700;"
-                         "text-align:center;vertical-align:bottom;padding:5px 3px;"
-                         "white-space:normal;line-height:1.3;border:1px solid #ccc;")
-            num_style  = "font-size:12px;text-align:right;padding:4px 6px;border:1px solid #e0e0e0;"
-            div_style  = "font-size:12px;text-align:left;padding:4px 6px;border:1px solid #e0e0e0;font-weight:600;"
-            tot_style  = "background:#1F3864;color:white;font-weight:700;font-size:12px;text-align:right;padding:4px 6px;border:1px solid #555;"
-            tot_div_st = "background:#1F3864;color:white;font-weight:700;font-size:12px;text-align:left;padding:4px 6px;border:1px solid #555;"
-
-            html = ["<div style='overflow-x:auto;'>",
-                    "<table style='border-collapse:collapse;width:100%;table-layout:fixed;'>",
-                    "<colgroup>"]
-            for c in cols:
-                html.append(f"<col style='width:{col_widths.get(c,75)}px;'>")
-            html.append("</colgroup><thead><tr>")
-            for c in cols:
-                lbl = col_labels.get(c, c)
-                html.append(f"<th style='{hdr_style}'>{lbl}</th>")
-            html.append("</tr></thead><tbody>")
-
-            for _, row in summary_df.iterrows():
-                is_total = (row["Division"] == "Total HQ Region")
-                html.append("<tr>")
-                for ci, c in enumerate(cols):
-                    val = row[c]
-                    disp = f"{int(val):,}" if isinstance(val, (int, float)) and not isinstance(val, bool) else str(val)
-                    if c == "Division":
-                        html.append(f"<td style='{tot_div_st if is_total else div_style}'>{val}</td>")
-                    elif c == pct_col:
-                        cell_style = (tot_style if is_total else
-                                      num_style + ";" + _pct_style(val))
-                        html.append(f"<td style='{cell_style}'>{disp}</td>")
-                    else:
-                        html.append(f"<td style='{tot_style if is_total else num_style}'>{disp}</td>")
-                html.append("</tr>")
-
-            html.append("</tbody></table></div>")
-            st.markdown("".join(html), unsafe_allow_html=True)
-            st.caption("🟢 ≥100%  🟡 75–99%  🟠 50–74%  🔴 <50% of proportionate target")
-
-            # ── Table 2: Scheme-wise Status ───────────────────────────
-            st.subheader(f"Scheme wise status – up to {report_date.strftime('%d.%m.%Y')}")
-
-            scheme_df = build_scheme_wise(ao_cumul_df if ao_cumul_df is not None else pd.DataFrame())
-
-            # Rename columns to full names for display
-            scheme_display = scheme_df.rename(columns={k: k for k in ACCOUNT_COLS})
-
-            def style_total_row(df):
-                styles = pd.DataFrame("", index=df.index, columns=df.columns)
-                styles.iloc[-1] = "background-color:#1F3864; color:white; font-weight:bold"
-                return styles
-
-            st.dataframe(
-                scheme_display.style.apply(style_total_row, axis=None),
-                use_container_width=True,
-                hide_index=True,
-            )
-
-            # ── Legend / scheme names ──────────────────────────────────
-            with st.expander("ℹ️ Scheme Code Reference"):
-                legend = pd.DataFrame([
-                    {"Code": k, "Full Name": v}
-                    for k, v in SCHEME_FULL.items()
-                ])
-                st.dataframe(legend, hide_index=True, use_container_width=False)
-
-            # ── Download both tables ───────────────────────────────────
-            def build_summary_excel(summary_df, scheme_df, report_date, report_month):
-                output = BytesIO()
-                wb = xlsxwriter.Workbook(output, {"in_memory": True})
-
-                title_fmt = wb.add_format({
-                    "bold": True, "font_size": 12, "align": "center",
-                    "valign": "vcenter", "bg_color": "#1F3864",
-                    "font_color": "white", "border": 1,
-                })
-                hdr_fmt = wb.add_format({
-                    "bold": True, "align": "center", "valign": "vcenter",
-                    "bg_color": "#2E75B6", "font_color": "white",
-                    "border": 1, "text_wrap": True,
-                })
-                data_fmt = wb.add_format({"align": "center", "border": 1})
-                data_left = wb.add_format({"align": "left", "border": 1})
-                total_fmt = wb.add_format({
-                    "bold": True, "align": "center", "border": 1,
-                    "bg_color": "#1F3864", "font_color": "white",
-                })
-                total_left = wb.add_format({
-                    "bold": True, "align": "left", "border": 1,
-                    "bg_color": "#1F3864", "font_color": "white",
-                })
-                green_fmt = wb.add_format({"align": "center", "border": 1, "bg_color": "#70AD47", "font_color": "white", "bold": True})
-                yellow_fmt = wb.add_format({"align": "center", "border": 1, "bg_color": "#FFFF00", "bold": True})
-                orange_fmt = wb.add_format({"align": "center", "border": 1, "bg_color": "#FFC000", "bold": True})
-                red_fmt = wb.add_format({"align": "center", "border": 1, "bg_color": "#FF0000", "font_color": "white", "bold": True})
-
-                # Sheet 1: Daily Summary
-                ws1 = wb.add_worksheet("Daily Summary")
-                cols = list(summary_df.columns)
-                title = f"POSB Accounts Daily Report dated {report_date.strftime('%d.%m.%Y')}"
-                ws1.merge_range(0, 0, 0, len(cols) - 1, title, title_fmt)
-                ws1.set_row(0, 30)
-                ws1.set_row(1, 45)
+            title = f"POSB Accounts Daily Report dated {report_date.strftime('%d.%m.%Y')}"
+            ws1.merge_range(0, 0, 0, len(cols) - 1, title, title_fmt)
+            ws1.set_row(0, 30)
+            ws1.set_row(1, 45)
+            for ci, col in enumerate(cols):
+                ws1.write(1, ci, col, hdr_fmt)
+            ws1.set_column(0, 0, 24)
+            ws1.set_column(1, len(cols) - 1, 14)
+            pct_col_idx = cols.index("% achievement of proportionate Target")
+            for ri, row in summary_df.iterrows():
+                is_total = row["Division"] == "Total HQ Region"
                 for ci, col in enumerate(cols):
-                    ws1.write(1, ci, col, hdr_fmt)
-                ws1.set_column(0, 0, 24)
-                ws1.set_column(1, len(cols) - 1, 14)
-                pct_col_idx = cols.index("% achievement of proportionate Target")
-                for ri, row in summary_df.iterrows():
-                    is_total = row["Division"] == "Total HQ Region"
-                    for ci, col in enumerate(cols):
-                        val = row[col]
-                        if is_total:
-                            fmt = total_left if ci == 0 else total_fmt
-                        elif ci == 0:
-                            fmt = data_left
-                        elif ci == pct_col_idx:
-                            try:
-                                v = float(val)
-                                fmt = green_fmt if v >= 100 else (yellow_fmt if v >= 75 else (orange_fmt if v >= 50 else red_fmt))
-                            except Exception:
-                                fmt = data_fmt
-                        else:
+                    val = row[col]
+                    if is_total:
+                        fmt = total_left if ci == 0 else total_fmt
+                    elif ci == 0:
+                        fmt = data_left
+                    elif ci == pct_col_idx:
+                        try:
+                            v = float(val)
+                            fmt = green_fmt if v >= 100 else (yellow_fmt if v >= 75 else (orange_fmt if v >= 50 else red_fmt))
+                        except Exception:
                             fmt = data_fmt
-                        ws1.write(ri + 2, ci, val, fmt)
+                    else:
+                        fmt = data_fmt
+                    ws1.write(ri + 2, ci, val, fmt)
 
-                # Sheet 2: Scheme wise
-                ws2 = wb.add_worksheet("Scheme Wise Status")
-                scheme_cols = list(scheme_df.columns)
-                title2 = f"Scheme wise status – up to {report_date.strftime('%d.%m.%Y')}"
-                ws2.merge_range(0, 0, 0, len(scheme_cols) - 1, title2, title_fmt)
-                ws2.set_row(0, 28)
-                ws2.set_row(1, 30)
-                ws2.set_column(0, 0, 28)
-                ws2.set_column(1, len(scheme_cols) - 1, 10)
+            # Sheet 2: Scheme wise
+            ws2 = wb.add_worksheet("Scheme Wise Status")
+            scheme_cols = list(scheme_df.columns)
+            title2 = f"Scheme wise status – up to {report_date.strftime('%d.%m.%Y')}"
+            ws2.merge_range(0, 0, 0, len(scheme_cols) - 1, title2, title_fmt)
+            ws2.set_row(0, 28)
+            ws2.set_row(1, 30)
+            ws2.set_column(0, 0, 28)
+            ws2.set_column(1, len(scheme_cols) - 1, 10)
+            for ci, col in enumerate(scheme_cols):
+                ws2.write(1, ci, col, hdr_fmt)
+            for ri, row in scheme_df.iterrows():
+                is_total = row["Division"] == "Total HQ Region"
                 for ci, col in enumerate(scheme_cols):
-                    ws2.write(1, ci, col, hdr_fmt)
-                for ri, row in scheme_df.iterrows():
-                    is_total = row["Division"] == "Total HQ Region"
-                    for ci, col in enumerate(scheme_cols):
-                        val = row[col]
-                        if is_total:
-                            fmt = total_left if ci == 0 else total_fmt
-                        else:
-                            fmt = data_left if ci == 0 else data_fmt
-                        ws2.write(ri + 2, ci, val, fmt)
+                    val = row[col]
+                    if is_total:
+                        fmt = total_left if ci == 0 else total_fmt
+                    else:
+                        fmt = data_left if ci == 0 else data_fmt
+                    ws2.write(ri + 2, ci, val, fmt)
 
-                wb.close()
-                return output.getvalue()
+            wb.close()
+            return output.getvalue()
 
-            scheme_df_for_dl = scheme_df if 'scheme_df' in dir() else pd.DataFrame()
-            excel_bytes2 = build_summary_excel(summary_df, scheme_df_for_dl, report_date, report_month)
-            st.download_button(
-                label="⬇️ Download Summary Reports as Excel",
-                data=excel_bytes2,
-                file_name=f"Division_Summary_Report_{report_date.strftime('%d%m%Y')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
+        scheme_df_for_dl = scheme_df if 'scheme_df' in dir() else pd.DataFrame()
+        excel_bytes2 = build_summary_excel(summary_df, scheme_df_for_dl, report_date, report_month)
+        st.download_button(
+            label="⬇️ Download Summary Reports as Excel",
+            data=excel_bytes2,
+            file_name=f"Division_Summary_Report_{report_date.strftime('%d%m%Y')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
 
 
 if __name__ == "__main__":
