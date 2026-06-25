@@ -664,7 +664,7 @@ def main():
         
         any_summary_file = any(f is not None for f in [ao_date_file, ao_file, net_date_file, net_file])
         if not any_summary_file:
-        st.warning("Please upload all 4 files above to generate this report.")
+            st.warning("Please upload all 4 files above to generate this report.")
         else:
                 # ── Table 1: Daily Summary ─────────────────────────────────
                 st.subheader(
