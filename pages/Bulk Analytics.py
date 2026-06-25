@@ -12,9 +12,9 @@ def _render_nav():
     st.sidebar.markdown(
         """<div style='padding:8px 0 4px 0;'>
         <p style='font-size:12px;font-weight:700;color:#888;
-           text-transform:uppercase;letter-spacing:1px;margin:0 0 4px 0;'>Pages</p>
+           text-transform:uppercase;letter-spacing:1px;margin:0 0 4px 0;'></p>
         </div>""", unsafe_allow_html=True)
-    st.sidebar.page_link("Analytics_Excel.py", label="\U0001f512 Login")
+    st.sidebar.page_link("Analytics_Excel.py", label="\U0001f512 Home")
     for pat,lbl in [("pages/Bulk Analytics.py|pages/*[Bb]ulk*.py","\U0001f4ca Bulk Customer Analytics"),
                     ("pages/POSB Daily Report.py|pages/*[Pp][Oo][Ss][Bb]*.py","\U0001f4ee POSB Daily Report"),
                     ("pages/1_Digital_Transactions.py|pages/*[Dd]igital*.py","\U0001f4bb Digital Transactions"),
