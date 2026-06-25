@@ -574,18 +574,16 @@ def main():
     st.title("📊 POSB Accounts Daily Report")
     st.caption(f"Hyderabad HQ Region  |  Report Date: **{report_date.strftime('%d.%m.%Y')}**  |  Month: **{report_month}**")
 
-    tab1, tab2 = st.tabs(["📁 Office-wise Range Report", "📈 Division-wise Summary Reports"])
-
     # ════════════════════════════════════════════════════════════════════════
     # TAB 1 – Range Report
     # ════════════════════════════════════════════════════════════════════════
-    with tab1:
-        st.header(f"Office-wise Range of Accounts Opened – as on {report_date.strftime('%d.%m.%Y')}")
-        st.info(
-            "Upload the **Product Wise A/C Report** for each Division in the sidebar. "
-            "The report counts only account category groups (MIS, PPFGP, SSA, RD, SBBAS, SBSGP, SCSS, TD). "
-            "DC offices are excluded."
-        )
+    # with tab1:
+    #     st.header(f"Office-wise Range of Accounts Opened – as on {report_date.strftime('%d.%m.%Y')}")
+    #     st.info(
+    #         "Upload the **Product Wise A/C Report** for each Division in the sidebar. "
+    #         "The report counts only account category groups (MIS, PPFGP, SSA, RD, SBBAS, SBSGP, SCSS, TD). "
+    #         "DC offices are excluded."
+    #     )
 
         uploaded_divs = {d: f for d, f in div_files.items() if f is not None}
         if not uploaded_divs:
@@ -646,13 +644,13 @@ def main():
     # ════════════════════════════════════════════════════════════════════════
     # TAB 2 – Division-wise Summary Reports
     # ════════════════════════════════════════════════════════════════════════
-    with tab2:
-        st.header("Division-wise Summary Reports")
+    # with tab2:
+    #     st.header("Division-wise Summary Reports")
 
-        st.info(
-            "📋 **Tab 1** (Office-wise Range Report) uses the Division-wise Product files uploaded in the sidebar.  \n"
-            "📋 **Tab 2** (Division-wise Summary Reports) uses the Accounts Opened Details and Net Addition files below."
-        )
+    #     st.info(
+    #         "📋 **Tab 1** (Office-wise Range Report) uses the Division-wise Product files uploaded in the sidebar.  \n"
+    #         "📋 **Tab 2** (Division-wise Summary Reports) uses the Accounts Opened Details and Net Addition files below."
+    #     )
         # Parse whichever files were uploaded (all optional; show partial results)
         def _parse_or_none(f):
             if f is None: return None
