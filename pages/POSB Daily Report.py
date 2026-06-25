@@ -28,15 +28,12 @@ def _render_nav():
             _glob.glob("pages/*[Dd]elivery*.py"))
     if _del:
         st.sidebar.page_link(_del[0].replace("\\", "/"), label="\U0001f4e6 Delivery Productivity")
-    #st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
 # ── Auth guard: redirect to Home (login) if not authenticated ─────────────────
 # set_page_config must be the very first Streamlit call
     _aebas = (_glob.glob("pages/AEBAS_Monitoring.py") +
               _glob.glob("pages/*[Aa][Ee][Bb][Aa][Ss]*.py"))
     if _aebas:
         st.sidebar.page_link(_aebas[0].replace("\\", "/"), label="\U0001f91a AEBAS Monitoring")
-    #st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
-    
 st.set_page_config(
     
     page_title="POSB Accounts Daily Report",
