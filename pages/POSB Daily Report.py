@@ -36,9 +36,7 @@ def _render_nav():
     if _aebas:
         st.sidebar.page_link(_aebas[0].replace("\\\\", "/"), label="\U0001f91a AEBAS Monitoring")
     st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
-    report_option = st.radio("Select Report",["Division wise Summary Reports","Office wise Range Report"])
-
-
+    
 st.set_page_config(
     page_title="POSB Accounts Daily Report",
     page_icon="📊",
@@ -497,7 +495,7 @@ def main():
         # ── Navigation ───────────────────────────────────────────────────────
         _render_nav()
         # ─────────────────────────────────────────────────────────────────────
-
+        report_option = st.radio("Select Report",["Division wise Summary Reports","Office wise Range Report"])
         # ── Logo (use local assets/logo.png if available, else text only) ──────
         import os as _os
         if _os.path.exists("assets/logo.png"):
