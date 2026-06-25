@@ -38,10 +38,49 @@ def _render_nav():
     st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
     
 st.set_page_config(
+    
     page_title="POSB Accounts Daily Report",
     page_icon="📊",
     layout="wide",
 )
+st.markdown("""
+    <style>
+    /* Hide drag-drop gray box styling */
+    [data-testid="stFileUploader"] {
+        border: none !important;
+        background: transparent !important;
+    }
+    
+    /* Hide 'Drag and drop file here' area */
+    [data-testid="stFileUploaderDropzone"] {
+        background: transparent !important;
+        border: none !important;
+        padding: 0 !important;
+    }
+    
+    /* Hide "200MB per file • XLSX, XLS" text */
+    [data-testid="stFileUploaderDropzoneInstructions"] > div:nth-child(2) {
+        display: none !important;
+    }
+    
+    /* Style upload button */
+    [data-testid="stFileUploader"] section button {
+        background-color: #d9d9d9 !important;
+        color: black !important;
+        border-radius: 8px !important;
+        border: 1px solid #999 !important;
+        padding: 8px 18px !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    /* Hover color */
+    [data-testid="stFileUploader"] section button:hover {
+        background-color: #4CAF50 !important;
+        color: white !important;
+        border-color: #4CAF50 !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
 st.markdown("""<style>
 [data-testid="stSidebarNav"] { display: none !important; }
