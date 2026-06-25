@@ -9,15 +9,19 @@ def _render_nav():
         <p style='font-size:12px;font-weight:700;color:#888;
            text-transform:uppercase;letter-spacing:1px;margin:0 0 4px 0;'>Pages</p>
         </div>""", unsafe_allow_html=True)
+    st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
     st.sidebar.page_link("Analytics_Excel.py", label="\U0001f3e0 Home")
+    st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
     _bulk = (_glob.glob("pages/Bulk Analytics.py") +
              _glob.glob("pages/*[Bb]ulk*.py"))
     if _bulk:
         st.sidebar.page_link(_bulk[0].replace("\\", "/"), label="\U0001f4ca Bulk Customer Analytics")
+    st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
     _posb = (_glob.glob("pages/POSB Daily Report.py") +
              _glob.glob("pages/*[Pp][Oo][Ss][Bb]*.py"))
     if _posb:
         st.sidebar.page_link(_posb[0].replace("\\", "/"), label="\U0001f4ee POSB Daily Report")
+    st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
     _dig = (_glob.glob("pages/1_Digital_Transactions.py") +
             _glob.glob("pages/*[Dd]igital*.py"))
     if _dig:
