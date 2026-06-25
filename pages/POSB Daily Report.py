@@ -624,28 +624,28 @@ def main():
 
     with col1:
         ao_date_file = st.file_uploader(
-            "1. Account opened on {report_date.strftime('%d.%m.%Y')}",
+            f"1. Account opened on {report_date.strftime('%d.%m.%Y')}",
             type=["xlsx", "xls"],
             key="ao_date"
         )
     
     with col2:
         net_date_file = st.file_uploader(
-            "2. Net Accounts on {report_date.strftime('%d.%m.%Y')}",
+            f"2. Net Accounts on {report_date.strftime('%d.%m.%Y')}",
             type=["xlsx", "xls"],
             key="net_date"
         )
     
     with col3:
         ao_file = st.file_uploader(
-            "3. Accounts opened upto {report_date.strftime('%d.%m.%Y')}",
+            f"3. Accounts opened upto {report_date.strftime('%d.%m.%Y')}",
             type=["xlsx", "xls"],
             key="ao_upto"
         )
     
     with col4:
         net_file = st.file_uploader(
-            "4. Net Accounts upto {report_date.strftime('%d.%m.%Y')}",
+            f"4. Net Accounts upto {report_date.strftime('%d.%m.%Y')}",
             type=["xlsx", "xls"],
             key="net_upto"
         )
