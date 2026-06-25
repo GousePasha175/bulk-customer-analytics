@@ -41,7 +41,7 @@ header{visibility:hidden;height:0!important;}
 
 if not st.session_state.get("authenticated",False):
     st.warning("⚠️ You are not logged in.")
-    st.markdown("Please go to **🔐 Login** in the sidebar to log in.")
+    st.markdown("Please go to **🔐 Home** in the sidebar to log in.")
     with st.sidebar: _render_nav()
     st.stop()
 
