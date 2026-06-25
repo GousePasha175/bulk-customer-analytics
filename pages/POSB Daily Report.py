@@ -578,8 +578,8 @@ def main():
     # TAB 1 – Range Report
     # ════════════════════════════════════════════════════════════════════════
     # with tab1:
- st.header(f"Office-wise Range of Accounts Opened – as on {report_date.strftime('%d.%m.%Y')}")
- st.info(
+st.header(f"Office-wise Range of Accounts Opened – as on {report_date.strftime('%d.%m.%Y')}")
+st.info(
      "Upload the **Product Wise A/C Report** for each Division in the sidebar. "
      "The report counts only account category groups (MIS, PPFGP, SSA, RD, SBBAS, SBSGP, SCSS, TD). "
      "DC offices are excluded."
@@ -645,9 +645,9 @@ else:
     # TAB 2 – Division-wise Summary Reports
     # ════════════════════════════════════════════════════════════════════════
     # with tab2:
- st.header("Division-wise Summary Reports")
+st.header("Division-wise Summary Reports")
 
- st.info(
+st.info(
      "📋 **Tab 1** (Office-wise Range Report) uses the Division-wise Product files uploaded in the sidebar.  \n"
      "📋 **Tab 2** (Division-wise Summary Reports) uses the Accounts Opened Details and Net Addition files below."
  )
