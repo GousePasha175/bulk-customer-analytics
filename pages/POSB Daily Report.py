@@ -661,33 +661,33 @@ def main():
         st.header("Daily Target monitoring")
         col1, col2, col3, col4 = st.columns(4)
 
-    with col1:
-        ao_date_file = st.file_uploader(
-            f"1. Account opened on {report_date.strftime('%d.%m.%Y')}",
-            type=["xlsx", "xls"],
-            key="ao_date"
-        )
-    
-    with col2:
-        net_date_file = st.file_uploader(
-            f"2. Net Accounts on {report_date.strftime('%d.%m.%Y')}",
-            type=["xlsx", "xls"],
-            key="net_date"
-        )
-    
-    with col3:
-        ao_file = st.file_uploader(
-            f"3. Accounts opened upto {report_date.strftime('%d.%m.%Y')}",
-            type=["xlsx", "xls"],
-            key="ao_upto"
-        )
-    
-    with col4:
-        net_file = st.file_uploader(
-            f"4. Net Accounts upto {report_date.strftime('%d.%m.%Y')}",
-            type=["xlsx", "xls"],
-            key="net_upto"
-        )
+        with col1:
+            ao_date_file = st.file_uploader(
+                f"1. Account opened on {report_date.strftime('%d.%m.%Y')}",
+                type=["xlsx", "xls"],
+                key="ao_date"
+            )
+        
+        with col2:
+            net_date_file = st.file_uploader(
+                f"2. Net Accounts on {report_date.strftime('%d.%m.%Y')}",
+                type=["xlsx", "xls"],
+                key="net_date"
+            )
+        
+        with col3:
+            ao_file = st.file_uploader(
+                f"3. Accounts opened upto {report_date.strftime('%d.%m.%Y')}",
+                type=["xlsx", "xls"],
+                key="ao_upto"
+            )
+        
+        with col4:
+            net_file = st.file_uploader(
+                f"4. Net Accounts upto {report_date.strftime('%d.%m.%Y')}",
+                type=["xlsx", "xls"],
+                key="net_upto"
+            )
         
         
         # Parse whichever files were uploaded (all optional; show partial results)
