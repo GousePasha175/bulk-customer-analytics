@@ -606,10 +606,35 @@ def main():
             # ════════════════════════════════════════════════════════════════════════
             # with tab2:
     elif report_option == "Division wise Summary Reports":
-        ao_date_file = st.file_uploader("1. Account opened on Date", type=["xlsx", "xls"], key="ao_date")
-        net_date_file = st.file_uploader("2. Net Accounts on Date", type=["xlsx", "xls"], key="net_date")
-        ao_file = st.file_uploader("3. Accounts opened up to Date",type=["xlsx", "xls"],key="ao_upto")
-        net_file = st.file_uploader("4. Net Accounts opened up to Date",type=["xlsx", "xls"],key="net_upto")
+        col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        ao_date_file = st.file_uploader(
+            "1. Account opened on Date",
+            type=["xlsx", "xls"],
+            key="ao_date"
+        )
+    
+    with col2:
+        net_date_file = st.file_uploader(
+            "2. Net Accounts on Date",
+            type=["xlsx", "xls"],
+            key="net_date"
+        )
+    
+    with col3:
+        ao_file = st.file_uploader(
+            "3. Accounts opened upto Date",
+            type=["xlsx", "xls"],
+            key="ao_upto"
+        )
+    
+    with col4:
+        net_file = st.file_uploader(
+            "4. Net Accounts upto Date",
+            type=["xlsx", "xls"],
+            key="net_upto"
+        )
         st.header("Division-wise Summary Reports")
         
         st.info(
