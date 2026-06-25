@@ -496,80 +496,36 @@ def main():
         _render_nav()
         # ─────────────────────────────────────────────────────────────────────
         report_option = st.radio("Select Report",["Division wise Summary Reports","Office wise Range Report"])
-        # ── Logo (use local assets/logo.png if available, else text only) ──────
-        import os as _os
-        if _os.path.exists("assets/logo.png"):
-            st.image("assets/logo.png", width=80)
-        st.title("📮 POSB Daily Report")
-        st.markdown("---")
-        st.subheader("📅 Report Parameters")
-
-        report_date = st.date_input("Report Date", value=date.today())
-
-        month_options = list(MONTH_TO_IDX.keys())
-        # Default to report_date month name
-        report_month_name = report_date.strftime("%B")
-        # Map calendar month to FY month
-        cal_to_fy = {
-            4: "April", 5: "May", 6: "June", 7: "July",
-            8: "August", 9: "September", 10: "October", 11: "November",
-            12: "December", 1: "January", 2: "February", 3: "March",
-        }
-        default_fy_month = cal_to_fy.get(report_date.month, "April")
-        report_month = st.selectbox(
-            "Report Month (FY)", month_options,
-            index=month_options.index(default_fy_month)
-        )
-
-        st.markdown("---")
-        st.subheader("⚙️ Daily Target Settings")
-        import calendar as _cal
-        _days_in_month = _cal.monthrange(report_date.year, report_date.month)[1]
-        _days_remaining_cal = _days_in_month - report_date.day + 1
-        working_days_left = st.number_input(
-            "Working days left in month",
-            min_value=1, max_value=31,
-            value=max(1, _days_remaining_cal),
-            step=1,
-            help="Enter the number of working days remaining including today. "
-                 "Daily target = (Proportionate Target – Net Addition as on date) ÷ working days left"
-        )
-
-        st.markdown("---")
-        st.subheader("📂 Upload Division Files")
-        st.caption("Product Wise A/C Report – one per Division")
-
-        div_files = {}
-        for div in DIVISIONS:
-            div_files[div] = st.file_uploader(
-                f"{div}", type=["xlsx", "xls"], key=f"div_{div}"
-            )
-
-        st.markdown("---")
-        st.subheader("📂 Upload Summary Files")
-        st.caption(
-            "Upload four files for the Division-wise Summary Report. "
-            "Each file: Column 1 = Name, Column 2 = Accounts Opened / Net Accounts."
-        )
-        ao_date_file = st.file_uploader(
-            f"Accounts Opened on {report_date.strftime('%d.%m.%Y')} (daily)",
-            type=["xlsx", "xls"], key="ao_date_file"
-        )
-        ao_file = st.file_uploader(
-            f"Accounts Opened up to {report_date.strftime('%d.%m.%Y')} (cumulative)",
-            type=["xlsx", "xls"], key="ao_file"
-        )
-        net_date_file = st.file_uploader(
-            f"Net Accounts on {report_date.strftime('%d.%m.%Y')} (daily)",
-            type=["xlsx", "xls"], key="net_date_file"
-        )
-        net_file = st.file_uploader(
-            f"Net Accounts up to {report_date.strftime('%d.%m.%Y')} (cumulative FY)",
-            type=["xlsx", "xls"], key="net_file"
-        )
-
+        
     # ── Main Area ─────────────────────────────────────────────────────────────
     st.title("📊 POSB Accounts Daily Report")
+    report_date = st.date_input("Report Date", value=date.today())
+
+    month_options = list(MONTH_TO_IDX.keys())
+    cal_to_fy = {
+        4: "April", 5: "May", 6: "June", 7: "July",
+        8: "August", 9: "September", 10: "October", 11: "November",
+        12: "December", 1: "January", 2: "February", 3: "March",
+    }
+    default_fy_month = cal_to_fy.get(report_date.month, "April")
+    
+    report_month = st.selectbox(
+        "Report Month (FY)",
+        month_options,
+        index=month_options.index(default_fy_month)
+    )
+    
+    import calendar as _cal
+    _days_in_month = _cal.monthrange(report_date.year, report_date.month)[1]
+    _days_remaining_cal = _days_in_month - report_date.day + 1
+    
+    working_days_left = st.number_input(
+        "Working days left in month",
+        min_value=1,
+        max_value=31,
+        value=max(1, _days_remaining_cal),
+        step=1
+    )
     st.caption(f"Hyderabad HQ Region  |  Report Date: **{report_date.strftime('%d.%m.%Y')}**  |  Month: **{report_month}**")
 
     # ════════════════════════════════════════════════════════════════════════
