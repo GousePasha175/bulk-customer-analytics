@@ -10,6 +10,10 @@ import glob as _glob
 import glob as _glob
 
 def _render_nav():
+    report_option = st.radio(
+        "Select Report",
+        ["Office wise Range Report", "Division wise Summary Reports"]
+    )
     st.sidebar.markdown(
         """<div style='padding:8px 0 4px 0;'>
         <p style='font-size:12px;font-weight:700;color:#888;
