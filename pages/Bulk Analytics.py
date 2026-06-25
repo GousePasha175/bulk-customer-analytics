@@ -16,7 +16,7 @@ def _render_nav():
         </div>""", unsafe_allow_html=True)
     st.sidebar.page_link("Analytics_Excel.py", label="\U0001f512 Home")
     st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>",unsafe_allow_html=True)
-    for pat,lbl in [("pages/Bulk Analytics.py|pages/*[Bb]ulk*.py","\U0001f4ca Bulk Customer Analytics","<hr style='margin:8px 0 12px 0;'>",unsafe_allow_html=True), 
+    for pat,lbl in [("pages/Bulk Analytics.py|pages/*[Bb]ulk*.py","\U0001f4ca Bulk Customer Analytics"), 
                     ("pages/POSB Daily Report.py|pages/*[Pp][Oo][Ss][Bb]*.py","\U0001f4ee POSB Daily Report"),
                     ("pages/1_Digital_Transactions.py|pages/*[Dd]igital*.py","\U0001f4bb Digital Transactions"), 
                     ("pages/Delivery Productivity.py|pages/*[Dd]elivery*.py", "\U0001f4e6 Delivery Productivity")]:
