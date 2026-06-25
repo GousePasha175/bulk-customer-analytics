@@ -499,7 +499,6 @@ def main():
         
     # ── Main Area ─────────────────────────────────────────────────────────────
     st.title("📊 POSB Accounts Daily Report")
-    st.caption(f"Hyderabad HQ Region  |  Report Date: **{report_date.strftime('%d.%m.%Y')}**  |  Month: **{report_month}**")
     col1, col2, col3 = st.columns(3)
 
     with col1:
@@ -532,6 +531,7 @@ def main():
             max_value=31,
             value=max(1, _days_remaining_cal)
         )
+    st.caption(f"Hyderabad HQ Region  |  Report Date: **{report_date.strftime('%d.%m.%Y')}**  |  Month: **{report_month}**")
     
 
     # ════════════════════════════════════════════════════════════════════════
