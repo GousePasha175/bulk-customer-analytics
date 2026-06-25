@@ -43,58 +43,6 @@ st.set_page_config(
     page_icon="📊",
     layout="wide",
 )
-st.markdown("""
-    <style>
-    /* Hide drag-drop gray box styling */
-    [data-testid="stFileUploader"] {
-        border: none !important;
-        background: transparent !important;
-    }
-    
-    /* Hide 'Drag and drop file here' area */
-    [data-testid="stFileUploaderDropzone"] {
-        background: transparent !important;
-        border: none !important;
-        padding: 0 !important;
-    }
-    
-    /* Hide "200MB per file • XLSX, XLS" text */
-    [data-testid="stFileUploaderDropzoneInstructions"] > div:nth-child(2) {
-        display: none !important;
-    }
-    
-    /* Style upload button */
-    [data-testid="stFileUploader"] section button {
-        background-color: #d9d9d9 !important;
-        color: black !important;
-        border-radius: 8px !important;
-        border: 1px solid #999 !important;
-        padding: 8px 18px !important;
-        transition: all 0.3s ease !important;
-    }
-    
-    /* Hover color */
-    [data-testid="stFileUploader"] section button:hover {
-        background-color: #4CAF50 !important;
-        color: white !important;
-        border-color: #4CAF50 !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-st.markdown("""<style>
-[data-testid="stSidebarNav"] { display: none !important; }
-[data-testid="collapsedControl"] {
-    display: flex !important; visibility: visible !important; opacity: 1 !important;
-    position: fixed !important; top: 50% !important; left: 0px !important;
-    transform: translateY(-50%) !important; z-index: 999999 !important;
-    background-color: #2f3343 !important; border-radius: 0 8px 8px 0 !important;
-    padding: 12px 7px !important; box-shadow: 3px 0 8px rgba(0,0,0,0.35) !important;
-    cursor: pointer !important;
-}
-[data-testid="collapsedControl"] button { background: transparent !important; border: none !important; padding: 0 !important; }
-[data-testid="collapsedControl"] svg { fill: white !important; color: white !important; }
-</style>""", unsafe_allow_html=True)
 
 if not st.session_state.get("authenticated", False):
     st.warning("⚠️ You are not logged in.")
