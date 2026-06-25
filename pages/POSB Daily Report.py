@@ -499,33 +499,38 @@ def main():
         
     # ── Main Area ─────────────────────────────────────────────────────────────
     st.title("📊 POSB Accounts Daily Report")
-    report_date = st.date_input("Report Date", value=date.today())
+    col1, col2, col3 = st.columns(3)
 
-    month_options = list(MONTH_TO_IDX.keys())
-    cal_to_fy = {
-        4: "April", 5: "May", 6: "June", 7: "July",
-        8: "August", 9: "September", 10: "October", 11: "November",
-        12: "December", 1: "January", 2: "February", 3: "March",
-    }
-    default_fy_month = cal_to_fy.get(report_date.month, "April")
+    with col1:
+        report_date = st.date_input("Report Date", value=date.today())
     
-    report_month = st.selectbox(
-        "Report Month (FY)",
-        month_options,
-        index=month_options.index(default_fy_month)
-    )
+    with col2:
+        month_options = list(MONTH_TO_IDX.keys())
+        cal_to_fy = {
+            4: "April", 5: "May", 6: "June", 7: "July",
+            8: "August", 9: "September", 10: "October",
+            11: "November", 12: "December",
+            1: "January", 2: "February", 3: "March",
+        }
+        default_fy_month = cal_to_fy.get(report_date.month, "April")
     
-    import calendar as _cal
-    _days_in_month = _cal.monthrange(report_date.year, report_date.month)[1]
-    _days_remaining_cal = _days_in_month - report_date.day + 1
+        report_month = st.selectbox(
+            "Report Month (FY)",
+            month_options,
+            index=month_options.index(default_fy_month)
+        )
     
-    working_days_left = st.number_input(
-        "Working days left in month",
-        min_value=1,
-        max_value=31,
-        value=max(1, _days_remaining_cal),
-        step=1
-    )
+    with col3:
+        import calendar as _cal
+        _days_in_month = _cal.monthrange(report_date.year, report_date.month)[1]
+        _days_remaining_cal = _days_in_month - report_date.day + 1
+    
+        working_days_left = st.number_input(
+            "Working Days Left",
+            min_value=1,
+            max_value=31,
+            value=max(1, _days_remaining_cal)
+        )
     st.caption(f"Hyderabad HQ Region  |  Report Date: **{report_date.strftime('%d.%m.%Y')}**  |  Month: **{report_month}**")
 
     # ════════════════════════════════════════════════════════════════════════
