@@ -10,10 +10,6 @@ import glob as _glob
 import glob as _glob
 
 def _render_nav():
-    report_option = st.radio(
-        "Select Report",
-        ["Office wise Range Report", "Division wise Summary Reports"]
-    )
     st.sidebar.markdown(
         """<div style='padding:8px 0 4px 0;'>
         <p style='font-size:12px;font-weight:700;color:#888;
@@ -33,7 +29,10 @@ def _render_nav():
     if _del:
         st.sidebar.page_link(_del[0].replace("\\", "/"), label="\U0001f4e6 Delivery Productivity")
     st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
-
+    report_option = st.radio(
+        "Select Report",
+        ["Division wise Summary Reports","Office wise Range Report"]
+    )
 
 # ── Auth guard: redirect to Home (login) if not authenticated ─────────────────
 # set_page_config must be the very first Streamlit call
