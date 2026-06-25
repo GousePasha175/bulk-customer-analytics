@@ -619,41 +619,38 @@ def main():
             # ════════════════════════════════════════════════════════════════════════
             # with tab2:
     elif report_option == "Division wise Summary Reports":
+        st.header("Division-wise Summary Reports")
         col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         ao_date_file = st.file_uploader(
-            "1. Account opened on Date",
+            "1. Account opened on {report_date.strftime('%d.%m.%Y')",
             type=["xlsx", "xls"],
             key="ao_date"
         )
     
     with col2:
         net_date_file = st.file_uploader(
-            "2. Net Accounts on Date",
+            "2. Net Accounts on {report_date.strftime('%d.%m.%Y')",
             type=["xlsx", "xls"],
             key="net_date"
         )
     
     with col3:
         ao_file = st.file_uploader(
-            "3. Accounts opened upto Date",
+            "3. Accounts opened upto {report_date.strftime('%d.%m.%Y')",
             type=["xlsx", "xls"],
             key="ao_upto"
         )
     
     with col4:
         net_file = st.file_uploader(
-            "4. Net Accounts upto Date",
+            "4. Net Accounts upto {report_date.strftime('%d.%m.%Y')",
             type=["xlsx", "xls"],
             key="net_upto"
         )
-        st.header("Division-wise Summary Reports")
         
-        st.info(
-             "📋 **Tab 1** (Office-wise Range Report) uses the Division-wise Product files uploaded in the sidebar.  \n"
-             "📋 **Tab 2** (Division-wise Summary Reports) uses the Accounts Opened Details and Net Addition files below."
-         )
+        
         # Parse whichever files were uploaded (all optional; show partial results)
         def _parse_or_none(f):
             if f is None: return None
