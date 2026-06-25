@@ -503,7 +503,7 @@ def main():
 
     with col1:
         from datetime import timedelta
-    report_date = st.date_input("📅 Report Date",value=date.today() - timedelta(days=1))
+        report_date = st.date_input("📅 Report Date",value=date.today() - timedelta(days=1))
     
     with col2:
         month_options = list(MONTH_TO_IDX.keys())
