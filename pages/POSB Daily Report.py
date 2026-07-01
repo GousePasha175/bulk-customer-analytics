@@ -21,6 +21,11 @@ def _render_nav():
     st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
     st.sidebar.page_link("Analytics_Excel.py", label="\U0001f3e0 Home")
     st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
+    _aebas = (_glob.glob("pages/AEBAS_Monitoring.py") +
+              _glob.glob("pages/*[Aa][Ee][Bb][Aa][Ss]*.py"))
+    if _aebas:
+        st.sidebar.page_link(_aebas[0].replace("\\", "/"), label="\U0001f91a AEBAS Monitoring")
+    st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
     _del = (_glob.glob("pages/Delivery_Productivity.py") +
             _glob.glob("pages/*[Dd]elivery*.py"))
     if _del:
@@ -37,13 +42,6 @@ def _render_nav():
         st.sidebar.page_link(_posb[0].replace("\\", "/"), label="\U0001f4ee POSB Daily Report")
     st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
     
-    
-# ── Auth guard: redirect to Home (login) if not authenticated ─────────────────
-# set_page_config must be the very first Streamlit call
-    _aebas = (_glob.glob("pages/AEBAS_Monitoring.py") +
-              _glob.glob("pages/*[Aa][Ee][Bb][Aa][Ss]*.py"))
-    if _aebas:
-        st.sidebar.page_link(_aebas[0].replace("\\", "/"), label="\U0001f91a AEBAS Monitoring")
 st.set_page_config(
     
     page_title="POSB Accounts Daily Report",
