@@ -172,7 +172,6 @@ def build_nil_reports(master_df, division_dfs):
             sol_id = str(row["BOCODE"]).strip()
             office_counts[sol_id] = int(row["Total Accounts"])
 
-    nil_rows = []
     mapping_rows = []
 
     for _, row in master_df.iterrows():
@@ -184,9 +183,9 @@ def build_nil_reports(master_df, division_dfs):
         mapping_rows.append(map_row)
 
         
-    nil_df = pd.DataFrame(nil_rows)
     mapping_df = pd.DataFrame(mapping_rows)
-
+    nil_df = mapping_df[mapping_df["Accounts Opened"] == 0].copy()
+    
     return nil_df, mapping_df
 # ─── Excel parsing helpers ─────────────────────────────────────────────────────
 
