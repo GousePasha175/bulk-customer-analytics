@@ -133,6 +133,27 @@ def load_master_file(uploaded_master=None):
             df = pd.read_excel(DEFAULT_MASTER_PATH)
 
         df.columns = [str(c).strip() for c in df.columns]
+
+        # Rename inconsistent columns
+        rename_map = {
+            "Sub divn": "Sub Division",
+            "Sub Division": "Sub Division",
+        }
+        
+        df = df.rename(columns=rename_map)
+        
+        required_cols = [
+            "SOL ID",
+            "Division",
+            "Sub Division",
+            "Head Office",
+            "Sub Office",
+            "Branch Office"
+        ]
+        
+        existing_cols = [c for c in required_cols if c in df.columns]
+        df = df[existing_cols].copy()
+        
         return df
 
     except Exception as e:
@@ -684,6 +705,7 @@ def main():
             if division_dfs:
                 range_df = build_range_report(division_dfs)
                 master_df = load_master_file(master_file)
+                st.write(master_df.columns.tolist())
 
                 nil_df = None
                 mapping_df = None
