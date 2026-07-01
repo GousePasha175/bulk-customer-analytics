@@ -26,12 +26,12 @@ def _render_nav():
             _glob.glob("pages/*[Dd]elivery*.py"))
     if _del:
         st.sidebar.page_link(_del[0].replace("\\", "/"), label="\U0001f4e6 Delivery Productivity")
-    st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
+    
     _dig = (_glob.glob("pages/1_Digital_Transactions.py") +
             _glob.glob("pages/*[Dd]igital*.py"))
     if _dig:
         st.sidebar.page_link(_dig[0].replace("\\", "/"), label="\U0001f4bb Digital Transactions")
-    st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
+    
     _posb = (_glob.glob("pages/POSB Daily Report.py") +
              _glob.glob("pages/*[Pp][Oo][Ss][Bb]*.py"))
     if _posb:
