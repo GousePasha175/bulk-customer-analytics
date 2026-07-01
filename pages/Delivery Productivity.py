@@ -85,6 +85,33 @@ def strip_div_word(name):
     """Column header already says 'Division' — drop the trailing word from each name."""
     return re.sub(r'\s*Division\s*$', '', str(name), flags=re.IGNORECASE).strip()
 
+def indian_number(v):
+    """Format an integer using the Indian numbering system, e.g. 110000000 -> 11,00,00,000."""
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return ""
+    n = int(round(v))
+    neg = n < 0
+    n = abs(n)
+    s = str(n)
+    if len(s) <= 3:
+        res = s
+    else:
+        last3 = s[-3:]
+        rest = s[:-3]
+        parts = []
+        while len(rest) > 2:
+            parts.insert(0, rest[-2:])
+            rest = rest[:-2]
+        if rest:
+            parts.insert(0, rest)
+        res = ",".join(parts) + "," + last3
+    return ("-" if neg else "") + res
+
+def drop_empty_bo_rows(df):
+    """Remove offices that have no BO presence at all in this file (e.g. Hyderabad GPO)."""
+    mask = ~(df["received"].isna() | (df["received"] == 0))
+    return df[mask].reset_index(drop=True)
+
 def read_transit_csv(uploaded_file):
     """Read + canonicalise a D+0 transit CSV. Returns (aggregated_df, category_list)."""
     try:
@@ -180,7 +207,7 @@ def validate_category(categories, expected_keywords, label):
 def _fmt_num(v):
     if v is None or (isinstance(v, float) and pd.isna(v)):
         return ""
-    return f"{int(round(v)):,}"
+    return indian_number(v)
 
 def _fmt_pct(v):
     if v is None or (isinstance(v, float) and pd.isna(v)):
@@ -241,12 +268,11 @@ def write_excel_sheet(wb, sheet_name, title, df):
     fmt_hdr = wb.add_format({"bold": True, "align": "center", "valign": "vcenter", "text_wrap": True,
                               "bg_color": "#EDEDED", "border": 1})
     fmt_name = wb.add_format({"align": "left", "border": 1})
-    fmt_num = wb.add_format({"align": "center", "border": 1, "num_format": "#,##0"})
+    fmt_num = wb.add_format({"align": "center", "border": 1})
     fmt_pct = wb.add_format({"align": "center", "border": 1})
     fmt_blank = wb.add_format({"align": "center", "border": 1})
     fmt_tot_name = wb.add_format({"align": "left", "border": 1, "bold": True, "bg_color": "#FFFF00"})
-    fmt_tot_num = wb.add_format({"align": "center", "border": 1, "bold": True, "bg_color": "#FFFF00",
-                                  "num_format": "#,##0"})
+    fmt_tot_num = wb.add_format({"align": "center", "border": 1, "bold": True, "bg_color": "#FFFF00"})
     fmt_tot_pct = wb.add_format({"align": "center", "border": 1, "bold": True, "bg_color": "#FFFF00"})
 
     ws.merge_range(0, 0, 0, 9, title, fmt_title)
@@ -257,7 +283,7 @@ def write_excel_sheet(wb, sheet_name, title, df):
         if v is None or (isinstance(v, float) and pd.isna(v)):
             ws.write_blank(row, col, None, fmt_blank)
         else:
-            ws.write_number(row, col, v, fmt)
+            ws.write(row, col, indian_number(v), fmt)
 
     def wpct(row, col, v, fmt):
         ws.write(row, col, _fmt_pct(v), fmt)
@@ -278,12 +304,12 @@ def write_excel_sheet(wb, sheet_name, title, df):
 
     tot = total_row(df)
     ws.write(ri, 0, "Total", fmt_tot_name)
-    ws.write_number(ri, 1, tot["received"], fmt_tot_num)
-    ws.write_number(ri, 2, tot["invoiced"], fmt_tot_num)
-    ws.write_number(ri, 3, tot["d0_delivered"], fmt_tot_num)
-    ws.write_number(ri, 4, tot["d0_redirected"], fmt_tot_num)
-    ws.write_number(ri, 5, tot["d0_returned"], fmt_tot_num)
-    ws.write_number(ri, 6, tot["d_plus_0"], fmt_tot_num)
+    ws.write(ri, 1, indian_number(tot["received"]), fmt_tot_num)
+    ws.write(ri, 2, indian_number(tot["invoiced"]), fmt_tot_num)
+    ws.write(ri, 3, indian_number(tot["d0_delivered"]), fmt_tot_num)
+    ws.write(ri, 4, indian_number(tot["d0_redirected"]), fmt_tot_num)
+    ws.write(ri, 5, indian_number(tot["d0_returned"]), fmt_tot_num)
+    ws.write(ri, 6, indian_number(tot["d_plus_0"]), fmt_tot_num)
     ws.write(ri, 7, _fmt_pct(tot["pct_received"]), fmt_tot_pct)
     ws.write(ri, 8, _fmt_pct(tot["pct_invoiced"]), fmt_tot_pct)
     ws.write(ri, 9, _fmt_pct(tot["pct_success"]), fmt_tot_pct)
@@ -387,6 +413,27 @@ border-radius:6px;margin-bottom:16px;font-size:15px;'>
 </div>
 """, unsafe_allow_html=True)
 
+SORT_OPTIONS = {
+    "No sorting (office order)": None,
+    "% D+0 Successful Delivery — High to Low": ("pct_success", False),
+    "% D+0 Successful Delivery — Low to High": ("pct_success", True),
+    "%D+O (Received) — High to Low": ("pct_received", False),
+    "%D+O (Received) — Low to High": ("pct_received", True),
+    "%D+O (Invoiced) — High to Low": ("pct_invoiced", False),
+    "%D+O (Invoiced) — Low to High": ("pct_invoiced", True),
+}
+sort_choice = st.selectbox("Sort divisions by", list(SORT_OPTIONS.keys()), index=0)
+
+def apply_sort(df):
+    """Sort a table's division rows by the chosen % column (Total row is computed separately)."""
+    key = SORT_OPTIONS[sort_choice]
+    if key is None:
+        return df
+    col, ascending = key
+    return df.sort_values(col, ascending=ascending, na_position="last").reset_index(drop=True)
+
+st.markdown("<hr style='margin:2px 0 14px 0;border-color:#eee;'>", unsafe_allow_html=True)
+
 excel_sheets = []
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -397,17 +444,20 @@ if allprod_all is not None:
     master_ap = make_master(allprod_all, allprod_bo)
 
     df_ap_all = add_metrics(reindex_to_master(allprod_all, master_ap))
+    df_ap_all = apply_sort(df_ap_all)
     title = f"Delivery Transit Analysis All Products -{period_str}"
     st.markdown(render_html_table(title, df_ap_all), unsafe_allow_html=True)
     excel_sheets.append(("AllProducts_AllOffices", title, df_ap_all))
 
     if allprod_bo is not None:
         df_ap_bo = add_metrics(reindex_to_master(allprod_bo, master_ap))
+        df_ap_bo_display = apply_sort(drop_empty_bo_rows(df_ap_bo))
         title_bo = f"Delivery Transit Analysis All Products-B.O dated {period_str}"
-        st.markdown(render_html_table(title_bo, df_ap_bo), unsafe_allow_html=True)
-        excel_sheets.append(("AllProducts_BOs", title_bo, df_ap_bo))
+        st.markdown(render_html_table(title_bo, df_ap_bo_display), unsafe_allow_html=True)
+        excel_sheets.append(("AllProducts_BOs", title_bo, df_ap_bo_display))
 
         df_ap_excl = add_metrics(subtract(allprod_all, allprod_bo, master_ap))
+        df_ap_excl = apply_sort(df_ap_excl)
         title_excl = f"Delivery Transit Analysis All Products (Excl. B.O) dated {period_str}"
         st.markdown(render_html_table(title_excl, df_ap_excl), unsafe_allow_html=True)
         excel_sheets.append(("AllProducts_ExclBOs", title_excl, df_ap_excl))
@@ -424,17 +474,20 @@ if spd_all is not None or spd_bo is not None:
     if spd_all is not None:
         master_spd = make_master(spd_all, spd_bo)
         df_spd_all = add_metrics(reindex_to_master(spd_all, master_spd))
+        df_spd_all = apply_sort(df_spd_all)
         title = f"Delivery Transit Analysis Speed Post Document dated {period_str}"
         st.markdown(render_html_table(title, df_spd_all), unsafe_allow_html=True)
         excel_sheets.append(("SpeedDoc_AllOffices", title, df_spd_all))
 
         if spd_bo is not None:
             df_spd_bo = add_metrics(reindex_to_master(spd_bo, master_spd))
+            df_spd_bo_display = apply_sort(drop_empty_bo_rows(df_spd_bo))
             title_bo = f"Delivery Transit Analysis Speed Post Document-B.O dated {period_str}"
-            st.markdown(render_html_table(title_bo, df_spd_bo), unsafe_allow_html=True)
-            excel_sheets.append(("SpeedDoc_BOs", title_bo, df_spd_bo))
+            st.markdown(render_html_table(title_bo, df_spd_bo_display), unsafe_allow_html=True)
+            excel_sheets.append(("SpeedDoc_BOs", title_bo, df_spd_bo_display))
 
             df_spd_excl = add_metrics(subtract(spd_all, spd_bo, master_spd))
+            df_spd_excl = apply_sort(df_spd_excl)
             title_excl = f"Delivery Transit Analysis Speed Post Document (Excl. B.O) dated {period_str}"
             st.markdown(render_html_table(title_excl, df_spd_excl), unsafe_allow_html=True)
             excel_sheets.append(("SpeedDoc_ExclBOs", title_excl, df_spd_excl))
@@ -444,9 +497,10 @@ if spd_all is not None or spd_bo is not None:
         st.warning("Upload the All Offices file for Speed Post Document to generate this section (the BOs file alone cannot build the Excluding-BOs report).")
         master_spd = make_master(spd_bo)
         df_spd_bo = add_metrics(reindex_to_master(spd_bo, master_spd))
+        df_spd_bo_display = apply_sort(drop_empty_bo_rows(df_spd_bo))
         title_bo = f"Delivery Transit Analysis Speed Post Document-B.O dated {period_str}"
-        st.markdown(render_html_table(title_bo, df_spd_bo), unsafe_allow_html=True)
-        excel_sheets.append(("SpeedDoc_BOs", title_bo, df_spd_bo))
+        st.markdown(render_html_table(title_bo, df_spd_bo_display), unsafe_allow_html=True)
+        excel_sheets.append(("SpeedDoc_BOs", title_bo, df_spd_bo_display))
 
 # ════════════════════════════════════════════════════════════════════════════
 # SECTION 3 — CONSOLIDATED PARCELS (Speed Parcel + India Post/Regd. Parcel)
@@ -461,20 +515,24 @@ if spp_all is not None or rp_all is not None or spp_bo is not None or rp_bo is n
     if have_all:
         master_pc = make_master(spp_all, rp_all, spp_bo, rp_bo)
         df_pc_all = add_metrics(combine_sum(spp_all, rp_all, master_pc))
-        title = f"Delivery Transit Analysis Consolidated Parcels (SPP+IPP) dated {period_str}"
-        st.markdown(render_html_table(title, df_pc_all), unsafe_allow_html=True)
-        excel_sheets.append(("Parcels_AllOffices", title, df_pc_all))
+        title = f"Delivery Transit Analysis Consolidated Parcels (SPP+IPP R) dated {period_str}"
+        st.markdown(render_html_table(title, apply_sort(df_pc_all)), unsafe_allow_html=True)
+        excel_sheets.append(("Parcels_AllOffices", title, apply_sort(df_pc_all)))
 
         if have_bo:
             df_pc_bo = add_metrics(combine_sum(spp_bo, rp_bo, master_pc))
-            title_bo = f"Delivery Transit Analysis Consolidated Parcels( SPP+IPP)-B.O dated  {period_str}"
-            st.markdown(render_html_table(title_bo, df_pc_bo), unsafe_allow_html=True)
-            excel_sheets.append(("Parcels_BOs", title_bo, df_pc_bo))
 
             df_pc_excl = add_metrics(subtract(
                 df_pc_all.rename(columns={}), df_pc_bo.rename(columns={}), master_pc
             ))
-            title_excl = f"Delivery Transit Analysis Consolidated Parcels( SPP+IPP) (Excl. B.O) dated {period_str}"
+
+            df_pc_bo_display = apply_sort(drop_empty_bo_rows(df_pc_bo))
+            title_bo = f"Delivery Transit Analysis Consolidated Parcels( SPP+IPP R)-B.O dated  {period_str}"
+            st.markdown(render_html_table(title_bo, df_pc_bo_display), unsafe_allow_html=True)
+            excel_sheets.append(("Parcels_BOs", title_bo, df_pc_bo_display))
+
+            df_pc_excl = apply_sort(df_pc_excl)
+            title_excl = f"Delivery Transit Analysis Consolidated Parcels( SPP+IPP R) (Excl. B.O) dated {period_str}"
             st.markdown(render_html_table(title_excl, df_pc_excl), unsafe_allow_html=True)
             excel_sheets.append(("Parcels_ExclBOs", title_excl, df_pc_excl))
         else:
