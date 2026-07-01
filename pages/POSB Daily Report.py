@@ -654,13 +654,13 @@ def main():
                 range_df = build_range_report(division_dfs)
                 master_df = load_master_file(master_file)
 
-    nil_df = None
-    mapping_df = None
-    
-    if master_df is not None:
-        nil_df, mapping_df = build_nil_reports(master_df, division_dfs)
-    if nil_df is not None:
-        st.info(f"📌 NIL transaction offices identified: {len(nil_df)}")
+                nil_df = None
+                mapping_df = None
+                
+                if master_df is not None:
+                    nil_df, mapping_df = build_nil_reports(master_df, division_dfs)
+                if nil_df is not None:
+                    st.info(f"📌 NIL transaction offices identified: {len(nil_df)}")
         
                 # ── Display Table ─────────────────────────────────────────
                 st.subheader(f"Division-wise Summary — {len(division_dfs)} Division(s) loaded")
