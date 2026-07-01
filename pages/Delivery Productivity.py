@@ -461,20 +461,20 @@ if spp_all is not None or rp_all is not None or spp_bo is not None or rp_bo is n
     if have_all:
         master_pc = make_master(spp_all, rp_all, spp_bo, rp_bo)
         df_pc_all = add_metrics(combine_sum(spp_all, rp_all, master_pc))
-        title = f"Delivery Transit Analysis Consolidated Parcels (SPP+IPP R) dated {period_str}"
+        title = f"Delivery Transit Analysis Consolidated Parcels (SPP+IPP) dated {period_str}"
         st.markdown(render_html_table(title, df_pc_all), unsafe_allow_html=True)
         excel_sheets.append(("Parcels_AllOffices", title, df_pc_all))
 
         if have_bo:
             df_pc_bo = add_metrics(combine_sum(spp_bo, rp_bo, master_pc))
-            title_bo = f"Delivery Transit Analysis Consolidated Parcels( SPP+IPP R)-B.O dated  {period_str}"
+            title_bo = f"Delivery Transit Analysis Consolidated Parcels( SPP+IPP)-B.O dated  {period_str}"
             st.markdown(render_html_table(title_bo, df_pc_bo), unsafe_allow_html=True)
             excel_sheets.append(("Parcels_BOs", title_bo, df_pc_bo))
 
             df_pc_excl = add_metrics(subtract(
                 df_pc_all.rename(columns={}), df_pc_bo.rename(columns={}), master_pc
             ))
-            title_excl = f"Delivery Transit Analysis Consolidated Parcels( SPP+IPP R) (Excl. B.O) dated {period_str}"
+            title_excl = f"Delivery Transit Analysis Consolidated Parcels( SPP+IPP) (Excl. B.O) dated {period_str}"
             st.markdown(render_html_table(title_excl, df_pc_excl), unsafe_allow_html=True)
             excel_sheets.append(("Parcels_ExclBOs", title_excl, df_pc_excl))
         else:
