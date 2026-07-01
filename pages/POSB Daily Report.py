@@ -117,9 +117,20 @@ def is_dc(name: str) -> bool:
 def normalize_office(name):
     if pd.isna(name):
         return ""
+
     name = str(name).upper().strip()
+
+    # remove dots
     name = name.replace(".", "")
-    name = re.sub(r"\s+", " ", name)
+
+    # remove office suffixes temporarily
+    name = re.sub(r"\bB\s*O\b", "", name)
+    name = re.sub(r"\bS\s*O\b", "", name)
+    name = re.sub(r"\bH\s*O\b", "", name)
+
+    # normalize spaces
+    name = re.sub(r"\s+", " ", name).strip()
+
     return name
 
 
