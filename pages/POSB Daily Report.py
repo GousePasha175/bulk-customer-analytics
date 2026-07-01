@@ -703,6 +703,7 @@ def main():
                 
                 if master_df is not None:
                     nil_df, mapping_df = build_nil_reports(master_df, division_dfs)
+                    st.write(nil_df.columns.tolist())
                     zero_counts = nil_df.groupby("Division").size().to_dict()
                     range_df = build_range_report(division_dfs)
                     range_df["0"] = range_df["Division"].map(zero_counts).fillna(0).astype(int)
