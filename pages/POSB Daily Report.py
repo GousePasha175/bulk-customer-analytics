@@ -170,7 +170,7 @@ def build_nil_reports(master_df, division_dfs):
 
         for _, row in temp.iterrows():
             office_name = normalize_office(row["Name"])
-            office_counts[office_name] = int(row["Total Accounts"])
+            office_counts[(div, office_name)] = int(row["Total Accounts"])
 
     nil_rows = []
     mapping_rows = []
@@ -184,12 +184,14 @@ def build_nil_reports(master_df, division_dfs):
         so_norm = normalize_office(so)
         ho_norm = normalize_office(ho)
 
+        division = str(row["Division"]).strip()
+
         if bo_norm:
-            office_key = bo_norm
+            office_key = (division, bo_norm)
         elif so_norm:
-            office_key = so_norm
+            office_key = (division, so_norm)
         else:
-            office_key = ho_norm
+            office_key = (division, ho_norm)
 
         count = office_counts.get(office_key, 0)
 
