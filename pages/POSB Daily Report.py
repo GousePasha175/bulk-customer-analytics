@@ -433,8 +433,17 @@ def export_range_report_excel(df, division_dfs=None, nil_df=None, mapping_df=Non
             ws3.set_column(0, len(cols3)-1, 22)
     
             for r, (_, row) in enumerate(nil_df.iterrows(), start=2):
-                for c, col in enumerate(cols3):
-                    ws3.write(r, c, row[col], data_fmt)
+        for c, col in enumerate(cols3):
+            value = row[col]
+    
+            if pd.isna(value):
+                value = ""
+            elif isinstance(value, (np.integer, np.floating)):
+                value = value.item()
+            else:
+                value = str(value)
+    
+            ws3.write(r, c, value, data_fmt)
     
         # ── Sheet 4: Master Mapping with Count ─────────────────────────────
         if mapping_df is not None and not mapping_df.empty:
@@ -452,8 +461,17 @@ def export_range_report_excel(df, division_dfs=None, nil_df=None, mapping_df=Non
             ws4.set_column(0, len(cols4)-1, 22)
     
             for r, (_, row) in enumerate(mapping_df.iterrows(), start=2):
-                for c, col in enumerate(cols4):
-                    ws4.write(r, c, row[col], data_fmt)
+        for c, col in enumerate(cols4):
+            value = row[col]
+    
+            if pd.isna(value):
+                value = ""
+            elif isinstance(value, (np.integer, np.floating)):
+                value = value.item()
+            else:
+                value = str(value)
+    
+            ws4.write(r, c, value, data_fmt)
     
         wb.close()
         return output.getvalue()
