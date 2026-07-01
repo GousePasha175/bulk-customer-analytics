@@ -170,7 +170,8 @@ def build_nil_reports(master_df, division_dfs):
 
         for _, row in temp.iterrows():
             office_name = normalize_office(row["Name"])
-            office_counts[(div, office_name)] = int(row["Total Accounts"])
+            key = (div, office_name)
+            office_counts[key] = office_counts.get(key, 0) + int(row["Total Accounts"])
 
     nil_rows = []
     mapping_rows = []
@@ -193,8 +194,6 @@ def build_nil_reports(master_df, division_dfs):
         else:
             office_key = (division, ho_norm)
 
-        if office_key not in office_counts:
-            print("NOT MATCHED:", office_key)
         count = office_counts.get(office_key, 0)
 
         map_row = row.to_dict()
@@ -234,6 +233,8 @@ def parse_product_report(uploaded_file, division_name: str) -> pd.DataFrame | No
 
     # Drop total row
     df = df[~df["Name"].astype(str).str.lower().str.startswith("total")]
+    df = df[~df["Name"].astype(str).str.lower().str.contains("grand total", na=False)]
+    df = df[~df["Name"].astype(str).str.lower().str.contains("summary", na=False)]
     # Drop DC offices
     df = df[~df["Name"].apply(is_dc)]
     # Drop empty names
@@ -709,7 +710,7 @@ def main():
             if division_dfs:
                 range_df = build_range_report(division_dfs)
                 master_df = load_master_file(master_file)
-                st.write(master_df.columns.tolist())
+                
 
                 nil_df = None
                 mapping_df = None
