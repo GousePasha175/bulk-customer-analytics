@@ -12,27 +12,31 @@ def _render_nav():
     st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
     st.sidebar.page_link("Analytics_Excel.py", label="\U0001f3e0 Home")
     st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
+    _aebas = (_glob.glob("pages/AEBAS_Monitoring.py") +
+              _glob.glob("pages/*[Aa][Ee][Bb][Aa][Ss]*.py"))
+    if _aebas:
+        st.sidebar.page_link(_aebas[0].replace("\\", "/"), label="\U0001f91a AEBAS Monitoring")
+    st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
     _bulk = (_glob.glob("pages/Bulk Analytics.py") +
              _glob.glob("pages/*[Bb]ulk*.py"))
     if _bulk:
         st.sidebar.page_link(_bulk[0].replace("\\", "/"), label="\U0001f4ca Bulk Customer Analytics")
-    st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
-    _posb = (_glob.glob("pages/POSB Daily Report.py") +
-             _glob.glob("pages/*[Pp][Oo][Ss][Bb]*.py"))
-    if _posb:
-        st.sidebar.page_link(_posb[0].replace("\\", "/"), label="\U0001f4ee POSB Daily Report")
-    st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
-    _dig = (_glob.glob("pages/1_Digital_Transactions.py") +
-            _glob.glob("pages/*[Dd]igital*.py"))
-    if _dig:
-        st.sidebar.page_link(_dig[0].replace("\\", "/"), label="\U0001f4bb Digital Transactions")
     st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
     _del = (_glob.glob("pages/Delivery Productivity.py") +
             _glob.glob("pages/*[Dd]elivery*.py"))
     if _del:
         st.sidebar.page_link(_del[0].replace("\\", "/"), label="\U0001f4e6 Delivery Productivity")
     st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
-
+    _dig = (_glob.glob("pages/1_Digital_Transactions.py") +
+            _glob.glob("pages/*[Dd]igital*.py"))
+    if _dig:
+        st.sidebar.page_link(_dig[0].replace("\\", "/"), label="\U0001f4bb Digital Transactions")
+    st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
+    _posb = (_glob.glob("pages/POSB Daily Report.py") +
+             _glob.glob("pages/*[Pp][Oo][Ss][Bb]*.py"))
+    if _posb:
+        st.sidebar.page_link(_posb[0].replace("\\", "/"), label="\U0001f4ee POSB Daily Report")
+    st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
 import pandas as pd
 import io, os, re
 import matplotlib
