@@ -417,33 +417,46 @@ def export_range_report_excel(df, division_dfs=None, nil_df=None, mapping_df=Non
             ws2.write(cur_row,3+len(ACCOUNT_COLS)+1,"",total_fmt)
             cur_row+=2
 
-    wb.close(); return output.getvalue()
-        # Sheet 3 - Nil Offices
-    if nil_df is not None:
-        ws3 = wb.add_worksheet("Nil Offices")
+        # ── Sheet 3: NIL Offices ─────────────────────────────────────────────
+        if nil_df is not None and not nil_df.empty:
+            ws3 = wb.add_worksheet("Nil Offices")
     
-        cols = list(nil_df.columns)
+            cols3 = list(nil_df.columns)
     
-        for c, col in enumerate(cols):
-            ws3.write(0, c, col, header_fmt)
+            ws3.merge_range(0, 0, 0, len(cols3)-1,
+                            "List of NIL Transaction Offices", title_fmt)
     
-        for r, (_, row) in enumerate(nil_df.iterrows(), start=1):
-            for c, col in enumerate(cols):
-                ws3.write(r, c, row[col], data_fmt)
+            for c, col in enumerate(cols3):
+                ws3.write(1, c, col, header_fmt)
     
-    # Sheet 4 - Master Mapping
-    if mapping_df is not None:
-        ws4 = wb.add_worksheet("Master Mapping")
+            ws3.freeze_panes(2, 0)
+            ws3.set_column(0, len(cols3)-1, 22)
     
-        cols = list(mapping_df.columns)
+            for r, (_, row) in enumerate(nil_df.iterrows(), start=2):
+                for c, col in enumerate(cols3):
+                    ws3.write(r, c, row[col], data_fmt)
     
-        for c, col in enumerate(cols):
-            ws4.write(0, c, col, header_fmt)
+        # ── Sheet 4: Master Mapping with Count ─────────────────────────────
+        if mapping_df is not None and not mapping_df.empty:
+            ws4 = wb.add_worksheet("Master Mapping")
     
-        for r, (_, row) in enumerate(mapping_df.iterrows(), start=1):
-            for c, col in enumerate(cols):
-                ws4.write(r, c, row[col], data_fmt)
-
+            cols4 = list(mapping_df.columns)
+    
+            ws4.merge_range(0, 0, 0, len(cols4)-1,
+                            "Master Office Mapping with Account Count", title_fmt)
+    
+            for c, col in enumerate(cols4):
+                ws4.write(1, c, col, header_fmt)
+    
+            ws4.freeze_panes(2, 0)
+            ws4.set_column(0, len(cols4)-1, 22)
+    
+            for r, (_, row) in enumerate(mapping_df.iterrows(), start=2):
+                for c, col in enumerate(cols4):
+                    ws4.write(r, c, row[col], data_fmt)
+    
+        wb.close()
+        return output.getvalue()
 def _sum_ac_cols(df, div):
     """
     For Accounts Opened files: sum MIS+PPFGP+SSA+RD+SBBAS+SBSGP+SCSS+TD
