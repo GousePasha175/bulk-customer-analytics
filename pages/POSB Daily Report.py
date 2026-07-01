@@ -194,7 +194,7 @@ def build_nil_reports(master_df, division_dfs):
             office_key = (division, ho_norm)
 
         if office_key not in office_counts:
-        print("NOT MATCHED:", office_key)
+            print("NOT MATCHED:", office_key)
         count = office_counts.get(office_key, 0)
 
         map_row = row.to_dict()
