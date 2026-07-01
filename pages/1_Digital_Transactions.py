@@ -9,9 +9,9 @@ def _render_nav():
         <p style='font-size:12px;font-weight:700;color:#888;
            text-transform:uppercase;letter-spacing:1px;margin:0 0 4px 0;'></p>
         </div>""", unsafe_allow_html=True)
-    st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
+    
     st.sidebar.page_link("Analytics_Excel.py", label="\U0001f3e0 Home")
-    st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
+    
     _aebas = (_glob.glob("pages/AEBAS_Monitoring.py") +
               _glob.glob("pages/*[Aa][Ee][Bb][Aa][Ss]*.py"))
     if _aebas:
@@ -36,7 +36,7 @@ def _render_nav():
              _glob.glob("pages/*[Pp][Oo][Ss][Bb]*.py"))
     if _posb:
         st.sidebar.page_link(_posb[0].replace("\\", "/"), label="\U0001f4ee POSB Daily Report")
-    st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
+    
 import pandas as pd
 import io, os, re
 import matplotlib
