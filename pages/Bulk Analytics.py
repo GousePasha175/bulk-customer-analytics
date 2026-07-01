@@ -18,9 +18,9 @@ def _render_nav():
     st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>",unsafe_allow_html=True)
     for pat,lbl in [("pages/AEBAS_Monitoring.py|pages/*[Aa][Ee][Bb][Aa][Ss]*.py","\U0001f91a AEBAS Monitoring"),
                     ("pages/Bulk Analytics.py|pages/*[Bb]ulk*.py","\U0001f4ca Bulk Customer Analytics"), 
-                    ("pages/Delivery Productivity.py|pages/*[Dd]elivery*.py", "\U0001f4e6 Delivery Productivity")]:            
+                    ("pages/Delivery Productivity.py|pages/*[Dd]elivery*.py", "\U0001f4e6 Delivery Productivity")
                     ("pages/1_Digital_Transactions.py|pages/*[Dd]igital*.py","\U0001f4bb Digital Transactions"),
-                    ("pages/POSB Daily Report.py|pages/*[Pp][Oo][Ss][Bb]*.py","\U0001f4ee POSB Daily Report"),
+                    ("pages/POSB Daily Report.py|pages/*[Pp][Oo][Ss][Bb]*.py","\U0001f4ee POSB Daily Report"),]:
                     
         hits=[]
         for p in pat.split("|"): hits+=_glob.glob(p)
