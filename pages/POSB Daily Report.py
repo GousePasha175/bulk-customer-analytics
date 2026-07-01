@@ -6,6 +6,8 @@ import xlsxwriter
 from datetime import date, datetime
 import calendar
 import glob as _glob
+import os
+import re
 
 import glob as _glob
 
@@ -89,6 +91,7 @@ SCHEME_FULL = {
 }
 
 OFFICE_SUFFIXES = {"S.O", "B.O", "H.O", "DC"}
+DEFAULT_MASTER_PATH = "Master_AeBAS/Master file for SB.xlsx"
 
 
 def classify_office(name: str) -> str:
@@ -110,7 +113,76 @@ def classify_office(name: str) -> str:
 def is_dc(name: str) -> bool:
     return classify_office(name) == "DC"
 
+def normalize_office(name):
+    if pd.isna(name):
+        return ""
+    name = str(name).upper().strip()
+    name = name.replace(".", "")
+    name = re.sub(r"\s+", " ", name)
+    return name
 
+
+def load_master_file(uploaded_master=None):
+    try:
+        if uploaded_master is not None:
+            df = pd.read_excel(uploaded_master)
+        else:
+            if not os.path.exists(DEFAULT_MASTER_PATH):
+                st.error(f"Default master not found at {DEFAULT_MASTER_PATH}")
+                return None
+            df = pd.read_excel(DEFAULT_MASTER_PATH)
+
+        df.columns = [str(c).strip() for c in df.columns]
+        return df
+
+    except Exception as e:
+        st.error(f"Error loading master file: {e}")
+        return None
+
+
+def build_nil_reports(master_df, division_dfs):
+    office_counts = {}
+
+    for div, df in division_dfs.items():
+        temp = df.copy()
+        temp["Total Accounts"] = temp[ACCOUNT_COLS].sum(axis=1)
+
+        for _, row in temp.iterrows():
+            office_name = normalize_office(row["Name"])
+            office_counts[office_name] = int(row["Total Accounts"])
+
+    nil_rows = []
+    mapping_rows = []
+
+    for _, row in master_df.iterrows():
+        bo = row.get("Branch Office", "")
+        so = row.get("Sub Office", "")
+        ho = row.get("Head Office", "")
+
+        bo_norm = normalize_office(bo)
+        so_norm = normalize_office(so)
+        ho_norm = normalize_office(ho)
+
+        if bo_norm:
+            office_key = bo_norm
+        elif so_norm:
+            office_key = so_norm
+        else:
+            office_key = ho_norm
+
+        count = office_counts.get(office_key, 0)
+
+        map_row = row.to_dict()
+        map_row["Accounts Opened"] = count
+        mapping_rows.append(map_row)
+
+        if count == 0:
+            nil_rows.append(row.to_dict())
+
+    nil_df = pd.DataFrame(nil_rows)
+    mapping_df = pd.DataFrame(mapping_rows)
+
+    return nil_df, mapping_df
 # ─── Excel parsing helpers ─────────────────────────────────────────────────────
 
 def parse_product_report(uploaded_file, division_name: str) -> pd.DataFrame | None:
@@ -265,7 +337,7 @@ def build_range_report(division_dfs: dict[str, pd.DataFrame]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def export_range_report_excel(df, division_dfs=None):
+def export_range_report_excel(df, division_dfs=None, nil_df=None, mapping_df=None):
     output = BytesIO()
     wb = xlsxwriter.Workbook(output, {"in_memory": True})
 
@@ -346,6 +418,31 @@ def export_range_report_excel(df, division_dfs=None):
             cur_row+=2
 
     wb.close(); return output.getvalue()
+        # Sheet 3 - Nil Offices
+    if nil_df is not None:
+        ws3 = wb.add_worksheet("Nil Offices")
+    
+        cols = list(nil_df.columns)
+    
+        for c, col in enumerate(cols):
+            ws3.write(0, c, col, header_fmt)
+    
+        for r, (_, row) in enumerate(nil_df.iterrows(), start=1):
+            for c, col in enumerate(cols):
+                ws3.write(r, c, row[col], data_fmt)
+    
+    # Sheet 4 - Master Mapping
+    if mapping_df is not None:
+        ws4 = wb.add_worksheet("Master Mapping")
+    
+        cols = list(mapping_df.columns)
+    
+        for c, col in enumerate(cols):
+            ws4.write(0, c, col, header_fmt)
+    
+        for r, (_, row) in enumerate(mapping_df.iterrows(), start=1):
+            for c, col in enumerate(cols):
+                ws4.write(r, c, row[col], data_fmt)
 
 def _sum_ac_cols(df, div):
     """
@@ -530,6 +627,7 @@ def main():
              "The report counts only account category groups (MIS, PPFGP, SSA, RD, SBBAS, SBSGP, SCSS, TD). "
              "DC offices are excluded."
          )
+        master_file = st.file_uploader("Optional: Upload Master Office Mapping",type=["xlsx", "xls"],key="master_override")
         div_files = {}
         cols = st.columns(6)
     
@@ -554,6 +652,15 @@ def main():
         
             if division_dfs:
                 range_df = build_range_report(division_dfs)
+                master_df = load_master_file(master_file)
+
+    nil_df = None
+    mapping_df = None
+    
+    if master_df is not None:
+        nil_df, mapping_df = build_nil_reports(master_df, division_dfs)
+    if nil_df is not None:
+        st.info(f"📌 NIL transaction offices identified: {len(nil_df)}")
         
                 # ── Display Table ─────────────────────────────────────────
                 st.subheader(f"Division-wise Summary — {len(division_dfs)} Division(s) loaded")
@@ -590,7 +697,7 @@ def main():
                         st.dataframe(df[existing], use_container_width=True, hide_index=True)
         
                 # ── Download ──────────────────────────────────────────────
-                excel_bytes = export_range_report_excel(range_df, division_dfs)
+                excel_bytes = export_range_report_excel(range_df,division_dfs,nil_df,mapping_df)
                 st.download_button(
                     label="⬇️ Download Range Report as Excel",
                     data=excel_bytes,
