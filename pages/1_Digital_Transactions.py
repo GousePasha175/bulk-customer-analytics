@@ -36,7 +36,7 @@ def _render_nav():
              _glob.glob("pages/*[Pp][Oo][Ss][Bb]*.py"))
     if _posb:
         st.sidebar.page_link(_posb[0].replace("\\", "/"), label="\U0001f4ee POSB Daily Report")
-    
+    st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
 import pandas as pd
 import io, os, re
 import matplotlib
