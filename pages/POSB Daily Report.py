@@ -26,6 +26,11 @@ def _render_nav():
     if _aebas:
         st.sidebar.page_link(_aebas[0].replace("\\", "/"), label="\U0001f91a AEBAS Monitoring")
     st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
+    _bulk = (_glob.glob("pages/Bulk Analytics.py") +
+             _glob.glob("pages/*[Bb]ulk*.py"))
+    if _bulk:
+        st.sidebar.page_link(_bulk[0].replace("\\", "/"), label="\U0001f4ca Bulk Customer Analytics")
+    st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
     _del = (_glob.glob("pages/Delivery_Productivity.py") +
             _glob.glob("pages/*[Dd]elivery*.py"))
     if _del:
