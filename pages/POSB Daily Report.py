@@ -117,22 +117,10 @@ def is_dc(name: str) -> bool:
 def normalize_office(name):
     if pd.isna(name):
         return ""
-
     name = str(name).upper().strip()
-
-    # remove dots
     name = name.replace(".", "")
-
-    # remove office suffixes temporarily
-    name = re.sub(r"\bB\s*O\b", "", name)
-    name = re.sub(r"\bS\s*O\b", "", name)
-    name = re.sub(r"\bH\s*O\b", "", name)
-
-    # normalize spaces
-    name = re.sub(r"\s+", " ", name).strip()
-
+    name = re.sub(r"\s+", " ", name)
     return name
-
 
 def load_master_file(uploaded_master=None):
     try:
@@ -179,34 +167,17 @@ def build_nil_reports(master_df, division_dfs):
     for div, df in division_dfs.items():
         temp = df.copy()
         temp["Total Accounts"] = temp[ACCOUNT_COLS].sum(axis=1)
-
+    
         for _, row in temp.iterrows():
-            office_name = normalize_office(row["Name"])
-            key = (div, office_name)
-            office_counts[key] = office_counts.get(key, 0) + int(row["Total Accounts"])
+            sol_id = str(row["BOCODE"]).strip()
+            office_counts[sol_id] = int(row["Total Accounts"])
 
     nil_rows = []
     mapping_rows = []
 
     for _, row in master_df.iterrows():
-        bo = row.get("Branch Office", "")
-        so = row.get("Sub Office", "")
-        ho = row.get("Head Office", "")
-
-        bo_norm = normalize_office(bo)
-        so_norm = normalize_office(so)
-        ho_norm = normalize_office(ho)
-
-        division = str(row["Division"]).strip()
-
-        if bo_norm:
-            office_key = (division, bo_norm)
-        elif so_norm:
-            office_key = (division, so_norm)
-        else:
-            office_key = (division, ho_norm)
-
-        count = office_counts.get(office_key, 0)
+        sol_id = str(row["SOL ID"]).strip()
+        count = office_counts.get(sol_id, 0)
 
         map_row = row.to_dict()
         map_row["Accounts Opened"] = count
@@ -242,6 +213,11 @@ def parse_product_report(uploaded_file, division_name: str) -> pd.DataFrame | No
     df.columns = df.iloc[hdr_row]
     df = df.iloc[hdr_row + 1:].reset_index(drop=True)
     df.columns = [str(c).strip() for c in df.columns]
+    # Normalize SOL ID column name
+    for col in df.columns:
+        if str(col).strip().upper() in ["SOL ID / BOCODE", "SOL ID", "BOCODE"]:
+            df = df.rename(columns={col: "BOCODE"})
+            break
 
     # Drop total row
     df = df[~df["Name"].astype(str).str.lower().str.startswith("total")]
