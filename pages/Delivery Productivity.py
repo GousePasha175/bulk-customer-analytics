@@ -16,7 +16,7 @@ def _render_nav():
         <p style='font-size:12px;font-weight:700;color:#888;
            text-transform:uppercase;letter-spacing:1px;margin:0 0 4px 0;'>Pages</p>
         </div>""", unsafe_allow_html=True)
-    st.sidebar.page_link("Analytics_Excel.py", label="\U0001f512 Login")
+    st.sidebar.page_link("Analytics_Excel.py", label="\U0001f3e0 Home")
     for pat, lbl in [
         ("pages/AEBAS_Monitoring.py|pages/*[Aa][Ee][Bb][Aa][Ss]*.py","\U0001f91a AEBAS Monitoring"),
         ("pages/Bulk Analytics.py|pages/*[Bb]ulk*.py",           "\U0001f4ca Bulk Customer Analytics"),
