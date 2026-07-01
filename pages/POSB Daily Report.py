@@ -183,9 +183,7 @@ def build_nil_reports(master_df, division_dfs):
         map_row["Accounts Opened"] = count
         mapping_rows.append(map_row)
 
-        if count == 0:
-            nil_rows.append(row.to_dict())
-
+        
     nil_df = pd.DataFrame(nil_rows)
     mapping_df = pd.DataFrame(mapping_rows)
 
@@ -705,6 +703,9 @@ def main():
                 
                 if master_df is not None:
                     nil_df, mapping_df = build_nil_reports(master_df, division_dfs)
+                    zero_counts = nil_df.groupby("Division").size().to_dict()
+                    range_df = build_range_report(division_dfs)
+                    range_df["0"] = range_df["Division"].map(zero_counts).fillna(0).astype(int)
                 if nil_df is not None:
                     st.info(f"📌 NIL transaction offices identified: {len(nil_df)}")
         
