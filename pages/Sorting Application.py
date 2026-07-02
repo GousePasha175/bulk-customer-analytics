@@ -201,6 +201,7 @@ def door_match(user_input, door_text):
 # Smart Search
 # ─────────────────────────────────────────────────────────────────────
 def smart_search(query):
+    st.write("Detected Type:", detect_query_type(query))
     qtype = detect_query_type(query)
 
     temp = df.copy()
