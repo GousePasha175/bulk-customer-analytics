@@ -167,18 +167,42 @@ def door_match(user_input, door_text):
     user = normalize_door(user_input)
     door = normalize_door(door_text)
 
+    # Exact match
     if user == door:
         return 100
 
-    fuzzy = fuzz.partial_ratio(user, door)
-    if fuzzy >= 90:
-        return fuzzy
+    user_parts = user.split("-")
 
+    # Single-number entries like "1"
+    if "-" not in door:
+        return 100 if user == door else 0
+
+    door_parts = door.split("-")
+
+    # Strong prefix matching: first 2 segments must match
+    if len(user_parts) >= 2 and len(door_parts) >= 2:
+        if user_parts[0] != door_parts[0]:
+            return 0
+        if user_parts[1] != door_parts[1]:
+            return 0
+
+    # Prefix match (e.g. 3-1-39 vs 3-1-39/1)
+    if door.startswith(user):
+        return 95
+
+    # Range match
     if "TO" in door:
         try:
-            parts = door.split("TO")
-            start = parts[0].strip()
-            end = parts[1].strip()
+            start, end = [x.strip() for x in door.split("TO")]
+
+            start_parts = start.split("-")
+            end_parts = end.split("-")
+
+            if len(start_parts) >= 2 and len(user_parts) >= 2:
+                if start_parts[0] != user_parts[0]:
+                    return 0
+                if start_parts[1] != user_parts[1]:
+                    return 0
 
             u_nums = extract_numbers(user)
             s_nums = extract_numbers(start)
@@ -201,7 +225,7 @@ def door_match(user_input, door_text):
 # Smart Search
 # ─────────────────────────────────────────────────────────────────────
 def smart_search(query):
-    st.write("Detected Type:", detect_query_type(query))
+    
     qtype = detect_query_type(query)
 
     temp = df.copy()
