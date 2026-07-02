@@ -7,7 +7,6 @@ import re
 from datetime import date, timedelta
 from io import BytesIO
 import xlsxwriter
-from rapidfuzz import process, fuzz
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -339,34 +338,19 @@ def load_aebas_export(file_bytes):
         df["Status"] = ""
     return df
 
-def match_offices(query_norms, master_norms, threshold):
-    """query_norms: unique list. Returns dict query_norm -> matched master_norm (or None)."""
-    master_list = list(master_norms)
-    out = {}
-    for q in query_norms:
-        if not q:
-            out[q] = None
+def build_exact_match_dict(names, ids):
+    """Map normalised office name -> office_id, using EXACT (not fuzzy) equality.
+    First occurrence wins if a name repeats with the same/different id."""
+    d = {}
+    for name_norm, oid in zip(names, ids):
+        if not name_norm or pd.isna(oid):
             continue
-        result = process.extractOne(q, master_list, scorer=fuzz.partial_ratio)
-        out[q] = result[0] if result and result[1] >= threshold else None
-    return out
-
-def match_offices_to_index(query_norms, master_df, threshold):
-    """Match each unique query norm to a single row (by positional index) of master_df.
-    Matching to a row index (rather than name text) avoids double-counting if two
-    master rows ever share the same normalised name."""
-    choices = master_df["office_norm"].tolist()
-    out = {}
-    for q in query_norms:
-        if not q:
-            out[q] = None
-            continue
-        result = process.extractOne(q, choices, scorer=fuzz.partial_ratio)
-        out[q] = result[2] if result and result[1] >= threshold else None
-    return out
+        if name_norm not in d:
+            d[name_norm] = int(oid)
+    return d
 
 # ── Excel builder ─────────────────────────────────────────────────────────────
-def build_excel(summary_df, not_marked_df, office_wise_df, report_date):
+def build_excel(summary_df, not_marked_df, office_wise_df, report_date, unmatched_df=None):
     output = BytesIO()
     wb = xlsxwriter.Workbook(output, {"in_memory": True})
 
@@ -516,6 +500,26 @@ def build_excel(summary_df, not_marked_df, office_wise_df, report_date):
     ri3 += 2
     ws3.write(ri3, 1, "* Departmental Post Offices only. Branch Offices (BOs) excluded.", fmt_note)
 
+    # ── Sheet 4: Unmatched Export Rows (no exact Office ID match in Consolidated) ──
+    if unmatched_df is not None and len(unmatched_df):
+        ws4 = wb.add_worksheet("Unmatched Export Rows")
+        ws4.set_column(0, 0, 6)
+        ws4.set_column(1, 1, 50)
+        ws4.set_column(2, 2, 12)
+        ws4.set_row(0, 24)
+        ws4.set_row(1, 20)
+        ws4.merge_range(0, 0, 0, 2,
+            "Export rows with no matching Office ID in the Consolidated sheet", fmt_title)
+        ws4.write(1, 0, "Sl. No.", fmt_hdr)
+        ws4.write(1, 1, "Office Location (as in export file)", fmt_hdr)
+        ws4.write(1, 2, "Records", fmt_hdr)
+        ri4 = 2
+        for sl, (_, row) in enumerate(unmatched_df.iterrows(), start=1):
+            ws4.write(ri4, 0, sl, fmt_c)
+            ws4.write(ri4, 1, str(row["Office Location"]), fmt_l)
+            ws4.write(ri4, 2, int(row["Records"]), fmt_c)
+            ri4 += 1
+
     wb.close()
     return output.getvalue()
 
@@ -648,9 +652,6 @@ aebas_file = st.sidebar.file_uploader(
     help="Downloaded from AEBAS portal — contains 'Office Location' and 'Status' columns"
 )
 
-FUZZY_THRESHOLD = 60  # matching is against exact office-code-based master names, so a
-                       # single sensible default is used instead of an exposed slider.
-
 # ── Main area: optional master overrides (one row) ───────────────────────────
 st.subheader("📂 Master Data")
 
@@ -720,25 +721,28 @@ om_lookup = {
     for _, r in office_master_nonbo.iterrows() if pd.notna(r["office_id"])
 }
 
-# STEP 1: fuzzy-match each unique export location against the Consolidated
-# alias dictionary (multiple name-variants can map to the same Office ID)
-with st.spinner("Matching office names..."):
-    match_idx_map = match_offices_to_index(export_norms_unique, consolidated_df, FUZZY_THRESHOLD)
+# STEP 1: exact-match each unique export location against the Consolidated
+# alias dictionary (multiple name-variants can map to the same Office ID).
+# No fuzzy matching — names are matched exactly (after basic normalisation
+# for case/spacing/punctuation only).
+consolidated_exact_map = build_exact_match_dict(consolidated_df["office_norm"], consolidated_df["office_id"])
 
-# STEP 2: resolve the matched Consolidated row to its Office ID (the join key),
-# then confirm that ID exists as a real, non-BO office in Office Master
-export_norm_to_office_id = {}
-for norm, pos in match_idx_map.items():
-    oid = None
-    if pos is not None:
-        raw_id = consolidated_df.iloc[pos]["office_id"]
-        oid = int(raw_id) if pd.notna(raw_id) else None
-    export_norm_to_office_id[norm] = oid
+# STEP 2: resolve each export location to its Office ID (the join key), then
+# confirm that ID exists as a real, non-BO office in Office Master
+export_norm_to_office_id = {norm: consolidated_exact_map.get(norm) for norm in export_norms_unique}
 
 export_df["matched_office_id"] = export_df["office_norm"].map(export_norm_to_office_id)
 export_df["matched_valid"] = export_df["matched_office_id"].apply(lambda v: v in om_lookup if pd.notna(v) else False)
 
 marked_ids = set(export_df.loc[export_df["matched_valid"], "matched_office_id"].unique())
+
+# Export rows whose Office Location has no exact match in the Consolidated sheet at all
+unmatched_export = export_df[export_df["matched_office_id"].isna()].copy()
+unmatched_summary = (
+    unmatched_export.groupby("Office Location", dropna=False)
+    .size().reset_index(name="Records")
+    .sort_values("Records", ascending=False).reset_index(drop=True)
+) if len(unmatched_export) else pd.DataFrame(columns=["Office Location", "Records"])
 
 # ══════════════════════════════════════════════════════════════════════════════
 # REPORT 1 — Division-wise % (base = Office Master, non-BO offices)
@@ -785,6 +789,18 @@ st.markdown("---")
 nm_title = f"List of offices not marked attendance in AEBAS portal as on {report_date.strftime('%d.%m.%Y')}"
 st.markdown(render_notmarked_html(not_marked, nm_title), unsafe_allow_html=True)
 
+if len(unmatched_summary):
+    st.markdown("---")
+    total_unmatched_records = int(unmatched_summary["Records"].sum())
+    st.error(
+        f"⚠️ **{len(unmatched_summary)} Office Location value(s) in the uploaded export "
+        f"({total_unmatched_records} record(s)) have no matching Office ID in the Consolidated "
+        "sheet.** These are not counted in either report below. Check for typos/aliases missing "
+        "from the Consolidated sheet, or offices outside this region."
+    )
+    st.dataframe(unmatched_summary.rename(columns={"Office Location": "Office Location (as in export file)"}),
+                 use_container_width=True, hide_index=True)
+
 # ══════════════════════════════════════════════════════════════════════════════
 # REPORT 2 — Office-wise number of users marked attendance
 # ══════════════════════════════════════════════════════════════════════════════
@@ -821,7 +837,7 @@ st.caption("* Departmental Post Offices only. Branch Offices (BOs) excluded.")
 
 # ── Download ──────────────────────────────────────────────────────────────────
 st.markdown("---")
-excel_bytes = build_excel(summary_display, not_marked, office_wise, report_date)
+excel_bytes = build_excel(summary_display, not_marked, office_wise, report_date, unmatched_summary)
 st.download_button(
     "⬇️ Download AEBAS Report (Excel)",
     data=excel_bytes,
