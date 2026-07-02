@@ -36,6 +36,11 @@ def _render_nav():
              _glob.glob("pages/*[Pp][Oo][Ss][Bb]*.py"))
     if _posb:
         st.sidebar.page_link(_posb[0].replace("\\", "/"), label="\U0001f4ee POSB Daily Report")
+        
+    _sort = (_glob.glob("pages/Sorting Application.py") +
+             _glob.glob("pages/*[Ss]orting*.py"))
+    if _sort:
+        st.sidebar.page_link(_sort[0].replace("\\", "/"),label="📮 Sorting Assistance")
     st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
     
 
