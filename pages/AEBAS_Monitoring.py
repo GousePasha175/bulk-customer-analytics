@@ -39,12 +39,16 @@ def _render_nav():
         </div>""", unsafe_allow_html=True)
     st.sidebar.page_link("Analytics_Excel.py", label="\U0001f512 Login")
     for pat, lbl in [
-        ("pages/AEBAS_Monitoring.py|pages/*[Aa][Ee][Bb][Aa][Ss]*.py","\U0001f91a AEBAS Monitoring"),
-        ("pages/Bulk_Analytics.py|pages/*[Bb]ulk*.py","\U0001f4ca Bulk Customer Analytics"),
-        ("pages/Delivery_Productivity.py|pages/*[Dd]elivery*.py","\U0001f4e6 Delivery Productivity"),
-        ("pages/1_Digital_Transactions.py|pages/*[Dd]igital*.py","\U0001f4bb Digital Transactions"),
-        ("pages/POSB Daily Report.py|pages/*[Pp][Oo][Ss][Bb]*.py","\U0001f4ee POSB Daily Report"),
-        
+        ("pages/Bulk_Analytics.py|pages/*[Bb]ulk*.py",
+         "\U0001f4ca Bulk Customer Analytics"),
+        ("pages/POSB Daily Report.py|pages/*[Pp][Oo][Ss][Bb]*.py",
+         "\U0001f4ee POSB Daily Report"),
+        ("pages/1_Digital_Transactions.py|pages/*[Dd]igital*.py",
+         "\U0001f4bb Digital Transactions"),
+        ("pages/Delivery_Productivity.py|pages/*[Dd]elivery*.py",
+         "\U0001f4e6 Delivery Productivity"),
+        ("pages/AEBAS_Monitoring.py|pages/*[Aa][Ee][Bb][Aa][Ss]*.py",
+         "\U0001f91a AEBAS Monitoring"),
     ]:
         hits = []
         for p in pat.split("|"): hits += _glob.glob(p)
@@ -112,14 +116,29 @@ def normalise(x):
     return x
 
 def find_bundled_master():
-    """Look for AEBAS_Master.xlsx bundled next to this script (or nearby)."""
-    candidates = []
-    candidates += _glob.glob(os.path.join(BASE_DIR, "AEBAS_Master.xlsx"))
-    candidates += _glob.glob(os.path.join(BASE_DIR, "**", "AEBAS_Master.xlsx"), recursive=True)
-    candidates += _glob.glob("AEBAS_Master.xlsx")
-    candidates += _glob.glob("assets/AEBAS_Master.xlsx")
-    candidates += _glob.glob("data/AEBAS_Master.xlsx")
-    return candidates[0] if candidates else None
+    """
+    Look for the bundled AEBAS master workbook anywhere near this script.
+    Matches on filename containing both 'aebas' and 'master' (case-insensitive,
+    regardless of underscore/space), so 'AEBAS_Master.xlsx', 'AEBAS Master.xlsx',
+    'Master_AeBAS/AEBAS Master.xlsx', etc. are all found.
+    """
+    skip_dirs = {".git", "node_modules", "__pycache__", ".streamlit", "venv", ".venv"}
+    search_roots = []
+    for r in [BASE_DIR, os.path.dirname(BASE_DIR), os.getcwd()]:
+        rn = os.path.normpath(r)
+        if rn not in search_roots:
+            search_roots.append(rn)
+
+    for root in search_roots:
+        if not os.path.isdir(root):
+            continue
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames[:] = [d for d in dirnames if d not in skip_dirs]
+            for fn in filenames:
+                low = fn.lower()
+                if low.endswith(".xlsx") and "aebas" in low and "master" in low:
+                    return os.path.join(dirpath, fn)
+    return None
 
 def _find_col(columns, *keywords):
     lc = {str(c).lower().strip(): c for c in columns}
@@ -422,49 +441,53 @@ Headquarters Region – Telangana Postal Circle &nbsp;|&nbsp;
 """, unsafe_allow_html=True)
 st.markdown("<hr style='margin:4px 0 12px 0;border-color:#ddd;'>", unsafe_allow_html=True)
 
-# ── Sidebar ───────────────────────────────────────────────────────────────────
+# ── Sidebar (nav only) ──────────────────────────────────────────────────────
 _render_nav()
 st.sidebar.title("🖐 AEBAS Monitoring")
 
+FUZZY_THRESHOLD = 60  # matching is against exact office-code-based master names, so a
+                       # single sensible default is used instead of an exposed slider.
+
+# ── Main-area inputs: row 1 = date + export upload, row 2 = optional master overrides ──
 today = date.today()
 default_date = today - timedelta(days=3 if today.weekday() == 0 else 1)
-report_date = st.sidebar.date_input("Report Date", value=default_date)
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("📂 Master Data")
+row1_c1, row1_c2 = st.columns(2)
+with row1_c1:
+    report_date = st.date_input("Report Date", value=default_date)
+with row1_c2:
+    aebas_file = st.file_uploader(
+        "AEBAS Export CSV",
+        type=["csv"],
+        help="Downloaded from AEBAS portal — contains 'Office Location' and 'Status' columns"
+    )
 
 bundled_path = find_bundled_master()
 bundled_bytes = None
 if bundled_path:
-    st.sidebar.success(f"✅ Bundled master found: {os.path.basename(bundled_path)}")
     with open(bundled_path, "rb") as fh:
         bundled_bytes = fh.read()
-else:
-    st.sidebar.info("ℹ️ No bundled AEBAS_Master.xlsx found next to the app — upload both sheets below.")
 
-office_master_override = st.sidebar.file_uploader(
-    "AEBAS Master (Office Master sheet) — optional override",
-    type=["xlsx"],
-    help="Full office list incl. Branch Offices, used only as the name-matching dictionary."
-)
-consolidated_override = st.sidebar.file_uploader(
-    "APT Master (Consolidated sheet) — optional override",
-    type=["xlsx"],
-    help="Region's departmental-office universe (Branch Offices already excluded)."
+st.caption(
+    f"✅ Bundled master found: `{os.path.basename(bundled_path)}`" if bundled_path
+    else "ℹ️ No bundled master file found next to the app — upload both sheets below."
 )
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("📂 Upload Export")
-aebas_file = st.sidebar.file_uploader(
-    "AEBAS Export CSV",
-    type=["csv"],
-    help="Downloaded from AEBAS portal — contains 'Office Location' and 'Status' columns"
-)
+row2_c1, row2_c2 = st.columns(2)
+with row2_c1:
+    office_master_override = st.file_uploader(
+        "Optional: AEBAS Master (Office Master sheet) — override",
+        type=["xlsx"],
+        help="Full office list incl. Branch Offices, used only as the name-matching dictionary."
+    )
+with row2_c2:
+    consolidated_override = st.file_uploader(
+        "Optional: APT Master (Consolidated sheet) — override",
+        type=["xlsx"],
+        help="Region's departmental-office universe (Branch Offices already excluded)."
+    )
 
-fuzzy_threshold = st.sidebar.slider(
-    "Match sensitivity", 40, 90, 60,
-    help="Higher = stricter matching. Lower = more lenient."
-)
+st.markdown("<hr style='margin:8px 0 16px 0;border-color:#eee;'>", unsafe_allow_html=True)
 
 # ── Gate ──────────────────────────────────────────────────────────────────────
 office_master_bytes = office_master_override.read() if office_master_override else bundled_bytes
@@ -472,10 +495,10 @@ consolidated_bytes = consolidated_override.read() if consolidated_override else 
 
 if not aebas_file:
     st.info(
-        "Upload the **AEBAS Export CSV** from the sidebar to generate the reports.\n\n"
-        "Master office data is loaded automatically from `AEBAS_Master.xlsx` bundled with "
-        "the app (Office Master + Consolidated sheets). You can override either sheet "
-        "individually using the optional uploaders in the sidebar."
+        "Upload the **AEBAS Export CSV** above to generate the reports.\n\n"
+        "Master office data is loaded automatically from the bundled master workbook "
+        "(Office Master + Consolidated sheets). You can override either sheet "
+        "individually using the optional uploaders above."
     )
     st.stop()
 
@@ -485,7 +508,7 @@ if consolidated_bytes is None: missing.append("APT Master (Consolidated sheet)")
 if missing:
     st.error(
         "Missing master data: " + ", ".join(missing) + ". "
-        "Either bundle `AEBAS_Master.xlsx` next to the app, or upload the missing sheet(s) from the sidebar."
+        "Either bundle the master workbook next to the app, or upload the missing sheet(s) above."
     )
     st.stop()
 
@@ -502,7 +525,7 @@ export_norms_unique = [n for n in export_norms_unique if n]
 # REPORT 1 — Division-wise % (Consolidated / departmental offices only)
 # ══════════════════════════════════════════════════════════════════════════════
 with st.spinner("Matching offices for Division-wise report..."):
-    marked_norms = match_offices(export_norms_unique, consolidated_df["office_norm"].tolist(), fuzzy_threshold)
+    marked_norms = match_offices(export_norms_unique, consolidated_df["office_norm"].tolist(), FUZZY_THRESHOLD)
     marked_set = set(v for v in marked_norms.values() if v)
 
 master_df = consolidated_df.copy()
@@ -595,7 +618,7 @@ st.subheader(f"2️⃣ Office-wise Number of Users Marked Attendance — {report
 office_master_nonbo = office_master_df[~office_master_df["is_bo"]].reset_index(drop=True)
 
 with st.spinner("Matching offices for Office-wise report..."):
-    match_idx_map = match_offices_to_index(export_norms_unique, office_master_nonbo, fuzzy_threshold)
+    match_idx_map = match_offices_to_index(export_norms_unique, office_master_nonbo, FUZZY_THRESHOLD)
 
 export_df["matched_idx"] = export_df["office_norm"].map(match_idx_map)
 unmatched_mask = export_df["matched_idx"].isna()
