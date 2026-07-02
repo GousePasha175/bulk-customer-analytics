@@ -213,8 +213,8 @@ def smart_search(query):
     elif qtype == "door":
         scores = temp["Door Nos."].apply(lambda x: door_match(query, x))
         temp["Score"] = scores
-        result = temp[temp["Score"] >= 75]
-        return result.sort_values("Score", ascending=False).head(10)
+        result = temp[temp["Score"] >= 85]
+        return result.sort_values("Score", ascending=False)
 
     else:
         query_norm = normalize_text(query)
@@ -228,16 +228,16 @@ def smart_search(query):
             scores.append(final)
 
         temp["Score"] = scores
-        result = temp[temp["Score"] >= 75]
+        result = temp[temp["Score"] >= 85]
 
-        return result.sort_values("Score", ascending=False).head(10)
+        return result.sort_values("Score", ascending=False)
 
 
 # ─────────────────────────────────────────────────────────────────────
 # UI
 # ─────────────────────────────────────────────────────────────────────
 st.title("📮 Sorting Assistance")
-st.caption("Type Pincode, Colony, Area or Door Number")
+st.caption("Type Pincode, Colony, Area or Door Number, and press ENTER")
 
 query = st.text_input(
     "Search",
@@ -245,14 +245,13 @@ query = st.text_input(
     key="sorting_query"
 )
 query = st.session_state.get("sorting_query", "")
-st.write("Query =", repr(query))
 if query and str(query).strip():
     results = smart_search(query)
 
     if results.empty:
         st.warning("No matching records found.")
     else:
-        st.success(f"Top {len(results)} matches")
+        st.success(f"{len(results)} matching records found (sorted by relevance)")
 
         display = results[
             [
