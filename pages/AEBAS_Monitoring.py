@@ -39,11 +39,16 @@ def _render_nav():
         </div>""", unsafe_allow_html=True)
     st.sidebar.page_link("Analytics_Excel.py", label="\U0001f512 Login")
     for pat, lbl in [
-        ("pages/AEBAS_Monitoring.py|pages/*[Aa][Ee][Bb][Aa][Ss]*.py","\U0001f91a AEBAS Monitoring"),
-        ("pages/Bulk_Analytics.py|pages/*[Bb]ulk*.py","\U0001f4ca Bulk Customer Analytics"),
-        ("pages/Delivery_Productivity.py|pages/*[Dd]elivery*.py","\U0001f4e6 Delivery Productivity"),
-        ("pages/1_Digital_Transactions.py|pages/*[Dd]igital*.py","\U0001f4bb Digital Transactions"),
-        ("pages/POSB Daily Report.py|pages/*[Pp][Oo][Ss][Bb]*.py","\U0001f4ee POSB Daily Report"),
+        ("pages/Bulk_Analytics.py|pages/*[Bb]ulk*.py",
+         "\U0001f4ca Bulk Customer Analytics"),
+        ("pages/POSB Daily Report.py|pages/*[Pp][Oo][Ss][Bb]*.py",
+         "\U0001f4ee POSB Daily Report"),
+        ("pages/1_Digital_Transactions.py|pages/*[Dd]igital*.py",
+         "\U0001f4bb Digital Transactions"),
+        ("pages/Delivery_Productivity.py|pages/*[Dd]elivery*.py",
+         "\U0001f4e6 Delivery Productivity"),
+        ("pages/AEBAS_Monitoring.py|pages/*[Aa][Ee][Bb][Aa][Ss]*.py",
+         "\U0001f91a AEBAS Monitoring"),
     ]:
         hits = []
         for p in pat.split("|"): hits += _glob.glob(p)
@@ -143,6 +148,63 @@ def _find_col(columns, *keywords):
                 return orig
     return None
 
+def _find_division_col(columns):
+    for c in columns:
+        l = str(c).lower().strip()
+        if "division" in l or "region" in l:
+            return c
+    return None
+
+def _find_id_col(columns):
+    for c in columns:
+        l = str(c).lower().strip()
+        if "office" in l and "id" in l:
+            return c
+    for c in columns:
+        l = str(c).lower().strip()
+        if l == "id" or l.endswith(" id") or "code" in l:
+            return c
+    return None
+
+def _find_type_col(columns):
+    for c in columns:
+        if "type" in str(c).lower():
+            return c
+    return None
+
+def _find_office_name_col(columns, exclude=()):
+    cols = [c for c in columns if c not in exclude]
+    for c in cols:
+        l = str(c).lower().strip()
+        if ("office" in l or "unit" in l) and "name" in l:
+            return c
+    for c in cols:
+        l = str(c).lower().strip()
+        if ("office" in l or "unit" in l) and "id" not in l and "type" not in l \
+                and "division" not in l and "region" not in l:
+            return c
+    for c in cols:
+        l = str(c).lower().strip()
+        if "name" in l and "division" not in l and "region" not in l:
+            return c
+    return None
+
+def _guess_name_col_by_content(df, used_cols):
+    """Last resort: pick the unused column that looks most like free-text office names
+    (mostly alphabetic, mostly unique values)."""
+    candidates = [c for c in df.columns if c not in used_cols]
+    best, best_score = None, -1.0
+    for c in candidates:
+        vals = df[c].dropna().astype(str)
+        if len(vals) == 0:
+            continue
+        alpha_frac = vals.str.contains(r"[A-Za-z]").mean()
+        uniqueness = vals.nunique() / max(len(vals), 1)
+        score = alpha_frac * uniqueness
+        if score > best_score:
+            best_score, best = score, c
+    return best
+
 def _read_sheet(xl, preferred_name):
     if preferred_name in xl.sheet_names:
         return xl.parse(preferred_name)
@@ -166,18 +228,23 @@ def load_office_master(file_bytes):
     """
     xl = pd.ExcelFile(BytesIO(file_bytes))
     df = _read_sheet(xl, "Office Master")
-    col_div  = _find_col(df.columns, "division")
-    col_id   = _find_col(df.columns, "office id", "officeid")
-    col_name = _find_col(df.columns, "office name", "name of the office", "office/unit")
-    col_type = _find_col(df.columns, "office type", "type")
+    col_div  = _find_division_col(df.columns)
+    col_id   = _find_id_col(df.columns)
+    col_type = _find_type_col(df.columns)
+    col_name = _find_office_name_col(df.columns, exclude={c for c in [col_div, col_id, col_type] if c})
+    if col_name is None:
+        col_name = _guess_name_col_by_content(df, {c for c in [col_div, col_id, col_type] if c})
+    if col_name is None:
+        raise ValueError(
+            "Office Master sheet: could not detect an office-name column. "
+            f"Columns found: {list(df.columns)}"
+        )
     ren = {}
     if col_div:  ren[col_div]  = "division"
     if col_id:   ren[col_id]   = "office_id"
-    if col_name: ren[col_name] = "office_name"
     if col_type: ren[col_type] = "office_type"
+    ren[col_name] = "office_name"
     df = df.rename(columns=ren)
-    if "office_name" not in df.columns:
-        raise ValueError("Office Master sheet: could not find an office-name column.")
     df = df.dropna(subset=["office_name"]).copy()
     df["office_name"] = df["office_name"].astype(str).str.strip()
     df = df[df["office_name"].str.len() > 0]
@@ -203,16 +270,21 @@ def load_consolidated(file_bytes):
     """
     xl = pd.ExcelFile(BytesIO(file_bytes))
     df = _read_sheet(xl, "Consolidated")
-    col_div  = _find_col(df.columns, "division")
-    col_id   = _find_col(df.columns, "office id", "officeid")
-    col_name = _find_col(df.columns, "office name", "name of the office", "office/unit")
+    col_div = _find_division_col(df.columns)
+    col_id  = _find_id_col(df.columns)
+    col_name = _find_office_name_col(df.columns, exclude={c for c in [col_div, col_id] if c})
+    if col_name is None:
+        col_name = _guess_name_col_by_content(df, {c for c in [col_div, col_id] if c})
+    if col_name is None:
+        raise ValueError(
+            "Consolidated sheet: could not detect an office-name column. "
+            f"Columns found: {list(df.columns)}"
+        )
     ren = {}
-    if col_div:  ren[col_div]  = "division"
-    if col_id:   ren[col_id]   = "office_id"
-    if col_name: ren[col_name] = "office_name"
+    if col_div: ren[col_div] = "division"
+    if col_id:  ren[col_id]  = "office_id"
+    ren[col_name] = "office_name"
     df = df.rename(columns=ren)
-    if "office_name" not in df.columns:
-        raise ValueError("Consolidated sheet: could not find an office-name column.")
     df = df.dropna(subset=["office_name"]).copy()
     df["office_name"] = df["office_name"].astype(str).str.strip()
     df = df[df["office_name"].str.len() > 0]
@@ -436,26 +508,26 @@ Headquarters Region – Telangana Postal Circle &nbsp;|&nbsp;
 """, unsafe_allow_html=True)
 st.markdown("<hr style='margin:4px 0 12px 0;border-color:#ddd;'>", unsafe_allow_html=True)
 
-# ── Sidebar (nav only) ──────────────────────────────────────────────────────
+# ── Sidebar: report date + required export upload ────────────────────────────
 _render_nav()
 st.sidebar.title("🖐 AEBAS Monitoring")
+
+today = date.today()
+default_date = today - timedelta(days=3 if today.weekday() == 0 else 1)
+report_date = st.sidebar.date_input("Report Date", value=default_date)
+
+st.sidebar.markdown("---")
+aebas_file = st.sidebar.file_uploader(
+    "AEBAS Export CSV",
+    type=["csv"],
+    help="Downloaded from AEBAS portal — contains 'Office Location' and 'Status' columns"
+)
 
 FUZZY_THRESHOLD = 60  # matching is against exact office-code-based master names, so a
                        # single sensible default is used instead of an exposed slider.
 
-# ── Main-area inputs: row 1 = date + export upload, row 2 = optional master overrides ──
-today = date.today()
-default_date = today - timedelta(days=3 if today.weekday() == 0 else 1)
-
-row1_c1, row1_c2 = st.columns(2)
-with row1_c1:
-    report_date = st.date_input("Report Date", value=default_date)
-with row1_c2:
-    aebas_file = st.file_uploader(
-        "AEBAS Export CSV",
-        type=["csv"],
-        help="Downloaded from AEBAS portal — contains 'Office Location' and 'Status' columns"
-    )
+# ── Main area: optional master overrides (one row) ───────────────────────────
+st.subheader("📂 Master Data")
 
 bundled_path = find_bundled_master()
 bundled_bytes = None
@@ -468,14 +540,14 @@ st.caption(
     else "ℹ️ No bundled master file found next to the app — upload both sheets below."
 )
 
-row2_c1, row2_c2 = st.columns(2)
-with row2_c1:
+row_c1, row_c2 = st.columns(2)
+with row_c1:
     office_master_override = st.file_uploader(
         "Optional: AEBAS Master (Office Master sheet) — override",
         type=["xlsx"],
         help="Full office list incl. Branch Offices, used only as the name-matching dictionary."
     )
-with row2_c2:
+with row_c2:
     consolidated_override = st.file_uploader(
         "Optional: APT Master (Consolidated sheet) — override",
         type=["xlsx"],
