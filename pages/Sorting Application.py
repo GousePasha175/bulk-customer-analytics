@@ -10,7 +10,7 @@ def _render_nav():
            text-transform:uppercase;letter-spacing:1px;margin:0 0 4px 0;'>Pages</p>
         </div>""", unsafe_allow_html=True)
 
-    st.sidebar.page_link("Analytics_Excel.py", label="🔐 Login")
+    st.sidebar.page_link("Analytics_Excel.py", label="\U0001f3e0 Home")
 
     for pat, lbl in [
         ("pages/AEBAS_Monitoring.py|pages/*[Aa][Ee][Bb][Aa][Ss]*.py", "🤚 AEBAS Monitoring"),
