@@ -3,8 +3,7 @@ import pandas as pd
 import re
 import glob as _glob
 from rapidfuzz import fuzz
-from streamlit_keyup import st_keyup
-from st_keyup import st_keyup
+
 
 # ─────────────────────────────────────────────────────────────────────
 # Page Config
@@ -240,11 +239,12 @@ def smart_search(query):
 st.title("📮 Sorting Assistance")
 st.caption("Type Pincode, Colony, Area or Door Number")
 
-query = st_keyup(
+query = st.text_input(
     "Search",
     placeholder="Type Pincode / Area / Door Number...",
-    debounce=250
+    key="sorting_query"
 )
+query = st.session_state.get("sorting_query", "")
 st.write("Query =", repr(query))
 if query and str(query).strip():
     results = smart_search(query)
