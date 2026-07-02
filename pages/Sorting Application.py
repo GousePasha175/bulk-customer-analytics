@@ -4,6 +4,18 @@ import re
 import glob as _glob
 from rapidfuzz import fuzz
 
+# ─────────────────────────────────────────────────────────────────────
+# Page Config
+# ─────────────────────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="Sorting Assistance",
+    page_icon="📮",
+    layout="wide"
+)
+
+# ─────────────────────────────────────────────────────────────────────
+# Shared Navigation
+# ─────────────────────────────────────────────────────────────────────
 def _render_nav():
     st.sidebar.markdown("""<div style='padding:8px 0 4px 0;'>
         <p style='font-size:12px;font-weight:700;color:#888;
@@ -18,7 +30,7 @@ def _render_nav():
         ("pages/Delivery_Productivity.py|pages/*[Dd]elivery*.py", "📦 Delivery Productivity"),
         ("pages/1_Digital_Transactions.py|pages/*[Dd]igital*.py", "💻 Digital Transactions"),
         ("pages/POSB Daily Report.py|pages/*[Pp][Oo][Ss][Bb]*.py", "📮 POSB Daily Report"),
-        ("pages/Sorting_Assistance.py|pages/*[Ss]orting*.py", "📮 Sorting Assistance"),
+        ("pages/Sorting Assistance.py|pages/*[Ss]orting*.py", "📮 Sorting Assistance"),
     ]:
         hits = []
         for p in pat.split("|"):
@@ -29,27 +41,33 @@ def _render_nav():
 
     st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
 
-# =========================
-# PAGE CONFIG
-# =========================
-st.set_page_config(
-    page_title="Sorting Assistance",
-    page_icon="📮",
-    layout="wide"
-)
 
+# ─────────────────────────────────────────────────────────────────────
+# Auth Guard
+# ─────────────────────────────────────────────────────────────────────
+if not st.session_state.get("authenticated", False):
+    st.warning("⚠️ You are not logged in.")
+    st.markdown("Please go to **🔐 Login** in the sidebar.")
+    with st.sidebar:
+        _render_nav()
+    st.stop()
+
+with st.sidebar:
+    _render_nav()
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Load Master
+# ─────────────────────────────────────────────────────────────────────
 MASTER_PATH = "data/Sorting Application/Sorting List HQR 2025.xlsx"
 
 
-# =========================
-# LOAD DATA
-# =========================
 @st.cache_data
-def load_data():
+def load_master():
     df = pd.read_excel(MASTER_PATH, sheet_name="Sorting Lists")
     df.columns = [str(c).strip() for c in df.columns]
 
-    required_cols = [
+    required = [
         "Name of the Post Office",
         "Pincode",
         "Beat",
@@ -57,203 +75,197 @@ def load_data():
         "Door Nos."
     ]
 
-    df = df[required_cols].copy()
+    df = df[required].copy()
 
-    for col in required_cols:
-        df[col] = df[col].fillna("").astype(str)
+    for c in required:
+        df[c] = df[c].fillna("").astype(str)
 
     df["Pincode"] = df["Pincode"].str.replace(".0", "", regex=False)
 
     return df
 
 
-df = load_data()
+df = load_master()
 
 
-# =========================
-# NORMALIZATION HELPERS
-# =========================
+# ─────────────────────────────────────────────────────────────────────
+# Normalization
+# ─────────────────────────────────────────────────────────────────────
 def normalize_text(txt):
-    if pd.isna(txt):
-        return ""
-
     txt = str(txt).upper().strip()
 
     txt = txt.replace("/", "-")
-    txt = txt.replace(".", "-")
     txt = txt.replace("\\", "-")
-    txt = txt.replace(" TO ", " TO ")
+    txt = txt.replace(".", "-")
+    txt = txt.replace(",", " ")
 
-    txt = re.sub(r"\s+", "", txt)
-    txt = re.sub(r"-+", "-", txt)
+    txt = re.sub(r"\s+", " ", txt)
+    txt = txt.strip()
 
     return txt
 
 
-def fuzzy_match(a, b):
-    return fuzz.partial_ratio(a, b)
+def normalize_door(txt):
+    txt = normalize_text(txt)
+    txt = txt.replace(" ", "")
+    txt = re.sub(r"-+", "-", txt)
+    return txt
 
 
-# =========================
-# DOOR RANGE PARSER
-# =========================
+# Precompute normalized columns
+df["area_norm"] = df["Colony/Area"].apply(normalize_text)
+df["door_norm"] = df["Door Nos."].apply(normalize_door)
+df["po_norm"] = df["Name of the Post Office"].apply(normalize_text)
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Search Type Detection
+# ─────────────────────────────────────────────────────────────────────
+def detect_query_type(q):
+    q = q.strip()
+
+    if re.fullmatch(r"\d{6}", q):
+        return "pincode"
+
+    digits = sum(ch.isdigit() for ch in q)
+    nonspace = len(q.replace(" ", ""))
+
+    if nonspace > 0 and digits / nonspace > 0.55:
+        return "door"
+
+    return "area"
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Scoring
+# ─────────────────────────────────────────────────────────────────────
+def weighted_score(query, candidate):
+    s1 = fuzz.partial_ratio(query, candidate)
+    s2 = fuzz.token_sort_ratio(query, candidate)
+    s3 = fuzz.token_set_ratio(query, candidate)
+
+    score = 0.45*s1 + 0.35*s2 + 0.20*s3
+
+    if query in candidate:
+        score += 15
+
+    if candidate.startswith(query):
+        score += 10
+
+    return score
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Door Range Logic
+# ─────────────────────────────────────────────────────────────────────
 def extract_numbers(text):
     return [int(x) for x in re.findall(r'\d+', text)]
 
 
-def door_range_match(user_input, door_range):
-    user_norm = normalize_text(user_input)
-    range_norm = normalize_text(door_range)
+def door_match(user_input, door_text):
+    user = normalize_door(user_input)
+    door = normalize_door(door_text)
 
-    # direct match
-    if user_norm == range_norm:
-        return True
+    if user == door:
+        return 100
 
-    # fuzzy
-    if fuzzy_match(user_norm, range_norm) >= 90:
-        return True
+    fuzzy = fuzz.partial_ratio(user, door)
+    if fuzzy >= 90:
+        return fuzzy
 
-    if "TO" not in range_norm:
-        return False
+    if "TO" in door:
+        try:
+            parts = door.split("TO")
+            start = parts[0].strip()
+            end = parts[1].strip()
 
-    try:
-        start, end = [x.strip() for x in range_norm.split("TO")]
+            u_nums = extract_numbers(user)
+            s_nums = extract_numbers(start)
+            e_nums = extract_numbers(end)
 
-        user_nums = extract_numbers(user_norm)
-        start_nums = extract_numbers(start)
-        end_nums = extract_numbers(end)
+            if u_nums and s_nums and e_nums:
+                u = u_nums[-1]
+                s = s_nums[-1]
+                e = e_nums[-1]
 
-        if not user_nums or not start_nums or not end_nums:
-            return False
+                if s <= u <= e:
+                    return 98
+        except:
+            pass
 
-        user_last = user_nums[-1]
-        start_last = start_nums[-1]
-        end_last = end_nums[-1]
-
-        if start_last <= user_last <= end_last:
-            return True
-
-    except:
-        pass
-
-    return False
+    return 0
 
 
-# =========================
-# SEARCH FUNCTIONS
-# =========================
-def search_pincode(pin):
-    return df[df["Pincode"] == str(pin)]
-
-
-def search_area(query):
-    q = normalize_text(query)
-
-    scores = []
-    for _, row in df.iterrows():
-        area = normalize_text(row["Colony/Area"])
-        score = fuzzy_match(q, area)
-
-        if q in area:
-            score += 20
-
-        scores.append(score)
+# ─────────────────────────────────────────────────────────────────────
+# Smart Search
+# ─────────────────────────────────────────────────────────────────────
+def smart_search(query):
+    qtype = detect_query_type(query)
 
     temp = df.copy()
-    temp["score"] = scores
 
-    return temp[temp["score"] >= 65].sort_values("score", ascending=False)
+    if qtype == "pincode":
+        result = temp[temp["Pincode"] == query].copy()
+        result["Score"] = 100
+        return result
 
+    elif qtype == "door":
+        scores = temp["Door Nos."].apply(lambda x: door_match(query, x))
+        temp["Score"] = scores
+        result = temp[temp["Score"] >= 75]
+        return result.sort_values("Score", ascending=False).head(10)
 
-def search_door(query):
-    matches = []
-
-    q_norm = normalize_text(query)
-
-    for _, row in df.iterrows():
-        door_text = row["Door Nos."]
-        door_norm = normalize_text(door_text)
-
-        matched = False
-
-        # Exact
-        if q_norm == door_norm:
-            matched = True
-
-        # Fuzzy
-        elif fuzzy_match(q_norm, door_norm) >= 85:
-            matched = True
-
-        # Range Logic
-        elif door_range_match(query, door_text):
-            matched = True
-
-        if matched:
-            matches.append(row)
-
-    if matches:
-        return pd.DataFrame(matches)
     else:
-        return pd.DataFrame()
+        query_norm = normalize_text(query)
+
+        scores = []
+        for _, row in temp.iterrows():
+            area_score = weighted_score(query_norm, row["area_norm"])
+            po_score = weighted_score(query_norm, row["po_norm"]) * 0.5
+
+            final = max(area_score, po_score)
+            scores.append(final)
+
+        temp["Score"] = scores
+        result = temp[temp["Score"] >= 75]
+
+        return result.sort_values("Score", ascending=False).head(10)
 
 
-# =========================
+# ─────────────────────────────────────────────────────────────────────
 # UI
-# =========================
+# ─────────────────────────────────────────────────────────────────────
 st.title("📮 Sorting Assistance")
-st.caption("Search office and beat using Pincode, Area or Door Number")
+st.caption("Type Pincode, Colony, Area or Door Number")
 
-mode = st.radio(
-    "Search By",
-    ["Pincode", "Area / Colony", "Door Number"],
-    horizontal=True
+query = st.text_input(
+    "Search",
+    placeholder="Example: 500001 / Abids / 4-3-227"
 )
 
-query = st.text_input("Enter Search Value")
+if query.strip():
+    results = smart_search(query)
 
-if st.button("Search"):
-    if not query.strip():
-        st.warning("Please enter a value.")
-        st.stop()
-
-    result = pd.DataFrame()
-
-    if mode == "Pincode":
-        result = search_pincode(query)
-
-    elif mode == "Area / Colony":
-        result = search_area(query)
-
-    elif mode == "Door Number":
-        result = search_door(query)
-
-    if result.empty:
-        st.error("No matching records found.")
+    if results.empty:
+        st.warning("No matching records found.")
     else:
-        st.success(f"{len(result)} matching entries found")
+        st.success(f"Top {len(results)} matches")
 
-        display_cols = [
-            "Name of the Post Office",
-            "Pincode",
-            "Beat",
-            "Colony/Area",
-            "Door Nos."
-        ]
+        display = results[
+            [
+                "Score",
+                "Name of the Post Office",
+                "Pincode",
+                "Beat",
+                "Colony/Area",
+                "Door Nos."
+            ]
+        ].copy()
+
+        display["Score"] = display["Score"].round(0).astype(int)
 
         st.dataframe(
-            result[display_cols],
+            display,
             use_container_width=True,
             hide_index=True
         )
-
-        st.subheader("Beat Summary")
-
-        summary = (
-            result.groupby(
-                ["Name of the Post Office", "Beat"]
-            )
-            .size()
-            .reset_index(name="Matches")
-        )
-
-        st.dataframe(summary, use_container_width=True, hide_index=True)
