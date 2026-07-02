@@ -244,7 +244,7 @@ query = st_keyup(
     placeholder="Type Pincode / Area / Door Number...",
     debounce=250
 )
-
+st.write("Query =", repr(query))
 if query.strip():
     results = smart_search(query)
 
