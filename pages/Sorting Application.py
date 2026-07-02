@@ -1,7 +1,33 @@
 import streamlit as st
 import pandas as pd
 import re
+import glob as _glob
 from rapidfuzz import fuzz
+
+def _render_nav():
+    st.sidebar.markdown("""<div style='padding:8px 0 4px 0;'>
+        <p style='font-size:12px;font-weight:700;color:#888;
+           text-transform:uppercase;letter-spacing:1px;margin:0 0 4px 0;'>Pages</p>
+        </div>""", unsafe_allow_html=True)
+
+    st.sidebar.page_link("Analytics_Excel.py", label="🔐 Login")
+
+    for pat, lbl in [
+        ("pages/AEBAS_Monitoring.py|pages/*[Aa][Ee][Bb][Aa][Ss]*.py", "🤚 AEBAS Monitoring"),
+        ("pages/Bulk_Analytics.py|pages/*[Bb]ulk*.py", "📊 Bulk Customer Analytics"),
+        ("pages/Delivery_Productivity.py|pages/*[Dd]elivery*.py", "📦 Delivery Productivity"),
+        ("pages/1_Digital_Transactions.py|pages/*[Dd]igital*.py", "💻 Digital Transactions"),
+        ("pages/POSB Daily Report.py|pages/*[Pp][Oo][Ss][Bb]*.py", "📮 POSB Daily Report"),
+        ("pages/Sorting_Assistance.py|pages/*[Ss]orting*.py", "📮 Sorting Assistance"),
+    ]:
+        hits = []
+        for p in pat.split("|"):
+            hits += _glob.glob(p)
+
+        if hits:
+            st.sidebar.page_link(hits[0].replace("\\", "/"), label=lbl)
+
+    st.sidebar.markdown("<hr style='margin:8px 0 12px 0;'>", unsafe_allow_html=True)
 
 # =========================
 # PAGE CONFIG
