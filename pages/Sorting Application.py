@@ -3,6 +3,7 @@ import pandas as pd
 import re
 import glob as _glob
 from rapidfuzz import fuzz
+from st_keyup import st_keyup
 
 # ─────────────────────────────────────────────────────────────────────
 # Page Config
@@ -238,9 +239,10 @@ def smart_search(query):
 st.title("📮 Sorting Assistance")
 st.caption("Type Pincode, Colony, Area or Door Number")
 
-query = st.text_input(
+query = st_keyup(
     "Search",
-    placeholder="Example: 500001 / Abids / 4-3-227"
+    placeholder="Type Pincode / Area / Door Number...",
+    debounce=250
 )
 
 if query.strip():
