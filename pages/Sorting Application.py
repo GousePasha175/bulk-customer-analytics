@@ -3,6 +3,7 @@ import pandas as pd
 import re
 import glob as _glob
 from rapidfuzz import fuzz
+from streamlit_keyup import st_keyup
 from st_keyup import st_keyup
 
 # ─────────────────────────────────────────────────────────────────────
@@ -245,7 +246,7 @@ query = st_keyup(
     debounce=250
 )
 st.write("Query =", repr(query))
-if query.strip():
+if query and str(query).strip():
     results = smart_search(query)
 
     if results.empty:
