@@ -483,7 +483,7 @@ def export_range_report_excel(df, division_dfs=None, nil_df=None, mapping_df=Non
             cols3 = list(nil_df.columns)
     
             ws3.merge_range(0, 0, 0, len(cols3)-1,
-                            "List of NIL Transaction Offices", title_fmt)
+                            "List of Offices with NO Accounts Opening", title_fmt)
     
             for c, col in enumerate(cols3):
                 ws3.write(1, c, col, header_fmt)
