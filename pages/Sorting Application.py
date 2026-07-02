@@ -31,7 +31,7 @@ def _render_nav():
         ("pages/Delivery_Productivity.py|pages/*[Dd]elivery*.py", "📦 Delivery Productivity"),
         ("pages/1_Digital_Transactions.py|pages/*[Dd]igital*.py", "💻 Digital Transactions"),
         ("pages/POSB Daily Report.py|pages/*[Pp][Oo][Ss][Bb]*.py", "📮 POSB Daily Report"),
-        ("pages/Sorting Assistance.py|pages/*[Ss]orting*.py", "📮 Sorting Assistance"),
+        ("pages/Sorting Application.py|pages/*[Ss]orting*.py", "📮 Sorting Assistance"),
     ]:
         hits = []
         for p in pat.split("|"):
