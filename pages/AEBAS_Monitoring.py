@@ -37,7 +37,9 @@ def _render_nav():
         <p style='font-size:12px;font-weight:700;color:#888;
            text-transform:uppercase;letter-spacing:1px;margin:0 0 4px 0;'>Pages</p>
         </div>""", unsafe_allow_html=True)
-    st.sidebar.page_link("Analytics_Excel.py", label="\U0001f3e0 Home")
+    st.sidebar.page_link("Analytics_Excel.py", label="\U0001f512 Login")
+    # Alphabetical order: AEBAS Monitoring, Bulk Customer Analytics,
+    # Delivery Productivity, Digital Transactions, POSB Daily Report
     for pat, lbl in [
         ("pages/AEBAS_Monitoring.py|pages/*[Aa][Ee][Bb][Aa][Ss]*.py","\U0001f91a AEBAS Monitoring"),
         ("pages/Bulk_Analytics.py|pages/*[Bb]ulk*.py","\U0001f4ca Bulk Customer Analytics"),
@@ -84,17 +86,29 @@ DIV_ORDER_MAP = {d: i for i, d in enumerate(DIV_ORDER)}
 
 # Standardise raw division names from the master sheets → canonical names
 DIV_STD = {
-    "SECUNDERABAD Dvn":           "Secunderabad Division",
-    "Hyderabad South East":       "Hyderabad South East",
-    "Hyderabad City Division":    "Hyderabad City Division",
-    "Hyderabad Sorting Division": "Hyderabad Sorting Division",
-    "Hyderabad GPO":              "Hyderabad GPO",
-    "Hyderabad GPO Division":     "Hyderabad GPO",
-    "MMS, Hyderabad":             "MMS, Hyderabad",
-    "PSD Hyderabad":              "PSD Hyderabad",
-    "Sangareddy Division":        "Sangareddy Division",
-    "Medak Division":             "Medak Division",
-    "Regional Office, HQ Region": "Regional Office, HQ Region",
+    "SECUNDERABAD Dvn":              "Secunderabad Division",
+    "Secunderabad Division":         "Secunderabad Division",
+    "Hyderabad South East":          "Hyderabad South East",
+    "Hyderabad South East Division": "Hyderabad South East",
+    "Hyderabad City Division":       "Hyderabad City Division",
+    "Hyderabad Sorting Division":    "Hyderabad Sorting Division",
+    "Hyderabad GPO":                 "Hyderabad GPO",
+    "Hyderabad GPO Division":        "Hyderabad GPO",
+    "Hyderabad City Region":         "Regional Office, HQ Region",
+    "MMS, Hyderabad":                "MMS, Hyderabad",
+    "MMS Hyderabad":                 "MMS, Hyderabad",
+    "PSD Hyderabad":                 "PSD Hyderabad",
+    "Sangareddy Division":           "Sangareddy Division",
+    "Medak Division":                "Medak Division",
+    "Regional Office, HQ Region":    "Regional Office, HQ Region",
+}
+
+# For rows with a blank/unrecognised division name, fall back to Office Type
+TYPE_DIV_OVERRIDE = {
+    "MMS": "MMS, Hyderabad",
+    "PSD": "PSD Hyderabad",
+    "RGN": "Regional Office, HQ Region",
+    "GPO": "Hyderabad GPO",
 }
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -219,8 +233,10 @@ def _looks_like_bo(office_name, office_type):
 @st.cache_data(show_spinner=False)
 def load_office_master(file_bytes):
     """
-    Parse the 'Office Master' sheet (a.k.a. 'AEBAS Master'): the full office
-    list including Branch Offices, used only as a name-matching dictionary.
+    Parse the 'Office Master' sheet: the authoritative, de-duplicated list of
+    every real office (one row per Office ID) with its Division and Office
+    Type. This is the total expected office count — the base/denominator for
+    both reports (after excluding Branch Offices).
     Returns columns: office_name, office_id, division, office_type, office_norm, is_bo
     """
     xl = pd.ExcelFile(BytesIO(file_bytes))
@@ -247,13 +263,21 @@ def load_office_master(file_bytes):
     df = df[df["office_name"].str.len() > 0]
     if "division" not in df.columns:
         df["division"] = ""
-    df["division"] = df["division"].astype(str).str.strip().map(lambda x: DIV_STD.get(x, x))
     if "office_id" in df.columns:
         df["office_id"] = pd.to_numeric(df["office_id"], errors="coerce")
     else:
         df["office_id"] = np.nan
     if "office_type" not in df.columns:
         df["office_type"] = ""
+    df["division"] = df["division"].astype(str).str.strip().map(lambda x: DIV_STD.get(x, x))
+    # Rows with a blank/unrecognised division fall back to Office Type
+    def _fix_div(row):
+        d = row["division"]
+        if d in DIV_ORDER_MAP:
+            return d
+        t = str(row["office_type"]).strip().upper()
+        return TYPE_DIV_OVERRIDE.get(t, d if d else "Other/Unmapped")
+    df["division"] = df.apply(_fix_div, axis=1)
     df["office_norm"] = df["office_name"].apply(normalise)
     df["is_bo"] = df.apply(lambda r: _looks_like_bo(r["office_name"], r["office_type"]), axis=1)
     return df[["office_name", "office_id", "division", "office_type", "office_norm", "is_bo"]].reset_index(drop=True)
@@ -261,9 +285,12 @@ def load_office_master(file_bytes):
 @st.cache_data(show_spinner=False)
 def load_consolidated(file_bytes):
     """
-    Parse the 'Consolidated' sheet (a.k.a. 'APT Master'): the region's full
-    departmental-office universe (Branch Offices already excluded).
-    Returns columns: office_name, office_id, division, office_norm
+    Parse the 'Consolidated' sheet: a name-matching dictionary — each Office ID
+    may appear multiple times under different name spellings/aliases, matching
+    however the office might appear in the export's 'Office Location' text.
+    This sheet is used only for fuzzy name-matching; office counts/divisions
+    for reporting come from Office Master, not from this sheet.
+    Returns columns: office_name, office_id, office_norm
     """
     xl = pd.ExcelFile(BytesIO(file_bytes))
     df = _read_sheet(xl, "Consolidated")
@@ -278,22 +305,18 @@ def load_consolidated(file_bytes):
             f"Columns found: {list(df.columns)}"
         )
     ren = {}
-    if col_div: ren[col_div] = "division"
     if col_id:  ren[col_id]  = "office_id"
     ren[col_name] = "office_name"
     df = df.rename(columns=ren)
     df = df.dropna(subset=["office_name"]).copy()
     df["office_name"] = df["office_name"].astype(str).str.strip()
     df = df[df["office_name"].str.len() > 0]
-    if "division" not in df.columns:
-        df["division"] = ""
-    df["division"] = df["division"].astype(str).str.strip().map(lambda x: DIV_STD.get(x, x))
     if "office_id" in df.columns:
         df["office_id"] = pd.to_numeric(df["office_id"], errors="coerce")
     else:
         df["office_id"] = np.nan
     df["office_norm"] = df["office_name"].apply(normalise)
-    return df[["office_name", "office_id", "division", "office_norm"]].reset_index(drop=True)
+    return df[["office_name", "office_id", "office_norm"]].reset_index(drop=True)
 
 @st.cache_data(show_spinner=False)
 def load_aebas_export(file_bytes):
@@ -463,16 +486,21 @@ def build_excel(summary_df, not_marked_df, office_wise_df, report_date):
         ws3.write(1, ci, h, fmt_hdr)
 
     ri3 = 2; sl = 1
-    for _, row in office_wise_df.iterrows():
-        ws3.write(ri3, 0, sl, fmt_c)
-        ws3.write(ri3, 1, row["division"], fmt_l)
-        ws3.write(ri3, 2, row["office_name"], fmt_l)
-        oid = row["office_id"]
-        ws3.write(ri3, 3, "" if pd.isna(oid) else int(oid), fmt_c)
-        ws3.write(ri3, 4, int(row["Present"]), fmt_c)
-        ws3.write(ri3, 5, int(row["Absent"]), fmt_c)
-        ws3.write(ri3, 6, int(row["Total"]), fmt_c)
-        ri3 += 1; sl += 1
+    for div, grp in office_wise_df.groupby("division", sort=False):
+        start = ri3
+        for _, row in grp.iterrows():
+            ws3.write(ri3, 0, sl, fmt_c)
+            ws3.write(ri3, 2, row["office_name"], fmt_l)
+            oid = row["office_id"]
+            ws3.write(ri3, 3, "" if pd.isna(oid) else int(oid), fmt_c)
+            ws3.write(ri3, 4, int(row["Present"]), fmt_c)
+            ws3.write(ri3, 5, int(row["Absent"]), fmt_c)
+            ws3.write(ri3, 6, int(row["Total"]), fmt_c)
+            ri3 += 1; sl += 1
+        if start == ri3 - 1:
+            ws3.write(start, 1, div, fmt_div)
+        else:
+            ws3.merge_range(start, 1, ri3 - 1, 1, div, fmt_div)
 
     tp, ta = office_wise_df["Present"].sum(), office_wise_df["Absent"].sum()
     ws3.write(ri3, 0, "", fmt_total)
@@ -488,7 +516,104 @@ def build_excel(summary_df, not_marked_df, office_wise_df, report_date):
     wb.close()
     return output.getvalue()
 
+# ── On-screen HTML table renderers (narrow Sl. column, centered numbers, merged Division cells) ──
+AEBAS_TABLE_CSS = f"""
+<style>
+.aebas-table {{ border-collapse:collapse;width:100%;font-size:13.5px;
+    font-family:Arial,Helvetica,sans-serif;margin-bottom:10px; }}
+.aebas-table th {{ border:1px solid #444;background:{HDR_BG};color:{HDR_FG};
+    font-weight:700;text-align:center;padding:6px 6px; }}
+.aebas-table td {{ border:1px solid #999;text-align:center;padding:5px 6px;color:#1a1a1a; }}
+.aebas-table td.name-left {{ text-align:left; }}
+.aebas-table th.sl-col, .aebas-table td.sl-col {{ width:42px;max-width:42px; }}
+.aebas-title {{ background:{TITLE_BG};color:{TITLE_FG};font-weight:700;
+    text-align:center;padding:9px 6px;font-size:15px; }}
+.aebas-total {{ background:{TOTAL_BG}!important;font-weight:700!important;color:{TOTAL_FG}!important; }}
+.aebas-divcell {{ background:{DIV_BG};color:{DIV_FG};font-weight:700;
+    text-align:center;vertical-align:middle; }}
+</style>
+"""
+
+def render_summary_html(summary_display, report_date):
+    thead = (
+        "<tr><th class='sl-col'>Sl.<br>No.</th><th>Name of the<br>Division/Unit</th>"
+        "<th>Total no.<br>of Units</th><th>No. of offices<br>marked attendance<br>in AEBAS</th>"
+        "<th>No. of offices not<br>marked attendance<br>in AEBAS</th>"
+        "<th>% of offices<br>implemented<br>AEBAS</th></tr>"
+    )
+    body = ""
+    for _, row in summary_display.iterrows():
+        v = float(row["% AEBAS"])
+        if row["Division/Unit"] == "TOTAL HQ REGION":
+            body += (
+                "<tr class='aebas-total'><td class='sl-col'></td>"
+                f"<td class='name-left'>TOTAL</td><td>{int(row['Total'])}</td>"
+                f"<td>{int(row['Marked'])}</td><td>{int(row['Not Marked'])}</td>"
+                f"<td>{v:.2f}%</td></tr>"
+            )
+        else:
+            pct_style = ("background:#70AD47;color:#fff;font-weight:700" if v >= 95 else
+                         "background:#E2EFDA;font-weight:700" if v >= 80 else
+                         "background:#FFC000;font-weight:700" if v >= 60 else
+                         "background:#FF0000;color:#fff;font-weight:700")
+            body += (
+                f"<tr><td class='sl-col'>{int(row['Sl.'])}</td>"
+                f"<td class='name-left'>{row['Division/Unit']}</td>"
+                f"<td>{int(row['Total'])}</td><td>{int(row['Marked'])}</td>"
+                f"<td>{int(row['Not Marked'])}</td>"
+                f"<td style='{pct_style}'>{v:.2f}%</td></tr>"
+            )
+    title = f"AEBAS Report dated {report_date.strftime('%d.%m.%Y')}"
+    return f"<table class='aebas-table'><tr><td colspan='6' class='aebas-title'>{title}</td></tr>{thead}{body}</table>"
+
+def render_notmarked_html(not_marked, title):
+    header_cells = "<th class='sl-col'>Sl.<br>No.</th><th>Name of the<br>Division</th><th>Name of the<br>Unit/Office</th>"
+    thead = f"<tr>{header_cells}</tr>"
+    body = ""
+    sl = 1
+    if len(not_marked) == 0:
+        body = "<tr><td colspan='3' style='padding:14px;color:#888;'>All offices have marked attendance 🎉</td></tr>"
+    else:
+        for div, grp in not_marked.groupby("division", sort=False):
+            n = len(grp)
+            first = True
+            for _, r in grp.iterrows():
+                body += f"<tr><td class='sl-col'>{sl}</td>"
+                if first:
+                    body += f"<td class='aebas-divcell' rowspan='{n}'>{div}</td>"
+                    first = False
+                body += f"<td class='name-left'>{r['office_name']}</td></tr>"
+                sl += 1
+    return f"<table class='aebas-table'><tr><td colspan='3' class='aebas-title'>{title}</td></tr>{thead}{body}</table>"
+
+def render_officewise_html(office_wise, title):
+    header_cells = ("<th class='sl-col'>Sl.<br>No.</th><th>Name of the<br>Division</th>"
+                     "<th>Name of the<br>Office</th><th>Office ID</th><th>Present</th><th>Absent</th><th>Total</th>")
+    thead = f"<tr>{header_cells}</tr>"
+    body = ""
+    sl = 1
+    if len(office_wise) == 0:
+        body = "<tr><td colspan='7' style='padding:14px;color:#888;'>No matched attendance data.</td></tr>"
+    else:
+        for div, grp in office_wise.groupby("division", sort=False):
+            n = len(grp)
+            first = True
+            for _, r in grp.iterrows():
+                oid = "" if pd.isna(r["office_id"]) else int(r["office_id"])
+                body += f"<tr><td class='sl-col'>{sl}</td>"
+                if first:
+                    body += f"<td class='aebas-divcell' rowspan='{n}'>{div}</td>"
+                    first = False
+                body += (f"<td class='name-left'>{r['office_name']}</td><td>{oid}</td>"
+                         f"<td>{int(r['Present'])}</td><td>{int(r['Absent'])}</td><td>{int(r['Total'])}</td></tr>")
+                sl += 1
+        tp, ta = int(office_wise["Present"].sum()), int(office_wise["Absent"].sum())
+        body += (f"<tr class='aebas-total'><td class='sl-col'></td><td class='name-left'>TOTAL</td>"
+                  f"<td></td><td></td><td>{tp}</td><td>{ta}</td><td>{tp + ta}</td></tr>")
+    return f"<table class='aebas-table'><tr><td colspan='7' class='aebas-title'>{title}</td></tr>{thead}{body}</table>"
+
 # ── Header ────────────────────────────────────────────────────────────────────
+st.markdown(AEBAS_TABLE_CSS, unsafe_allow_html=True)
 from PIL import Image
 logo_path = "assets/logo.png"
 logo = Image.open(logo_path) if os.path.exists(logo_path) else None
@@ -585,15 +710,38 @@ with st.spinner("Loading master and AEBAS data..."):
 export_norms_unique = export_df["office_norm"].dropna().unique().tolist()
 export_norms_unique = [n for n in export_norms_unique if n]
 
-# ══════════════════════════════════════════════════════════════════════════════
-# REPORT 1 — Division-wise % (Consolidated / departmental offices only)
-# ══════════════════════════════════════════════════════════════════════════════
-with st.spinner("Matching offices for Division-wise report..."):
-    marked_norms = match_offices(export_norms_unique, consolidated_df["office_norm"].tolist(), FUZZY_THRESHOLD)
-    marked_set = set(v for v in marked_norms.values() if v)
+office_master_nonbo = office_master_df[~office_master_df["is_bo"]].reset_index(drop=True)
+# Office Master has one row per real Office ID (verified duplicate-free) — safe as a direct lookup
+om_lookup = {
+    int(r["office_id"]): {"division": r["division"], "office_name": r["office_name"]}
+    for _, r in office_master_nonbo.iterrows() if pd.notna(r["office_id"])
+}
 
-master_df = consolidated_df.copy()
-master_df["Marked"] = master_df["office_norm"].isin(marked_set)
+# STEP 1: fuzzy-match each unique export location against the Consolidated
+# alias dictionary (multiple name-variants can map to the same Office ID)
+with st.spinner("Matching office names..."):
+    match_idx_map = match_offices_to_index(export_norms_unique, consolidated_df, FUZZY_THRESHOLD)
+
+# STEP 2: resolve the matched Consolidated row to its Office ID (the join key),
+# then confirm that ID exists as a real, non-BO office in Office Master
+export_norm_to_office_id = {}
+for norm, pos in match_idx_map.items():
+    oid = None
+    if pos is not None:
+        raw_id = consolidated_df.iloc[pos]["office_id"]
+        oid = int(raw_id) if pd.notna(raw_id) else None
+    export_norm_to_office_id[norm] = oid
+
+export_df["matched_office_id"] = export_df["office_norm"].map(export_norm_to_office_id)
+export_df["matched_valid"] = export_df["matched_office_id"].apply(lambda v: v in om_lookup if pd.notna(v) else False)
+
+marked_ids = set(export_df.loc[export_df["matched_valid"], "matched_office_id"].unique())
+
+# ══════════════════════════════════════════════════════════════════════════════
+# REPORT 1 — Division-wise % (base = Office Master, non-BO offices)
+# ══════════════════════════════════════════════════════════════════════════════
+master_df = office_master_nonbo.copy()
+master_df["Marked"] = master_df["office_id"].apply(lambda v: pd.notna(v) and int(v) in marked_ids)
 
 summary = (
     master_df.groupby("division")
@@ -602,7 +750,8 @@ summary = (
 )
 summary["Not Marked"] = summary["Total"] - summary["Marked"]
 summary["% AEBAS"] = (summary["Marked"] / summary["Total"] * 100).round(2)
-summary = summary.sort_values("% AEBAS", ascending=False).reset_index(drop=True)
+summary["_order"] = summary["division"].map(lambda x: DIV_ORDER_MAP.get(x, 99))
+summary = summary.sort_values("_order").drop(columns="_order").reset_index(drop=True)
 summary.insert(0, "Sl.", range(1, len(summary) + 1))
 summary.columns = ["Sl.", "Division/Unit", "Total", "Marked", "Not Marked", "% AEBAS"]
 
@@ -616,30 +765,8 @@ tot_row = pd.DataFrame([{
 summary_display = pd.concat([summary, tot_row], ignore_index=True)
 
 st.subheader(f"1️⃣ Division-wise % — AEBAS Report dated {report_date.strftime('%d.%m.%Y')}")
-
-def _style_summary(row):
-    if row["Division/Unit"] == "TOTAL HQ REGION":
-        return [f"background-color:{TOTAL_BG};color:{TOTAL_FG};font-weight:700"] * len(row)
-    try:
-        v = float(row["% AEBAS"])
-        pct_style = ("background-color:#70AD47;color:white;font-weight:700" if v >= 95 else
-                     "background-color:#E2EFDA;font-weight:600" if v >= 80 else
-                     "background-color:#FFC000;font-weight:700" if v >= 60 else
-                     "background-color:#FF0000;color:white;font-weight:700")
-        div_style = ("background-color:#E2EFDA" if v >= 80 else
-                     "background-color:#FFF2CC" if v >= 60 else
-                     f"background-color:{NOTMK_BG}")
-        return ["", div_style, "", "", "", pct_style]
-    except Exception:
-        return [""] * len(row)
-
-styled = (
-    summary_display.style
-    .apply(_style_summary, axis=1)
-    .format({"% AEBAS": "{:.2f}%"})
-)
-st.dataframe(styled, use_container_width=True, hide_index=True)
-st.caption("* Departmental Post Offices only. Branch Offices (BOs) excluded.")
+st.markdown(render_summary_html(summary_display, report_date), unsafe_allow_html=True)
+st.caption("* Departmental Post Offices only. Branch Offices (BOs) excluded. Office counts are based on the Office Master sheet.")
 
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Total Offices", int(tot_t))
@@ -652,26 +779,8 @@ not_marked["_order"] = not_marked["division"].map(lambda x: DIV_ORDER_MAP.get(x,
 not_marked = not_marked.sort_values(["_order", "division", "office_name"]).reset_index(drop=True)
 
 st.markdown("---")
-st.subheader(f"List of offices not marked attendance in AEBAS portal as on {report_date.strftime('%d.%m.%Y')}")
-
-rows = []; sl = 1; prev_div = None
-for _, row in not_marked.iterrows():
-    rows.append({
-        "Sl. No.": sl,
-        "Name of the Division": row["division"] if row["division"] != prev_div else "",
-        "Name of the Unit/Office": row["office_name"],
-    })
-    prev_div = row["division"]
-    sl += 1
-nm_display = pd.DataFrame(rows) if rows else pd.DataFrame(columns=["Sl. No.", "Name of the Division", "Name of the Unit/Office"])
-
-def _style_nm(row):
-    div = str(row["Name of the Division"]).strip()
-    if div and div != "nan":
-        return [f"background-color:{DIV_BG};color:{DIV_FG};font-weight:700"] * 3
-    return ["", "", f"background-color:{NOTMK_BG}"]
-
-st.dataframe(nm_display.style.apply(_style_nm, axis=1), use_container_width=True, hide_index=True)
+nm_title = f"List of offices not marked attendance in AEBAS portal as on {report_date.strftime('%d.%m.%Y')}"
+st.markdown(render_notmarked_html(not_marked, nm_title), unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # REPORT 2 — Office-wise number of users marked attendance
@@ -679,22 +788,11 @@ st.dataframe(nm_display.style.apply(_style_nm, axis=1), use_container_width=True
 st.markdown("---")
 st.subheader(f"2️⃣ Office-wise Number of Users Marked Attendance — {report_date.strftime('%d.%m.%Y')}")
 
-office_master_nonbo = office_master_df[~office_master_df["is_bo"]].reset_index(drop=True)
-
-with st.spinner("Matching offices for Office-wise report..."):
-    match_idx_map = match_offices_to_index(export_norms_unique, office_master_nonbo, FUZZY_THRESHOLD)
-
-export_df["matched_idx"] = export_df["office_norm"].map(match_idx_map)
-unmatched_mask = export_df["matched_idx"].isna()
-matched_rows = export_df[~unmatched_mask].copy()
-matched_rows["matched_idx"] = matched_rows["matched_idx"].astype(int)
-
+matched_rows = export_df[export_df["matched_valid"]].copy()
 if len(matched_rows):
-    office_info = office_master_nonbo.loc[matched_rows["matched_idx"].values].reset_index(drop=True)
-    matched_rows = matched_rows.reset_index(drop=True)
-    matched_rows["m_division"] = office_info["division"]
-    matched_rows["m_office_name"] = office_info["office_name"]
-    matched_rows["m_office_id"] = office_info["office_id"]
+    matched_rows["m_division"] = matched_rows["matched_office_id"].map(lambda oid: om_lookup[oid]["division"])
+    matched_rows["m_office_name"] = matched_rows["matched_office_id"].map(lambda oid: om_lookup[oid]["office_name"])
+    matched_rows["m_office_id"] = matched_rows["matched_office_id"]
 
     office_wise = (
         matched_rows.groupby(["m_division", "m_office_name", "m_office_id"])
@@ -709,14 +807,8 @@ if len(matched_rows):
 else:
     office_wise = pd.DataFrame(columns=["division", "office_name", "office_id", "Present", "Absent", "Total"])
 
-ow_display = office_wise.copy()
-ow_display.insert(0, "Sl.", range(1, len(ow_display) + 1))
-ow_display["office_id"] = ow_display["office_id"].apply(lambda v: "" if pd.isna(v) else int(v))
-ow_display = ow_display.rename(columns={
-    "division": "Name of the Division", "office_name": "Name of the Office", "office_id": "Office ID"
-})
-
-st.dataframe(ow_display, use_container_width=True, hide_index=True)
+ow_title = f"Office-wise Number of Users Marked Attendance – {report_date.strftime('%d.%m.%Y')}"
+st.markdown(render_officewise_html(office_wise, ow_title), unsafe_allow_html=True)
 
 oc1, oc2, oc3 = st.columns(3)
 oc1.metric("Offices with Attendance Data", len(office_wise))
@@ -737,18 +829,18 @@ st.download_button(
 # ── Debug expander ────────────────────────────────────────────────────────────
 with st.expander("🔍 Matching Debug", expanded=False):
     st.caption(
-        f"Consolidated (departmental) offices: {len(consolidated_df)} | "
-        f"Office Master rows: {len(office_master_df)} (non-BO: {len(office_master_nonbo)}) | "
+        f"Office Master rows: {len(office_master_df)} (non-BO base: {len(office_master_nonbo)}) | "
+        f"Consolidated (alias) rows: {len(consolidated_df)} | "
         f"AEBAS export unique locations: {len(set(export_norms_unique))} | "
-        f"Matched to Consolidated: {len(marked_set)} | "
-        f"Matched to Office Master (non-BO): {export_df['matched_idx'].notna().sum()} export rows"
+        f"Matched to a valid non-BO office: {len(marked_ids)} unique offices | "
+        f"Matched export rows: {int(export_df['matched_valid'].sum())} / {len(export_df)}"
     )
-    st.markdown("**Consolidated offices NOT matched (shown as 'Not Marked' above):**")
+    st.markdown("**Non-BO offices NOT matched (shown as 'Not Marked' above):**")
     st.dataframe(
         not_marked[["office_name", "division"]].rename(columns={"office_name": "Office", "division": "Division"}),
         use_container_width=True, hide_index=True
     )
-    unmatched_locs = export_df.loc[unmatched_mask, "Office Location"].dropna().unique().tolist()
+    unmatched_locs = export_df.loc[~export_df["matched_valid"], "Office Location"].dropna().unique().tolist()
     st.markdown(f"**Export locations that did not match any non-BO office ({len(unmatched_locs)}):**")
     st.dataframe(pd.DataFrame({"Unmatched Office Location": unmatched_locs}),
                  use_container_width=True, hide_index=True)
