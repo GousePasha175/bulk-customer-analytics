@@ -23,6 +23,7 @@ def _render_nav():
         ("pages/Delivery Productivity.py|pages/*[Dd]elivery*.py", "\U0001f4e6 Delivery Productivity"),
         ("pages/1_Digital_Transactions.py|pages/*[Dd]igital*.py", "\U0001f4bb Digital Transactions"),
         ("pages/POSB Daily Report.py|pages/*[Pp][Oo][Ss][Bb]*.py","\U0001f4ee POSB Daily Report"),
+        ("pages/Sorting_Assistance.py|pages/*[Ss]orting*.py", "📮 Sorting Assistance"),
     ]:
         hits = []
         for p in pat.split("|"): hits += _glob.glob(p)
