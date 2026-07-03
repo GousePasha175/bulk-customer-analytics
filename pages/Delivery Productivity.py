@@ -276,7 +276,7 @@ def write_excel_sheet(wb, sheet_name, title, df):
     ws.set_column(1, 9, 13)
 
     fmt_title = wb.add_format({"bold": True, "font_size": 12, "align": "center", "valign": "vcenter",
-                                "bg_color": "#A94F4A", "font_color": "#FFFFFF", "border": 1})
+                                "bg_color": "#aae22b", "font_color": "#FFFFFF", "border": 1})
     fmt_hdr = wb.add_format({"bold": True, "align": "center", "valign": "vcenter", "text_wrap": True,
                               "bg_color": "#EDEDED", "border": 1})
     fmt_name = wb.add_format({"align": "left", "border": 1})
