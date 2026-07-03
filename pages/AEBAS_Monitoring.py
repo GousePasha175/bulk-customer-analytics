@@ -711,6 +711,33 @@ with st.spinner("Loading master and AEBAS data..."):
     consolidated_df = load_consolidated(consolidated_bytes)
     export_df = load_aebas_export(aebas_file.read())
 
+# ── Data health check — catches a mis-parsed master file immediately instead of
+# silently producing a wrong report. Non-BO row count should be in the low hundreds
+# and every division label should be real text, never a bare Office ID number. ──
+_nonbo_preview = office_master_df[~office_master_df["is_bo"]]
+_bad_divisions = _nonbo_preview[_nonbo_preview["division"].astype(str).str.match(r"^\d+(\.\d+)?$")]
+if len(_bad_divisions) > 0:
+    st.error(
+        f"🛑 Master data parsing problem: {len(_bad_divisions)} office(s) have a raw Office ID "
+        "sitting in the Division column instead of a real division name (e.g. "
+        f"'{_bad_divisions.iloc[0]['division']}'). This means the Office Master sheet's columns "
+        "were misread. Reports below will be wrong — please check the Office Master sheet's "
+        "column headers, or re-upload it using the override uploader above."
+    )
+    st.stop()
+with st.expander("✅ Master data loaded — click to verify column detection", expanded=False):
+    st.caption(
+        f"Office Master: {len(office_master_df)} total rows "
+        f"({len(_nonbo_preview)} non-BO). Office Type breakdown: "
+        + ", ".join(f"{k}={v}" for k, v in office_master_df['office_type'].value_counts().items())
+    )
+    st.caption(
+        "Office Master — divisions detected (non-BO): "
+        + ", ".join(f"{k}={v}" for k, v in _nonbo_preview['division'].value_counts().items())
+    )
+    st.caption(f"Consolidated (alias dictionary): {len(consolidated_df)} rows, "
+               f"{consolidated_df['office_id'].nunique()} unique Office IDs")
+
 export_norms_unique = export_df["office_norm"].dropna().unique().tolist()
 export_norms_unique = [n for n in export_norms_unique if n]
 
