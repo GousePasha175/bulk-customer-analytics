@@ -67,7 +67,7 @@ if not st.session_state.get("authenticated", False):
     st.stop()
 
 # ── Colour constants ──────────────────────────────────────────────────────────
-TITLE_BG = "#1F3864"; TITLE_FG = "#FFFFFF"
+TITLE_BG = "#7199de"; TITLE_FG = "#FFFFFF"
 HDR_BG   = "#2E75B6"; HDR_FG   = "#FFFFFF"
 TOTAL_BG = "#FFF2CC"; TOTAL_FG = "#000000"
 DIV_BG   = "#DDEBF7"; DIV_FG   = "#1F3864"
