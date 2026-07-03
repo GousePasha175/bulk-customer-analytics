@@ -36,7 +36,7 @@ def _render_nav():
         <p style='font-size:12px;font-weight:700;color:#888;
            text-transform:uppercase;letter-spacing:1px;margin:0 0 4px 0;'>Pages</p>
         </div>""", unsafe_allow_html=True)
-    st.sidebar.page_link("Analytics_Excel.py", label="\U0001f512 Login")
+    st.sidebar.page_link("Analytics_Excel.py", label="\U0001f3e0 Home")
     # Alphabetical order: AEBAS Monitoring, Bulk Customer Analytics,
     # Delivery Productivity, Digital Transactions, POSB Daily Report
     for pat, lbl in [
@@ -50,6 +50,8 @@ def _render_nav():
          "\U0001f4bb Digital Transactions"),
         ("pages/POSB Daily Report.py|pages/*[Pp][Oo][Ss][Bb]*.py",
          "\U0001f4ee POSB Daily Report"),
+        ("pages/Sorting_Assistance.py|pages/*[Ss]orting*.py", "📮 Sorting Assistance"),
+        
     ]:
         hits = []
         for p in pat.split("|"): hits += _glob.glob(p)
