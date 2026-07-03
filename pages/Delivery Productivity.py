@@ -54,7 +54,7 @@ header{visibility:hidden;height:0!important;}
 #.dtx-title{background:linear-gradient(180deg,#c1615c,#a94f4a);color:#fff;font-weight:700;
  #   text-align:center;padding:10px 6px;font-size:15.5px;border:1px solid #444;letter-spacing:.2px;}
 .dtx-title{
-    background:#003366;   /* Dark Blue */
+    background:#aae22b;   /* Dark Blue */
     color:#FFFFFF;        /* White text */
     font-weight:700;
     text-align:center;
