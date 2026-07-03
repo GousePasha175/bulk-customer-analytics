@@ -134,6 +134,12 @@ def find_bundled_master():
     Matches on filename containing both 'aebas' and 'master' (case-insensitive,
     regardless of underscore/space), so 'AEBAS_Master.xlsx', 'AEBAS Master.xlsx',
     'Master_AeBAS/AEBAS Master.xlsx', etc. are all found.
+
+    Returns (chosen_path, all_candidate_paths) — if more than one file matches,
+    the exact canonical name ('aebas master.xlsx' / 'aebas_master.xlsx',
+    ignoring spacing) is preferred over near-miss variants like
+    'AEBAS Master1.xlsx', and ALL candidates are returned so the caller can
+    warn about ambiguity (a stale duplicate file is a real, silent-failure risk).
     """
     skip_dirs = {".git", "node_modules", "__pycache__", ".streamlit", "venv", ".venv"}
     search_roots = []
@@ -142,16 +148,25 @@ def find_bundled_master():
         if rn not in search_roots:
             search_roots.append(rn)
 
+    candidates = []
     for root in search_roots:
         if not os.path.isdir(root):
             continue
         for dirpath, dirnames, filenames in os.walk(root):
             dirnames[:] = [d for d in dirnames if d not in skip_dirs]
-            for fn in filenames:
+            for fn in sorted(filenames):
                 low = fn.lower()
                 if low.endswith(".xlsx") and "aebas" in low and "master" in low:
-                    return os.path.join(dirpath, fn)
-    return None
+                    candidates.append(os.path.normpath(os.path.join(dirpath, fn)))
+
+    if not candidates:
+        return None, []
+
+    candidates = sorted(set(candidates))
+    exact = [c for c in candidates
+             if re.sub(r"[\s_]", "", os.path.basename(c).lower()) == "aebasmaster.xlsx"]
+    chosen = exact[0] if exact else candidates[0]
+    return chosen, candidates
 
 def _find_col(columns, *keywords):
     lc = {str(c).lower().strip(): c for c in columns}
@@ -655,16 +670,24 @@ aebas_file = st.sidebar.file_uploader(
 # ── Main area: optional master overrides (one row) ───────────────────────────
 st.subheader("📂 Master Data")
 
-bundled_path = find_bundled_master()
+bundled_path, bundled_candidates = find_bundled_master()
 bundled_bytes = None
 if bundled_path:
     with open(bundled_path, "rb") as fh:
         bundled_bytes = fh.read()
 
+_rel_path = os.path.relpath(bundled_path, os.getcwd()) if bundled_path else None
 st.caption(
-    f"✅ Bundled master found: `{os.path.basename(bundled_path)}`" if bundled_path
+    f"✅ Bundled master found: `{_rel_path}`" if bundled_path
     else "ℹ️ No bundled master file found next to the app — upload both sheets below."
 )
+if len(bundled_candidates) > 1:
+    st.warning(
+        f"⚠️ Found **{len(bundled_candidates)} files** matching 'AEBAS Master' near the app — "
+        f"using `{_rel_path}`. A stale duplicate can silently produce wrong reports. "
+        "Please remove the extra file(s) from your repo:\n\n"
+        + "\n".join(f"- `{os.path.relpath(c, os.getcwd())}`" for c in bundled_candidates)
+    )
 
 row_c1, row_c2 = st.columns(2)
 with row_c1:
