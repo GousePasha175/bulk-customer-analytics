@@ -51,8 +51,18 @@ header{visibility:hidden;height:0!important;}
 .dtx-table th{border:1px solid #444;background:#EDEDED;font-weight:700;text-align:center;padding:6px 6px;color:#1a1a1a;}
 .dtx-table td{border:1px solid #999;text-align:center;padding:5px 6px;color:#1a1a1a;}
 .dtx-table td.name{text-align:left;font-weight:600;}
-.dtx-title{background:linear-gradient(180deg,#c1615c,#a94f4a);color:#fff;font-weight:700;
-    text-align:center;padding:10px 6px;font-size:15.5px;border:1px solid #444;letter-spacing:.2px;}
+#.dtx-title{background:linear-gradient(180deg,#c1615c,#a94f4a);color:#fff;font-weight:700;
+ #   text-align:center;padding:10px 6px;font-size:15.5px;border:1px solid #444;letter-spacing:.2px;}
+.dtx-title{
+    background:#003366;   /* Dark Blue */
+    color:#FFFFFF;        /* White text */
+    font-weight:700;
+    text-align:center;
+    padding:10px 6px;
+    font-size:15.5px;
+    border:1px solid #444;
+    letter-spacing:.2px;
+}
 .dtx-total{background:#FFFF00!important;font-weight:700!important;}
 </style>""", unsafe_allow_html=True)
 
