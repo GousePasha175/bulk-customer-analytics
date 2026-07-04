@@ -656,6 +656,36 @@ def build_scheme_wise(accounts_opened_df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def combine_summary_dfs(dfs: list) -> "pd.DataFrame | None":
+    """
+    Combine multiple parsed 'upto date' summary files into a single equivalent
+    DataFrame by summing numeric columns row-aligned on 'Name' (division).
+    This lets the existing single-file downstream logic (build_daily_summary,
+    _sum_ac_cols, _net_total_col — all unchanged) work exactly as before,
+    while letting the user upload e.g. a Q1 total file + a Q2-so-far file and
+    have the app add them together into the true FY-cumulative figure.
+    """
+    dfs = [d for d in dfs if d is not None and not d.empty]
+    if not dfs:
+        return None
+    if len(dfs) == 1:
+        return dfs[0].copy()
+    prepped = []
+    for d in dfs:
+        dd = d.copy()
+        for c in dd.columns:
+            if c != "Name":
+                dd[c] = pd.to_numeric(dd[c], errors="coerce").fillna(0)
+        prepped.append(dd)
+    stacked = pd.concat(prepped, ignore_index=True, sort=False)
+    numeric_cols = [c for c in stacked.columns if c != "Name"]
+    stacked[numeric_cols] = stacked[numeric_cols].fillna(0)
+    grouped = stacked.groupby("Name", as_index=False)[numeric_cols].sum()
+    for c in numeric_cols:
+        grouped[c] = grouped[c].round().astype(int)
+    return grouped
+
+
 # ─── Streamlit UI ─────────────────────────────────────────────────────────────
 
 def main():
@@ -822,17 +852,23 @@ def main():
             )
         
         with col3:
-            ao_file = st.file_uploader(
+            ao_files = st.file_uploader(
                 f"3. Accounts opened upto {report_date.strftime('%d.%m.%Y')}",
                 type=["xlsx", "xls"],
-                key="ao_upto"
+                key="ao_upto",
+                accept_multiple_files=True,
+                help="Upload the quarter total file(s) plus any later quarter/daily file(s) — "
+                     "e.g. Q1 total + Q2-so-far file. All uploaded files are added together."
             )
         
         with col4:
-            net_file = st.file_uploader(
+            net_files = st.file_uploader(
                 f"4. Net Accounts upto {report_date.strftime('%d.%m.%Y')}",
                 type=["xlsx", "xls"],
-                key="net_upto"
+                key="net_upto",
+                accept_multiple_files=True,
+                help="Upload the quarter total file(s) plus any later quarter/daily file(s) — "
+                     "e.g. Q1 total + Q2-so-far file. All uploaded files are added together."
             )
         
         
@@ -843,11 +879,16 @@ def main():
             return df
         
         ao_date_df  = _parse_or_none(ao_date_file)
-        ao_cumul_df = _parse_or_none(ao_file)
+        ao_cumul_df = combine_summary_dfs([_parse_or_none(f) for f in (ao_files or [])])
         net_date_df = _parse_or_none(net_date_file)
-        net_cumul_df= _parse_or_none(net_file)
+        net_cumul_df= combine_summary_dfs([_parse_or_none(f) for f in (net_files or [])])
+
+        if ao_files and len(ao_files) > 1:
+            st.caption(f"✅ Combined {len(ao_files)} files for 'Accounts opened upto date'")
+        if net_files and len(net_files) > 1:
+            st.caption(f"✅ Combined {len(net_files)} files for 'Net Accounts upto date'")
         
-        any_summary_file = any(f is not None for f in [ao_date_file, ao_file, net_date_file, net_file])
+        any_summary_file = any(f is not None for f in [ao_date_file, net_date_file]) or bool(ao_files) or bool(net_files)
         if not any_summary_file:
             st.warning("Please upload all 4 files above to generate this report.")
         else:
