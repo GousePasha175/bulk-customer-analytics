@@ -656,6 +656,41 @@ def build_scheme_wise(accounts_opened_df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def combine_product_dfs(dfs: list) -> "pd.DataFrame | None":
+    """
+    Combine multiple parsed Product Wise A/C Report files for the SAME division
+    (e.g. Q1 total + Q2-so-far) into one, by summing account/certificate columns
+    per office — matched on BOCODE (falls back to Name if BOCODE is missing/blank).
+    Lets the existing single-file downstream logic (build_range_report,
+    build_nil_reports, export_range_report_excel — all unchanged) work exactly
+    as before.
+    """
+    dfs = [d for d in dfs if d is not None and not d.empty]
+    if not dfs:
+        return None
+    if len(dfs) == 1:
+        return dfs[0].copy()
+    prepped = []
+    for d in dfs:
+        dd = d.copy()
+        for c in ALL_PROD_COLS:
+            if c in dd.columns:
+                dd[c] = pd.to_numeric(dd[c], errors="coerce").fillna(0)
+            else:
+                dd[c] = 0
+        prepped.append(dd)
+    stacked = pd.concat(prepped, ignore_index=True, sort=False)
+    key_col = "BOCODE" if ("BOCODE" in stacked.columns and stacked["BOCODE"].notna().any()) else "Name"
+    other_cols = [c for c in stacked.columns if c not in ALL_PROD_COLS and c != key_col]
+    agg_dict = {c: "sum" for c in ALL_PROD_COLS}
+    for c in other_cols:
+        agg_dict[c] = "first"
+    grouped = stacked.groupby(key_col, as_index=False).agg(agg_dict)
+    for c in ALL_PROD_COLS:
+        grouped[c] = grouped[c].round().astype(int)
+    return grouped
+
+
 def combine_summary_dfs(dfs: list) -> "pd.DataFrame | None":
     """
     Combine multiple parsed 'upto date' summary files into a single equivalent
@@ -757,18 +792,24 @@ def main():
                     label=div,
                     type=["xlsx", "xls"],
                     key=f"div_{div}",
-                    label_visibility="collapsed"
+                    label_visibility="collapsed",
+                    accept_multiple_files=True,
+                    help="Upload the quarter total file(s) plus any later quarter/daily "
+                         "file(s) for this division — all will be added together."
                 )
                 st.caption(div)
-        uploaded_divs = {d: f for d, f in div_files.items() if f is not None}
+        uploaded_divs = {d: f for d, f in div_files.items() if f}
         if not uploaded_divs:
             st.warning("Please upload at least one Division file above to generate this report.")
         else:
             division_dfs = {}
-            for div, f in uploaded_divs.items():
-                df = parse_product_report(f, div)
+            for div, files in uploaded_divs.items():
+                parsed = [parse_product_report(f, div) for f in files]
+                df = combine_product_dfs(parsed)
                 if df is not None:
                     division_dfs[div] = df
+                if len(files) > 1:
+                    st.caption(f"✅ Combined {len(files)} files for {div}")
         
             if division_dfs:
                 range_df = build_range_report(division_dfs)
