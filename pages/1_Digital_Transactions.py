@@ -197,15 +197,15 @@ def n(row, col):
 def clr_dig(pct, use_color=True):
     if not use_color: return "#ffffff"
     p = float(pct)
-    if p >= 60: return "#90EE90"
-    if p >= 40: return "#FFFACD"
+    if p >= 70: return "#90EE90"
+    if p >= 50: return "#FFFACD"
     return "#FF9999"
 
 def clr_cod(pct, use_color=True):
     if not use_color: return "#ffffff"
     p = float(pct)
-    if p >= 50: return "#90EE90"
-    if p >= 30: return "#FFFACD"
+    if p >= 80: return "#90EE90"
+    if p >= 50: return "#FFFACD"
     return "#FF9999"
 
 def th(label, cs=1, rs=1, cls=""):
@@ -752,19 +752,19 @@ def build_excel(df, view, show_region, date_str, use_color, total_label, full_df
         def cf_dig(pct):
             if not use_color: return cell
             p=float(pct)
-            return mkfmt(bg_color="#90EE90" if p>=60 else ("#FFFACD" if p>=40 else "#FF9999"))
+            return mkfmt(bg_color="#90EE90" if p>=70 else ("#FFFACD" if p>=50 else "#FF9999"))
         def cf_dig_l(pct):
             if not use_color: return lft
             p=float(pct)
-            return mkfmt(bg_color="#90EE90" if p>=60 else ("#FFFACD" if p>=40 else "#FF9999"),align="left")
+            return mkfmt(bg_color="#90EE90" if p>=70 else ("#FFFACD" if p>=50 else "#FF9999"),align="left")
         def cf_cod(pct):
             if not use_color: return cell
             p=float(pct)
-            return mkfmt(bg_color="#90EE90" if p>=50 else ("#FFFACD" if p>=30 else "#FF9999"))
+            return mkfmt(bg_color="#90EE90" if p>=80 else ("#FFFACD" if p>=50 else "#FF9999"))
         def cf_cod_l(pct):
             if not use_color: return lft
             p=float(pct)
-            return mkfmt(bg_color="#90EE90" if p>=50 else ("#FFFACD" if p>=30 else "#FF9999"),align="left")
+            return mkfmt(bg_color="#90EE90" if p>=80 else ("#FFFACD" if p>=50 else "#FF9999"),align="left")
 
         ws_name = {"Count":"Count","Amount":"Amount","Combined":"Combined","COD":"COD"}[view]
         ws = wb.add_worksheet(ws_name); writer.sheets[ws_name] = ws
@@ -994,11 +994,11 @@ def build_excel(df, view, show_region, date_str, use_color, total_label, full_df
             def ow_cf(pct):
                 if not use_color: return ow_cell
                 p = float(pct)
-                return mkfmt(bg_color="#90EE90" if p >= 50 else ("#FFFACD" if p >= 30 else "#FF9999"))
+                return mkfmt(bg_color="#90EE90" if p >= 80 else ("#FFFACD" if p >= 50 else "#FF9999"))
             def ow_cf_l(pct):
                 if not use_color: return ow_lft
                 p = float(pct)
-                return mkfmt(bg_color="#90EE90" if p >= 50 else ("#FFFACD" if p >= 30 else "#FF9999"), align="left")
+                return mkfmt(bg_color="#90EE90" if p >= 80 else ("#FFFACD" if p >= 50 else "#FF9999"), align="left")
 
             used_sheet_names = set(writer.sheets.keys())
             for division, ddf in office_detail_df.groupby("division", sort=False):
@@ -1156,9 +1156,9 @@ if uploaded:
 
         if use_color:
             st.markdown("""<div style='display:flex;gap:14px;margin-bottom:8px;font-size:13px;'>
-            <span style='background:#90EE90;padding:3px 10px;border-radius:4px;'>≥ 50% Digital</span>
-            <span style='background:#FFFACD;padding:3px 10px;border-radius:4px;'>30–49% Digital</span>
-            <span style='background:#FF9999;padding:3px 10px;border-radius:4px;'>< 30% Digital</span>
+            <span style='background:#90EE90;padding:3px 10px;border-radius:4px;'>≥ 70% Digital</span>
+            <span style='background:#FFFACD;padding:3px 10px;border-radius:4px;'>50–69% Digital</span>
+            <span style='background:#FF9999;padding:3px 10px;border-radius:4px;'>< 50% Digital</span>
             </div>""", unsafe_allow_html=True)
 
         df_display_cod, full_df_cod = apply_hyd_filter(df, show_hyd_detail)
