@@ -151,6 +151,26 @@ REGION_ORDER = ["Headquarters Region", "Hyderabad Region", "Other"]
 # IDs that represent region-level totals (not individual divisions)
 REGION_SUMMARY_IDS = {30610001, 30610002}
 
+# Division-name based region classification — used for the newer, transaction-level
+# COD export which carries real per-office IDs (not the coarse division-HQ IDs in
+# REGION_MAP above) plus an explicit 'Division Name' column.
+DIVISION_REGION_MAP = {
+    "Hyderabad City Division":       "Headquarters Region",
+    "Hyderabad GPO Division":        "Headquarters Region",
+    "Hyderabad GPO":                 "Headquarters Region",
+    "Hyderabad South East Division": "Headquarters Region",
+    "Hyderabad South East":          "Headquarters Region",
+    "Secunderabad Division":         "Headquarters Region",
+    "Medak Division":                "Headquarters Region",
+    "Sangareddy Division":           "Headquarters Region",
+    "Hyderabad Sorting Division":    "Headquarters Region",
+    "MMS, Hyderabad":                "Headquarters Region",
+    "MMS Hyderabad":                 "Headquarters Region",
+    "PSD Hyderabad":                 "Headquarters Region",
+    "Regional Office, HQ Region":    "Headquarters Region",
+    "Hyderabad City Region":         "Headquarters Region",
+}
+
 # ========== HELPERS ==========
 def strip_div(name):
     return re.sub(r'\s*Division\s*$', '', str(name), flags=re.IGNORECASE).strip()
@@ -265,9 +285,36 @@ def process_booking(df_raw):
 # ========== PROCESS COD ==========
 def process_cod(df_raw):
     df = df_raw.copy()
-    cols = [c.lower().strip() for c in df.columns]
+    cols_lower = {c.lower().strip(): c for c in df.columns}
 
-    # Detect office-id column (handle variations)
+    def find(*kws):
+        for kw in kws:
+            for lc, orig in cols_lower.items():
+                if kw in lc:
+                    return orig
+        return None
+
+    # New-style transaction-level export: one row per office+customer, with real
+    # per-office IDs, a 'Division Name' column, and explicit Cash/Digital count columns.
+    div_col     = find('division name', 'division_name')
+    office_col  = find('office name', 'office_name')
+    newid_col   = find('office id', 'office_id', 'office-id')
+    newcash_col = find('cod cash count')
+    newdig_col  = find('cod digital count')
+
+    if div_col and office_col and newid_col and newcash_col and newdig_col:
+        office_detail = _aggregate_cod_office_level(df, div_col, office_col, newid_col, newcash_col, newdig_col)
+        div_agg = (office_detail.groupby(["region", "division"], as_index=False)
+                   .agg(digital=("digital", "sum"), cash=("cash", "sum")))
+        div_agg["total_cod"] = div_agg["digital"] + div_agg["cash"]
+        div_agg["pct"] = div_agg.apply(
+            lambda r: round(r["digital"] / r["total_cod"] * 100, 2) if r["total_cod"] > 0 else 0.0, axis=1)
+        div_agg = div_agg.rename(columns={"division": "name"})
+        div_agg["oid_i"] = 0
+        div_agg["is_region_summary"] = False
+        return div_agg[["oid_i", "region", "name", "digital", "cash", "total_cod", "pct", "is_region_summary"]]
+
+    # ---- Old pre-aggregated (one row per Division) format — unchanged original logic ----
     id_col = next((c for c in df.columns if c.lower().strip() in
                    ('office-id','office_id','office id')), None)
     # Accept "Division Name", "Division_Name", "Office Name" etc.
@@ -306,6 +353,53 @@ def process_cod(df_raw):
     # Flag if this is a region-summary file (all IDs are region-level, not division-level)
     agg['is_region_summary'] = agg['oid_i'].isin(REGION_SUMMARY_IDS)
     return agg
+
+def _aggregate_cod_office_level(df, div_col, office_col, id_col, cash_col, dig_col):
+    """Shared helper: aggregate the new transaction-level COD export to one row per office."""
+    d = df.copy()
+    d['oid_i'] = d[id_col].apply(lambda x: int(float(str(x))) if pd.notna(x) else None)
+    d = d.dropna(subset=['oid_i'])
+    d['oid_i'] = d['oid_i'].astype(int)
+    d['office_name'] = d[office_col].apply(lambda x: strip_div(str(x)))
+    # Map region from the RAW division text (before the 'Division' suffix is stripped),
+    # since DIVISION_REGION_MAP keys include that suffix (e.g. "Secunderabad Division").
+    raw_division  = d[div_col].astype(str).str.strip()
+    d['region']   = raw_division.map(DIVISION_REGION_MAP).fillna("Other")
+    d['division'] = raw_division.apply(strip_div)
+    office_agg = d.groupby(['oid_i','region','division','office_name'], as_index=False).agg(
+        cash=(cash_col,'sum'), digital=(dig_col,'sum'))
+    office_agg['total_cod'] = office_agg['digital'] + office_agg['cash']
+    office_agg['pct'] = office_agg.apply(
+        lambda r: round(r['digital']/r['total_cod']*100,2) if r['total_cod']>0 else 0.0, axis=1)
+    return office_agg
+
+def process_cod_office_detail(df_raw):
+    """
+    Office-level breakdown for the new transaction-level COD export, used only to
+    build the per-Division 'office-wise' Excel sheets. Returns None for the older
+    pre-aggregated (one-row-per-Division) file format, since no office-level
+    detail exists in that case.
+    Columns: oid_i, region, division, office_name, cash, digital, total_cod, pct
+    """
+    df = df_raw.copy()
+    cols_lower = {c.lower().strip(): c for c in df.columns}
+
+    def find(*kws):
+        for kw in kws:
+            for lc, orig in cols_lower.items():
+                if kw in lc:
+                    return orig
+        return None
+
+    div_col     = find('division name', 'division_name')
+    office_col  = find('office name', 'office_name')
+    id_col      = find('office id', 'office_id', 'office-id')
+    cash_col    = find('cod cash count')
+    dig_col     = find('cod digital count')
+
+    if not (div_col and office_col and id_col and cash_col and dig_col):
+        return None
+    return _aggregate_cod_office_level(df, div_col, office_col, id_col, cash_col, dig_col)
 
 # ========== HTML TABLE — BOOKING ==========
 def booking_html(df, view, show_region, date_str, use_color, total_label, full_df=None):
@@ -641,7 +735,7 @@ def cod_png(df, show_region, date_str, use_color, total_label, full_df=None):
     return df_to_png(dfd, f"Status of COD Digital Transactions — {date_str}", colors)
 
 # ========== EXCEL BUILDER ==========
-def build_excel(df, view, show_region, date_str, use_color, total_label, full_df=None, mode="booking"):
+def build_excel(df, view, show_region, date_str, use_color, total_label, full_df=None, mode="booking", office_detail_df=None):
     out = io.BytesIO()
     with pd.ExcelWriter(out, engine="xlsxwriter") as writer:
         wb = writer.book
@@ -889,6 +983,67 @@ def build_excel(df, view, show_region, date_str, use_color, total_label, full_df
                 else:
                     ws.set_column(ci3, ci3, max(r1_len + 2, r2_len + 2, 10))
 
+        # ── NEW: COD Collection - Office wise sheets (one per Division) ──────────
+        if mode == "cod" and office_detail_df is not None and not office_detail_df.empty:
+            ow_hdr  = mkfmt(bold=True, bg_color="#2f3343", font_color="#FFFFFF")
+            ow_title = mkfmt(bold=True, bg_color="#FFD700", font_color="#cc0000",
+                              font_size=12, align="center")
+            ow_gtot = mkfmt(bold=True, bg_color="#FFD700")
+            ow_glft = mkfmt(bold=True, bg_color="#FFD700", align="left")
+            ow_cell = mkfmt(); ow_lft = mkfmt(align="left")
+            def ow_cf(pct):
+                if not use_color: return ow_cell
+                p = float(pct)
+                return mkfmt(bg_color="#90EE90" if p >= 50 else ("#FFFACD" if p >= 30 else "#FF9999"))
+            def ow_cf_l(pct):
+                if not use_color: return ow_lft
+                p = float(pct)
+                return mkfmt(bg_color="#90EE90" if p >= 50 else ("#FFFACD" if p >= 30 else "#FF9999"), align="left")
+
+            used_sheet_names = set(writer.sheets.keys())
+            for division, ddf in office_detail_df.groupby("division", sort=False):
+                safe_name = re.sub(r'[\[\]:*?/\\]', '', f"OW-{division}")[:31]
+                base_name = safe_name
+                dedupe_i = 1
+                while safe_name in used_sheet_names:
+                    dedupe_i += 1
+                    safe_name = f"{base_name[:28]}_{dedupe_i}"
+                used_sheet_names.add(safe_name)
+
+                ows = wb.add_worksheet(safe_name); writer.sheets[safe_name] = ows
+                ow_cols = ["Office Name","Cash Count","COD Digital Count",
+                           "Total COD Count","COD Collection Performance (%)"]
+                ows.set_row(0, 22)
+                ows.merge_range(0, 0, 0, len(ow_cols)-1,
+                                 f"COD Collection - Office wise {date_str}", ow_title)
+                ows.set_row(1, 24)
+                for ci4, lbl in enumerate(ow_cols): ows.write(1, ci4, lbl, ow_hdr)
+
+                dr4 = 2
+                ddf_sorted = ddf.sort_values("pct", ascending=False)
+                for _, row in ddf_sorted.iterrows():
+                    pv = row["pct"]
+                    f = ow_cf(pv); fl = ow_cf_l(pv)
+                    ows.write(dr4, 0, row["office_name"], fl)
+                    ows.write(dr4, 1, int(row["cash"]), f)
+                    ows.write(dr4, 2, int(row["digital"]), f)
+                    ows.write(dr4, 3, int(row["total_cod"]), f)
+                    ows.write(dr4, 4, f"{pv:.2f}%", f)
+                    dr4 += 1
+
+                tc4 = ddf["total_cod"].sum(); dc4 = ddf["digital"].sum(); ca4 = ddf["cash"].sum()
+                pg4 = round(dc4/tc4*100, 2) if tc4 > 0 else 0.0
+                ows.write(dr4, 0, "Total", ow_glft)
+                ows.write(dr4, 1, int(ca4), ow_gtot)
+                ows.write(dr4, 2, int(dc4), ow_gtot)
+                ows.write(dr4, 3, int(tc4), ow_gtot)
+                ows.write(dr4, 4, f"{pg4:.2f}%", ow_gtot)
+
+                max_n4 = max((len(str(x)) for x in ddf["office_name"]), default=20)
+                ows.set_column(0, 0, min(max_n4 + 3, 35))
+                ows.set_column(1, 3, 16)
+                ows.set_column(4, 4, 22)
+
     out.seek(0); return out.getvalue()
 
 # ========== SIDEBAR ==========
@@ -1013,10 +1168,37 @@ if uploaded:
         png_bytes = cod_png(df_display_cod,show_region,date_str,use_color,total_label,full_df_cod)
         st.download_button("📷 Download as Image", png_bytes,
             file_name=f"{fn}.png", mime="image/png")
-        xl = build_excel(df_display_cod,"COD",show_region,date_str,use_color,total_label,full_df=full_df_cod,mode="cod")
+
+        cod_office_detail = process_cod_office_detail(df_raw)
+        xl = build_excel(df_display_cod,"COD",show_region,date_str,use_color,total_label,
+                          full_df=full_df_cod,mode="cod",office_detail_df=cod_office_detail)
         st.download_button("⬇ Download Excel (COD)", xl,
             file_name=f"{fn}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+        if cod_office_detail is not None and not cod_office_detail.empty:
+            st.markdown("---")
+            st.markdown(f"##### 📋 COD Collection - Office wise {date_str}")
+            st.caption("Office-wise detail is also included as separate sheets (one per Division) in the Excel download above.")
+            for division, ddf in cod_office_detail.groupby("division", sort=False):
+                tc5 = ddf["total_cod"].sum(); dc5 = ddf["digital"].sum()
+                pg5 = round(dc5/tc5*100, 2) if tc5 > 0 else 0.0
+                with st.expander(f"{division}  —  {pg5:.2f}% digital"):
+                    ow_html = '<div class="rpt-wrap"><table class="rpt">'
+                    ow_html += (f'<caption>COD Collection - Office wise {date_str} — {division}</caption>'
+                                '<thead><tr><th>Office Name</th><th>Cash Count</th>'
+                                '<th>COD Digital Count</th><th>Total COD Count</th>'
+                                '<th>COD Collection Performance (%)</th></tr></thead><tbody>')
+                    for _, row in ddf.sort_values("pct", ascending=False).iterrows():
+                        bg = clr_cod(row["pct"], use_color)
+                        ow_html += (f'<tr style="background:{bg};"><td class="lft">{row["office_name"]}</td>'
+                                    f'<td>{indian_num(row["cash"])}</td><td>{indian_num(row["digital"])}</td>'
+                                    f'<td>{indian_num(row["total_cod"])}</td><td><b>{row["pct"]:.2f}%</b></td></tr>\n')
+                    ca5 = ddf["cash"].sum()
+                    ow_html += (f'<tr class="gtot"><td class="lft"><b>Total</b></td><td>{indian_num(ca5)}</td>'
+                                f'<td>{indian_num(dc5)}</td><td>{indian_num(tc5)}</td><td><b>{pg5:.2f}%</b></td></tr>')
+                    ow_html += "</tbody></table></div>"
+                    st.markdown(ow_html, unsafe_allow_html=True)
 
 else:
     st.info("Select report type and upload a CSV from the sidebar to begin.")
