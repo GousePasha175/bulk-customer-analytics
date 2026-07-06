@@ -1012,7 +1012,7 @@ def build_excel(df, view, show_region, date_str, use_color, total_label, full_df
 
                 ows = wb.add_worksheet(safe_name); writer.sheets[safe_name] = ows
                 ow_cols = ["Office Name","Cash Count","COD Digital Count",
-                           "Total COD Count","COD Collection Performance (%)"]
+                           "Total COD Count","Digital Transactions (%)"]
                 ows.set_row(0, 22)
                 ows.merge_range(0, 0, 0, len(ow_cols)-1,
                                  f"COD Collection - Office wise {date_str} — {division}", ow_title)
@@ -1188,7 +1188,7 @@ if uploaded:
                     ow_html += (f'<caption>COD Collection - Office wise {date_str} — {division}</caption>'
                                 '<thead><tr><th>Office Name</th><th>Cash Count</th>'
                                 '<th>COD Digital Count</th><th>Total COD Count</th>'
-                                '<th>COD Collection Performance (%)</th></tr></thead><tbody>')
+                                '<th>Digital Transactions (%)</th></tr></thead><tbody>')
                     for _, row in ddf.sort_values("pct", ascending=False).iterrows():
                         bg = clr_cod(row["pct"], use_color)
                         ow_html += (f'<tr style="background:{bg};"><td class="lft">{row["office_name"]}</td>'
