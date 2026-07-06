@@ -1015,7 +1015,7 @@ def build_excel(df, view, show_region, date_str, use_color, total_label, full_df
                            "Total COD Count","COD Collection Performance (%)"]
                 ows.set_row(0, 22)
                 ows.merge_range(0, 0, 0, len(ow_cols)-1,
-                                 f"COD Collection - Office wise {date_str}", ow_title)
+                                 f"COD Collection - Office wise {date_str} — {division}", ow_title)
                 ows.set_row(1, 24)
                 for ci4, lbl in enumerate(ow_cols): ows.write(1, ci4, lbl, ow_hdr)
 
