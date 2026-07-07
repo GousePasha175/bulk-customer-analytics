@@ -422,7 +422,7 @@ def build_excel(summary_df, not_marked_df, office_wise_df, report_date, unmatche
     ri = 2
     for _, row in data_rows.iterrows():
         v = float(row["% AEBAS"])
-        pf = (fmt_green if v = 100 else fmt_lgreen if v >= 95 else
+        pf = (fmt_green if v >= 100 else fmt_lgreen if v >= 95 else
               fmt_amber if v >= 80 else fmt_red)
         ws1.write(ri, 0, int(row["Sl."]), fmt_c)
         ws1.write(ri, 1, row["Division/Unit"], fmt_l)
