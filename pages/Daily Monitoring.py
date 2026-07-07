@@ -132,6 +132,18 @@ table{
 </style>
 """, unsafe_allow_html=True)
 _render_nav()
+st.sidebar.markdown("---")
+st.sidebar.header("📊 Reports")
+
+show_lowest = st.sidebar.checkbox(
+    "Division-wise Daily Monitoring",
+    value=True
+)
+
+show_100 = st.sidebar.checkbox(
+    "100% Deposit Offices",
+    value=False
+)
 
 # --------------------------------------------------------
 # Header
