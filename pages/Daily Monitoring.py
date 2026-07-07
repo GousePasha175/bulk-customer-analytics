@@ -331,6 +331,55 @@ with c7:
 
 with c8:
     st.metric("Branch Offices", total_bo)
+st.markdown("---")
+
+# ==========================================================
+# TOP / BOTTOM DELIVERY DIVISIONS
+# ==========================================================
+
+top_delivery = (
+    division_summary
+    .sort_values("Delivery", ascending=False)
+    .head(10)
+)
+
+bottom_delivery = (
+    division_summary
+    .sort_values("Delivery", ascending=True)
+    .head(10)
+)
+
+left, right = st.columns(2)
+
+with left:
+    st.subheader("🏆 Top Delivery Divisions")
+
+    st.dataframe(
+        top_delivery[
+            [
+                "division-office-name",
+                "Delivery",
+                "Articles"
+            ]
+        ],
+        hide_index=True,
+        use_container_width=True
+    )
+
+with right:
+    st.subheader("⚠ Bottom Delivery Divisions")
+
+    st.dataframe(
+        bottom_delivery[
+            [
+                "division-office-name",
+                "Delivery",
+                "Articles"
+            ]
+        ],
+        hide_index=True,
+        use_container_width=True
+    )
 # ==========================================================
 # Division Selector
 # ==========================================================
