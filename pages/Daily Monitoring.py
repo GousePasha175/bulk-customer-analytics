@@ -241,18 +241,41 @@ st.success("✅ Office Master merged successfully")
 st.success("✅ Master merge successful")
 
 st.dataframe(
+
     daily[
         [
-            "office-id",
-            "office-name",
             "division-office-name",
+            "office-name",
             "office-type-code",
             "invoice-count",
-            "delivery-count",
-            "deposit-count",
-            "redirection-count",
-            "return-count"
+            "Delivery %",
+            "Deposit %",
+            "Redirect %",
+            "Return %"
         ]
-    ].head(15),
+    ],
+
     use_container_width=True
 )
+)
+# --------------------------------------------------------
+# Percentage Calculations
+# --------------------------------------------------------
+
+daily["Delivery %"] = (
+    daily["delivery-count"] / daily["invoice-count"] * 100
+).round(2)
+
+daily["Deposit %"] = (
+    daily["deposit-count"] / daily["invoice-count"] * 100
+).round(2)
+
+daily["Redirect %"] = (
+    daily["redirection-count"] / daily["invoice-count"] * 100
+).round(2)
+
+daily["Return %"] = (
+    daily["return-count"] / daily["invoice-count"] * 100
+).round(2)
+
+daily = daily.fillna(0)
