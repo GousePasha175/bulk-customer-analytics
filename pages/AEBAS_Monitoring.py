@@ -576,7 +576,7 @@ def render_summary_html(summary_display, report_date):
                 f"<td>{v:.2f}%</td></tr>"
             )
         else:
-            pct_style = ("background:#70AD47;color:#fff;font-weight:700" if v = 100 else
+            pct_style = ("background:#70AD47;color:#fff;font-weight:700" if v == 100 else
                          "background:#E2EFDA;font-weight:700" if v >= 95 else
                          "background:#FFC000;font-weight:700" if v >= 60 else
                          "background:#FF0000;color:#fff;font-weight:700")
