@@ -228,3 +228,20 @@ daily = daily.merge(
     on="office-id",
     how="left"
 )
+st.success("✅ Office Master merged successfully")
+
+st.write(
+    daily[
+        [
+            "office-id",
+            "office-name",
+            "division-office-name",
+            "office-type-code",
+            "invoice-count",
+            "delivery-count",
+            "deposit-count",
+            "redirection-count",
+            "return-count"
+        ]
+    ].head(15)
+)
