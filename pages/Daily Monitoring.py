@@ -278,6 +278,60 @@ division_summary = (
 
 division_summary = division_summary.round(2)
 # ==========================================================
+# HQ KPI VALUES
+# ==========================================================
+
+total_divisions = division_summary["division-office-name"].nunique()
+
+total_offices = len(daily)
+
+total_articles = int(daily["invoice-count"].sum())
+
+avg_delivery = daily["Delivery %"].mean()
+
+avg_deposit = daily["Deposit %"].mean()
+
+avg_redirect = daily["Redirect %"].mean()
+
+avg_return = daily["Return %"].mean()
+
+total_bo = (daily["office-type-code"] == "BPO").sum()
+
+total_other = len(daily) - total_bo
+# ==========================================================
+# HQ KPI CARDS
+# ==========================================================
+
+st.markdown("## 🏛 Headquarters Region Dashboard")
+
+c1,c2,c3,c4 = st.columns(4)
+
+c5,c6,c7,c8 = st.columns(4)
+
+with c1:
+    st.metric("Divisions", total_divisions)
+
+with c2:
+    st.metric("Offices", total_offices)
+
+with c3:
+    st.metric("Articles", f"{total_articles:,}")
+
+with c4:
+    st.metric("Avg Delivery %", f"{avg_delivery:.2f}")
+
+with c5:
+    st.metric("Avg Deposit %", f"{avg_deposit:.2f}")
+
+with c6:
+    st.metric("Avg Redirect %", f"{avg_redirect:.2f}")
+
+with c7:
+    st.metric("Avg Return %", f"{avg_return:.2f}")
+
+with c8:
+    st.metric("Branch Offices", total_bo)
+# ==========================================================
 # Division Selector
 # ==========================================================
 
