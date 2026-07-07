@@ -228,7 +228,31 @@ daily = daily.merge(
     on="office-id",
     how="left"
 )
+# Keep Office Master office name
+daily = daily.rename(columns={
+    "office-name_y": "office-name"
+})
+
+# Remove uploaded office name
+if "office-name_x" in daily.columns:
+    daily = daily.drop(columns=["office-name_x"])
 st.success("✅ Office Master merged successfully")
 
-st.write(daily.columns.tolist())
-st.stop()
+st.success("✅ Master merge successful")
+
+st.dataframe(
+    daily[
+        [
+            "office-id",
+            "office-name",
+            "division-office-name",
+            "office-type-code",
+            "invoice-count",
+            "delivery-count",
+            "deposit-count",
+            "redirection-count",
+            "return-count"
+        ]
+    ].head(15),
+    use_container_width=True
+)
