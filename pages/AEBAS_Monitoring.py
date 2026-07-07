@@ -67,7 +67,8 @@ if not st.session_state.get("authenticated", False):
     st.stop()
 
 # ── Colour constants ──────────────────────────────────────────────────────────
-TITLE_BG = "#083e9c"; TITLE_FG = "#FFFFFF"
+TITLE_BG = "#0B3D91"
+TITLE_FG = "#FFFFFF"
 HDR_BG   = "#2E75B6"; HDR_FG   = "#FFFFFF"
 TOTAL_BG = "#FFF2CC"; TOTAL_FG = "#000000"
 DIV_BG   = "#DDEBF7"; DIV_FG   = "#1F3864"
@@ -554,7 +555,7 @@ AEBAS_TABLE_CSS = f"""
 .aebas-table td.name-left {{ text-align:left; }}
 .aebas-table th.sl-col, .aebas-table td.sl-col {{ width:42px;max-width:42px; }}
 .aebas-title {{ background:{TITLE_BG};color:{TITLE_FG};font-weight:700;
-    text-align:center;padding:9px 6px;font-size:15px; }}
+    text-align:center;padding:9px 6px;font-size:16px; }}
 .aebas-total {{ background:{TOTAL_BG}!important;font-weight:700!important;color:{TOTAL_FG}!important; }}
 .aebas-divcell {{ background:{DIV_BG};color:{DIV_FG};font-weight:700;
     text-align:center;vertical-align:middle; }}
@@ -829,6 +830,16 @@ st.subheader(f"1️⃣ Division-wise % — AEBAS Report dated {report_date.strft
 st.markdown(render_summary_html(summary_display, report_date), unsafe_allow_html=True)
 st.caption("* Departmental Post Offices only. Branch Offices (BOs) excluded. Office counts are based on the Office Master sheet.")
 
+# ── Download ──────────────────────────────────────────────────────────────────
+st.markdown("---")
+excel_bytes = build_excel(summary_display, not_marked, office_wise, report_date, unmatched_summary)
+st.download_button(
+    "⬇️ Download AEBAS Report (Excel)",
+    data=excel_bytes,
+    file_name=f"AEBAS_Report_{report_date.strftime('%d%m%Y')}.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
+
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Total Offices", int(tot_t))
 c2.metric("Marked", int(tot_m))
@@ -889,15 +900,15 @@ oc2.metric("Total Present", int(office_wise["Present"].sum()) if len(office_wise
 oc3.metric("Total Absent", int(office_wise["Absent"].sum()) if len(office_wise) else 0)
 st.caption("* Departmental Post Offices only. Branch Offices (BOs) excluded.")
 
-# ── Download ──────────────────────────────────────────────────────────────────
-st.markdown("---")
-excel_bytes = build_excel(summary_display, not_marked, office_wise, report_date, unmatched_summary)
-st.download_button(
-    "⬇️ Download AEBAS Report (Excel)",
-    data=excel_bytes,
-    file_name=f"AEBAS_Report_{report_date.strftime('%d%m%Y')}.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-)
+# # ── Download ──────────────────────────────────────────────────────────────────
+# st.markdown("---")
+# excel_bytes = build_excel(summary_display, not_marked, office_wise, report_date, unmatched_summary)
+# st.download_button(
+#     "⬇️ Download AEBAS Report (Excel)",
+#     data=excel_bytes,
+#     file_name=f"AEBAS_Report_{report_date.strftime('%d%m%Y')}.xlsx",
+#     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+# )
 
 # ── Debug expander ────────────────────────────────────────────────────────────
 with st.expander("🔍 Matching Debug", expanded=False):
