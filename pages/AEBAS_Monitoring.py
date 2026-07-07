@@ -400,16 +400,6 @@ def build_excel(summary_df, not_marked_df, office_wise_df, report_date, unmatche
 
     date_str = report_date.strftime("%d.%m.%Y")
 
-    # ── Download ──────────────────────────────────────────────────────────────────
-    st.markdown("---")
-    excel_bytes = build_excel(summary_display, not_marked, office_wise, report_date, unmatched_summary)
-    st.download_button(
-        "⬇️ Download AEBAS Report (Excel)",
-        data=excel_bytes,
-        file_name=f"AEBAS_Report_{report_date.strftime('%d%m%Y')}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-    
 
     # ── Sheet 1: Summary ──────────────────────────────────────────────────────
     ws1 = wb.add_worksheet("Summary")
@@ -763,7 +753,7 @@ if len(_bad_divisions) > 0:
         "column headers, or re-upload it using the override uploader above."
     )
     st.stop()
-with st.expander("✅ Master data loaded — click to verify column detection", expanded=False):
+#with st.expander("✅ Master data loaded — click to verify column detection", expanded=False):
     st.caption(
         f"Office Master: {len(office_master_df)} total rows "
         f"({len(_nonbo_preview)} non-BO). Office Type breakdown: "
@@ -900,15 +890,15 @@ oc2.metric("Total Present", int(office_wise["Present"].sum()) if len(office_wise
 oc3.metric("Total Absent", int(office_wise["Absent"].sum()) if len(office_wise) else 0)
 st.caption("* Departmental Post Offices only. Branch Offices (BOs) excluded.")
 
-# # ── Download ──────────────────────────────────────────────────────────────────
-# st.markdown("---")
-# excel_bytes = build_excel(summary_display, not_marked, office_wise, report_date, unmatched_summary)
-# st.download_button(
-#     "⬇️ Download AEBAS Report (Excel)",
-#     data=excel_bytes,
-#     file_name=f"AEBAS_Report_{report_date.strftime('%d%m%Y')}.xlsx",
-#     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-# )
+# ── Download ──────────────────────────────────────────────────────────────────
+st.markdown("---")
+excel_bytes = build_excel(summary_display, not_marked, office_wise, report_date, unmatched_summary)
+st.download_button(
+    "⬇️ Download AEBAS Report (Excel)",
+    data=excel_bytes,
+    file_name=f"AEBAS_Report_{report_date.strftime('%d%m%Y')}.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
 
 # ── Debug expander ────────────────────────────────────────────────────────────
 with st.expander("🔍 Matching Debug", expanded=False):
