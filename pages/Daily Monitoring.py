@@ -440,6 +440,14 @@ division_df = daily[
 ].copy()
 
 st.subheader(selected_division)
+delivery_tab, deposit_tab, redirect_tab, return_tab = st.tabs(
+    [
+        "🚚 Delivery",
+        "📥 Deposit",
+        "🔀 Redirect",
+        "↩ Return"
+    ]
+)
 # ==========================================================
 # Lowest Delivery % Report
 # ==========================================================
@@ -472,7 +480,12 @@ bo_delivery = (
     )
     .head(25)
 )
+st.markdown("""
+### 🚚 Lowest Delivery Percentage
 
+Showing the offices having the **lowest Delivery Percentage**
+subject to the minimum invoiced article criteria.
+""")
 other_delivery = (
     other_df.sort_values(
         ["Delivery %", "invoice-count"],
@@ -480,7 +493,7 @@ other_delivery = (
     )
     .head(15)
 )
-with st.expander("🚚 Lowest Delivery Percentage", expanded=True):
+with delivery_tab:
 
     col1, col2 = st.columns(2)
     
@@ -526,7 +539,12 @@ bo_deposit = (
         ascending=[False, False]
     ).head(25)
 )
+st.markdown("""
+### Highest Deposit
 
+Showing the offices having the **Highest Deposit**
+subject to the minimum invoiced article criteria.
+""")
 other_deposit = (
     other_df.sort_values(
         ["Deposit %", "invoice-count"],
@@ -534,7 +552,7 @@ other_deposit = (
     ).head(15)
 )
 
-with st.expander("📥 Highest Deposit Percentage"):
+with deposit_tab:
 
     c1, c2 = st.columns(2)
 
@@ -587,8 +605,7 @@ other_redirect = (
     ).head(15)
 )
 
-with st.expander("🔀 Highest Redirect Percentage"):
-
+with redirect_tab:
     c1, c2 = st.columns(2)
 
     with c1:
@@ -642,7 +659,7 @@ other_return = (
     ).head(15)
 )
 
-with st.expander("↩ Highest Return Percentage"):
+with return_tab:
 
     c1, c2 = st.columns(2)
 
