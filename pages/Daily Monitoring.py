@@ -176,6 +176,21 @@ if uploaded_file is None:
 daily = pd.read_csv(uploaded_file)
 
 daily.columns = daily.columns.str.strip()
+daily["office-id"] = daily["office-id"].astype(str)
+master["office-id"] = master["office-id"].astype(str)
+
+daily = daily.merge(
+    master[
+        [
+            "office-id",
+            "office-name",
+            "division-office-name",
+            "office-type-code"
+        ]
+    ],
+    on="office-id",
+    how="left"
+)
 # --------------------------------------------------------
 # Header
 # --------------------------------------------------------
