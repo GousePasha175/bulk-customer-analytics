@@ -815,8 +815,8 @@ summary["% AEBAS"] = (summary["Marked"] / summary["Total"] * 100).round(2)
 summary = summary.sort_values(by=["% AEBAS", "Marked"],ascending=[False, False]).reset_index(drop=True)
 summary.insert(0, "Sl.", range(1, len(summary)+1))
 summary.columns = ["Sl.","Division/Unit","Total","Marked","Not Marked","% AEBAS"]
-summary.insert(0, "Sl.", range(1, len(summary) + 1))
-summary.columns = ["Sl.", "Division/Unit", "Total", "Marked", "Not Marked", "% AEBAS"]
+#summary.insert(0, "Sl.", range(1, len(summary) + 1))
+#summary.columns = ["Sl.", "Division/Unit", "Total", "Marked", "Not Marked", "% AEBAS"]
 
 tot_t = summary["Total"].sum()
 tot_m = summary["Marked"].sum()
