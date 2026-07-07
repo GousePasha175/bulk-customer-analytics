@@ -350,6 +350,23 @@ st.markdown("<hr style='margin:4px 0 10px 0;border-color:#ddd;'>", unsafe_allow_
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 _render_nav()
+# ================================
+# MODULE SELECTION
+# ================================
+
+st.sidebar.markdown("---")
+
+module = st.sidebar.radio(
+    "📊 Select Module",
+    [
+        "Delivery Transit Analysis",
+        "Division-wise Daily Monitoring",
+        "100% Deposit Offices"
+    ],
+    index=0
+)
+
+st.sidebar.markdown("---")
 st.sidebar.header("Report Period")
 c1, c2 = st.sidebar.columns(2)
 from_date = c1.date_input("From", value=date.today())
