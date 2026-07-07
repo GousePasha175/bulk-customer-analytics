@@ -298,39 +298,79 @@ avg_return = daily["Return %"].mean()
 total_bo = (daily["office-type-code"] == "BPO").sum()
 
 total_other = len(daily) - total_bo
-# ==========================================================
-# HQ KPI CARDS
-# ==========================================================
+st.markdown("""
+<style>
+
+.kpi-card{
+background:white;
+border-radius:18px;
+padding:18px;
+box-shadow:0 4px 15px rgba(0,0,0,.08);
+text-align:center;
+margin-bottom:15px;
+border-top:6px solid #0B5CAD;
+}
+
+.kpi-title{
+font-size:15px;
+color:#666;
+font-weight:600;
+margin-bottom:8px;
+}
+
+.kpi-value{
+font-size:34px;
+font-weight:700;
+color:#0B5CAD;
+}
+
+</style>
+""",unsafe_allow_html=True)
 
 st.markdown("## 🏛 Headquarters Region Dashboard")
 
-c1,c2,c3,c4 = st.columns(4)
+def kpi(title,value):
 
-c5,c6,c7,c8 = st.columns(4)
+    st.markdown(f"""
+<div class="kpi-card">
 
-with c1:
-    st.metric("Divisions", total_divisions)
+<div class="kpi-title">
+{title}
+</div>
 
-with c2:
-    st.metric("Offices", total_offices)
+<div class="kpi-value">
+{value}
+</div>
 
-with c3:
-    st.metric("Articles", f"{total_articles:,}")
+</div>
+""",unsafe_allow_html=True)
+r1,r2,r3,r4 = st.columns(4)
 
-with c4:
-    st.metric("Avg Delivery %", f"{avg_delivery:.2f}")
+with r1:
+    kpi("Divisions",total_divisions)
 
-with c5:
-    st.metric("Avg Deposit %", f"{avg_deposit:.2f}")
+with r2:
+    kpi("Offices",f"{total_offices:,}")
 
-with c6:
-    st.metric("Avg Redirect %", f"{avg_redirect:.2f}")
+with r3:
+    kpi("Articles",f"{total_articles:,}")
 
-with c7:
-    st.metric("Avg Return %", f"{avg_return:.2f}")
+with r4:
+    kpi("Avg Delivery",f"{avg_delivery:.2f}%")
 
-with c8:
-    st.metric("Branch Offices", total_bo)
+r5,r6,r7,r8 = st.columns(4)
+
+with r5:
+    kpi("Avg Deposit",f"{avg_deposit:.2f}%")
+
+with r6:
+    kpi("Avg Redirect",f"{avg_redirect:.2f}%")
+
+with r7:
+    kpi("Avg Return",f"{avg_return:.2f}%")
+
+with r8:
+    kpi("Branch Offices",f"{total_bo:,}")
 st.markdown("---")
 
 # ==========================================================
