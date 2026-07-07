@@ -132,6 +132,26 @@ table{
 </style>
 """, unsafe_allow_html=True)
 _render_nav()
+# ==========================
+# PAGE HEADER
+# ==========================
+
+col_logo, col_title = st.columns([1, 9])
+
+with col_logo:
+    st.image("assets/logo.png", width=75)
+
+with col_title:
+    st.markdown("""
+    <h1 style="margin-bottom:0px;color:#1f2a44;font-size:48px;font-weight:700;">
+        Division-wise Daily Monitoring
+    </h1>
+    <div style="font-size:22px;color:#6c757d;margin-top:6px;">
+        Headquarters Region • Telangana Circle
+    </div>
+    """, unsafe_allow_html=True)
+
+st.markdown("<hr style='margin-top:20px;margin-bottom:30px;'>", unsafe_allow_html=True)
 st.sidebar.markdown("---")
 st.sidebar.header("📊 Reports")
 
