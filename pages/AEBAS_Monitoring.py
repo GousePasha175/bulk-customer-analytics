@@ -840,21 +840,21 @@ not_marked = master_df[~master_df["Marked"]].copy()
 not_marked["_order"] = not_marked["division"].map(lambda x: DIV_ORDER_MAP.get(x, 99))
 not_marked = not_marked.sort_values(["_order", "division", "office_name"]).reset_index(drop=True)
 
-# st.markdown("---")
-# nm_title = f"List of offices not marked attendance in AEBAS portal as on {report_date.strftime('%d.%m.%Y')}"
-# st.markdown(render_notmarked_html(not_marked, nm_title), unsafe_allow_html=True)
+st.markdown("---")
+nm_title = f"List of offices not marked attendance in AEBAS portal as on {report_date.strftime('%d.%m.%Y')}"
+st.markdown(render_notmarked_html(not_marked, nm_title), unsafe_allow_html=True)
 
-# if len(unmatched_summary):
-#     st.markdown("---")
-#     total_unmatched_records = int(unmatched_summary["Records"].sum())
-#     st.error(
-#         f"⚠️ **{len(unmatched_summary)} Office Location value(s) in the uploaded export "
-#         f"({total_unmatched_records} record(s)) have no matching Office ID in the Consolidated "
-#         "sheet.** These are not counted in either report below. Check for typos/aliases missing "
-#         "from the Consolidated sheet, or offices outside this region."
-#     )
-#     st.dataframe(unmatched_summary.rename(columns={"Office Location": "Office Location (as in export file)"}),
-#                  use_container_width=True, hide_index=True)
+if len(unmatched_summary):
+    st.markdown("---")
+    total_unmatched_records = int(unmatched_summary["Records"].sum())
+    st.error(
+        f"⚠️ **{len(unmatched_summary)} Office Location value(s) in the uploaded export "
+        f"({total_unmatched_records} record(s)) have no matching Office ID in the Consolidated "
+        "sheet.** These are not counted in either report below. Check for typos/aliases missing "
+        "from the Consolidated sheet, or offices outside this region."
+    )
+    st.dataframe(unmatched_summary.rename(columns={"Office Location": "Office Location (as in export file)"}),
+                 use_container_width=True, hide_index=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # REPORT 2 — Office-wise number of users marked attendance
