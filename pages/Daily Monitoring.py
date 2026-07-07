@@ -260,6 +260,24 @@ daily["Return %"] = (
 
 daily = daily.fillna(0)
 # ==========================================================
+# HQ REGION SUMMARY
+# ==========================================================
+
+division_summary = (
+    daily
+    .groupby("division-office-name", as_index=False)
+    .agg(
+        Offices=("office-id", "count"),
+        Articles=("invoice-count", "sum"),
+        Delivery=("Delivery %", "mean"),
+        Deposit=("Deposit %", "mean"),
+        Redirect=("Redirect %", "mean"),
+        Return=("Return %", "mean"),
+    )
+)
+
+division_summary = division_summary.round(2)
+# ==========================================================
 # Division Selector
 # ==========================================================
 
