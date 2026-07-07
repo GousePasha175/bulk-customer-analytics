@@ -830,16 +830,6 @@ st.subheader(f"1️⃣ Division-wise % — AEBAS Report dated {report_date.strft
 st.markdown(render_summary_html(summary_display, report_date), unsafe_allow_html=True)
 st.caption("* Departmental Post Offices only. Branch Offices (BOs) excluded. Office counts are based on the Office Master sheet.")
 
-# ── Download ──────────────────────────────────────────────────────────────────
-st.markdown("---")
-excel_bytes = build_excel(summary_display, not_marked, office_wise, report_date, unmatched_summary)
-st.download_button(
-    "⬇️ Download AEBAS Report (Excel)",
-    data=excel_bytes,
-    file_name=f"AEBAS_Report_{report_date.strftime('%d%m%Y')}.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-)
-
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Total Offices", int(tot_t))
 c2.metric("Marked", int(tot_m))
@@ -900,15 +890,15 @@ oc2.metric("Total Present", int(office_wise["Present"].sum()) if len(office_wise
 oc3.metric("Total Absent", int(office_wise["Absent"].sum()) if len(office_wise) else 0)
 st.caption("* Departmental Post Offices only. Branch Offices (BOs) excluded.")
 
-# # ── Download ──────────────────────────────────────────────────────────────────
-# st.markdown("---")
-# excel_bytes = build_excel(summary_display, not_marked, office_wise, report_date, unmatched_summary)
-# st.download_button(
-#     "⬇️ Download AEBAS Report (Excel)",
-#     data=excel_bytes,
-#     file_name=f"AEBAS_Report_{report_date.strftime('%d%m%Y')}.xlsx",
-#     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-# )
+# ── Download ──────────────────────────────────────────────────────────────────
+st.markdown("---")
+excel_bytes = build_excel(summary_display, not_marked, office_wise, report_date, unmatched_summary)
+st.download_button(
+    "⬇️ Download AEBAS Report (Excel)",
+    data=excel_bytes,
+    file_name=f"AEBAS_Report_{report_date.strftime('%d%m%Y')}.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
 
 # ── Debug expander ────────────────────────────────────────────────────────────
 with st.expander("🔍 Matching Debug", expanded=False):
