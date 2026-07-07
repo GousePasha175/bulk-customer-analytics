@@ -3,6 +3,8 @@ import pandas as pd
 from PIL import Image
 import os
 import glob as _glob
+from io import BytesIO
+import xlsxwriter
 
 # --------------------------------------------------------
 # Navigation (Copied from your existing app)
@@ -516,3 +518,68 @@ with st.expander("↩ Highest Return Percentage"):
                 hide_index=True,
                 use_container_width=True
             )
+# ==========================================================
+# Create Excel Workbook
+# ==========================================================
+
+output = BytesIO()
+
+workbook = xlsxwriter.Workbook(output, {"in_memory": True})
+
+title_fmt = workbook.add_format({
+    "bold": True,
+    "font_size": 16,
+    "align": "center",
+    "valign": "vcenter",
+    "bg_color": "#1F4E78",
+    "font_color": "white"
+})
+
+header_fmt = workbook.add_format({
+    "bold": True,
+    "bg_color": "#D9EAD3",
+    "border": 1,
+    "align": "center"
+})
+
+cell_fmt = workbook.add_format({
+    "border": 1
+})
+ws = workbook.add_worksheet("Lowest Delivery")
+
+ws.merge_range(
+    "A1:E1",
+    f"{selected_division} - Lowest Delivery Percentage",
+    title_fmt
+)
+
+headers = [
+    "Office",
+    "Type",
+    "Invoice",
+    "Delivery",
+    "Delivery %"
+]
+
+for col, h in enumerate(headers):
+    ws.write(1, col, h, header_fmt)
+row = 2
+
+for _, r in other_delivery.iterrows():
+
+    ws.write(row, 0, r["office-name"], cell_fmt)
+    ws.write(row, 1, r["office-type-code"], cell_fmt)
+    ws.write(row, 2, r["invoice-count"], cell_fmt)
+    ws.write(row, 3, r["delivery-count"], cell_fmt)
+    ws.write(row, 4, r["Delivery %"], cell_fmt)
+
+    row += 1
+workbook.close()
+output.seek(0)
+
+st.download_button(
+    "📥 Download Division Report",
+    output,
+    file_name=f"{selected_division}.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
