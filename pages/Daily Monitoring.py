@@ -211,8 +211,8 @@ master = master[
 daily = pd.read_csv(uploaded_file)
 
 daily.columns = daily.columns.str.strip()
-st.subheader("Detected Columns")
-st.write(daily.columns.tolist())
+#st.subheader("Detected Columns")
+#st.write(daily.columns.tolist())
 daily["office-id"] = daily["office-id"].astype(str)
 master["office-id"] = master["office-id"].astype(str)
 
