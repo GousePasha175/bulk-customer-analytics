@@ -442,15 +442,15 @@ def build_excel(summary_df, not_marked_df, office_wise_df, report_date, unmatche
     ri += 2
     ws1.write(ri, 1, "* Departmental Post Offices only. Branch Offices (BOs) excluded.", fmt_note)
 
-    # ── Download ──────────────────────────────────────────────────────────────────
-st.markdown("---")
-excel_bytes = build_excel(summary_display, not_marked, office_wise, report_date, unmatched_summary)
-st.download_button(
-    "⬇️ Download AEBAS Report (Excel)",
-    data=excel_bytes,
-    file_name=f"AEBAS_Report_{report_date.strftime('%d%m%Y')}.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-)
+    # # ── Download ──────────────────────────────────────────────────────────────────
+    # st.markdown("---")
+    # excel_bytes = build_excel(summary_display, not_marked, office_wise, report_date, unmatched_summary)
+    # st.download_button(
+    #     "⬇️ Download AEBAS Report (Excel)",
+    #     data=excel_bytes,
+    #     file_name=f"AEBAS_Report_{report_date.strftime('%d%m%Y')}.xlsx",
+    #     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    # )
 
 
     # ── Sheet 2: Not Marked (merged Division column) ──────────────────────────
