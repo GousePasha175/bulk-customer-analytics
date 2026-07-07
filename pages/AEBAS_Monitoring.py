@@ -881,8 +881,8 @@ if len(matched_rows):
 else:
     office_wise = pd.DataFrame(columns=["division", "office_name", "office_id", "Present", "Absent", "Total"])
 
-ow_title = f"Office-wise Number of Users Marked Attendance – {report_date.strftime('%d.%m.%Y')}"
-st.markdown(render_officewise_html(office_wise, ow_title), unsafe_allow_html=True)
+# ow_title = f"Office-wise Number of Users Marked Attendance – {report_date.strftime('%d.%m.%Y')}"
+# st.markdown(render_officewise_html(office_wise, ow_title), unsafe_allow_html=True)
 
 oc1, oc2, oc3 = st.columns(3)
 oc1.metric("Offices with Attendance Data", len(office_wise))
