@@ -843,6 +843,13 @@ not_marked = not_marked.sort_values(["_order", "division", "office_name"]).reset
 st.markdown("---")
 nm_title = f"List of offices not marked attendance in AEBAS portal as on {report_date.strftime('%d.%m.%Y')}"
 st.markdown(render_notmarked_html(not_marked, nm_title), unsafe_allow_html=True)
+st.download_button(
+    "📥 Download Complete AEBAS Report (Excel)",
+    data=excel_bytes,
+    file_name=f"AEBAS_Report_{report_date.strftime('%d-%m-%Y')}.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    use_container_width=True
+)
 
 # if len(unmatched_summary):
 #     st.markdown("---")
