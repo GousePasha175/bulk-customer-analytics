@@ -367,215 +367,227 @@ module = st.sidebar.radio(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.header("Report Period")
-c1, c2 = st.sidebar.columns(2)
-from_date = c1.date_input("From", value=date.today())
-to_date = c2.date_input("To", value=date.today())
-period_str = f"{from_date.strftime('%d.%m.%Y')} to {to_date.strftime('%d.%m.%Y')}"
-
-st.sidebar.markdown("---")
-st.sidebar.header("Upload Report Files")
-
-st.sidebar.subheader("1️⃣ All Products")
-allprod_all_file = st.sidebar.file_uploader("All Offices file", type=["csv", "tsv"], key="allprod_all")
-allprod_bo_file = st.sidebar.file_uploader("BOs file (optional)", type=["csv", "tsv"], key="allprod_bo")
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("2️⃣ Speed Post Document (Speed Letter)")
-spd_all_file = st.sidebar.file_uploader("All Offices file", type=["csv", "tsv"], key="spd_all")
-spd_bo_file = st.sidebar.file_uploader("BOs file (optional)", type=["csv", "tsv"], key="spd_bo")
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("3️⃣ Consolidated Parcels (Speed Parcel + Regd. Parcel)")
-spp_all_file = st.sidebar.file_uploader("Speed Parcel – All Offices", type=["csv", "tsv"], key="spp_all")
-rp_all_file = st.sidebar.file_uploader("Regd. Parcel – All Offices", type=["csv", "tsv"], key="rp_all")
-spp_bo_file = st.sidebar.file_uploader("Speed Parcel – BOs (optional)", type=["csv", "tsv"], key="spp_bo")
-rp_bo_file = st.sidebar.file_uploader("Regd. Parcel – BOs (optional)", type=["csv", "tsv"], key="rp_bo")
-
-# ── Read files ────────────────────────────────────────────────────────────────
-def safe_read(f, label):
-    if f is None:
-        return None, []
-    try:
-        df, cats = read_transit_csv(f)
-        st.sidebar.success(f"✅ {label}: {len(df)} offices")
-        return df, cats
-    except Exception as e:
-        st.sidebar.error(f"❌ {label}: {e}")
-        return None, []
-
-allprod_all, cat_ap_all = safe_read(allprod_all_file, "All Products / All Offices")
-allprod_bo, cat_ap_bo = safe_read(allprod_bo_file, "All Products / BOs")
-spd_all, cat_spd_all = safe_read(spd_all_file, "Speed Post Doc / All Offices")
-spd_bo, cat_spd_bo = safe_read(spd_bo_file, "Speed Post Doc / BOs")
-spp_all, cat_spp_all = safe_read(spp_all_file, "Speed Parcel / All Offices")
-rp_all, cat_rp_all = safe_read(rp_all_file, "Regd. Parcel / All Offices")
-spp_bo, cat_spp_bo = safe_read(spp_bo_file, "Speed Parcel / BOs")
-rp_bo, cat_rp_bo = safe_read(rp_bo_file, "Regd. Parcel / BOs")
-
-if spd_all is not None: validate_category(cat_spd_all, ["speed letter"], "Speed Post Doc / All Offices")
-if spd_bo is not None: validate_category(cat_spd_bo, ["speed letter"], "Speed Post Doc / BOs")
-if spp_all is not None: validate_category(cat_spp_all, ["speed parcel"], "Speed Parcel / All Offices")
-if spp_bo is not None: validate_category(cat_spp_bo, ["speed parcel"], "Speed Parcel / BOs")
-if rp_all is not None: validate_category(cat_rp_all, ["registered parcel", "regd"], "Regd. Parcel / All Offices")
-if rp_bo is not None: validate_category(cat_rp_bo, ["registered parcel", "regd"], "Regd. Parcel / BOs")
-
-any_file = any(x is not None for x in
-               [allprod_all, allprod_bo, spd_all, spd_bo, spp_all, rp_all, spp_bo, rp_bo])
-
-if not any_file:
-    st.info(
-        "Upload report files from the sidebar to generate D+0 Transit Analysis reports.  \n\n"
-        "**1) All Products** — upload the All Offices file, and optionally the BOs file "
-        "(to also generate the BOs and Excluding-BOs reports).  \n"
-        "**2) Speed Post Document** — same pattern, for files where Product Category = *Speed Letter*.  \n"
-        "**3) Consolidated Parcels (Speed Parcel + India Post/Regd. Parcel)** — upload up to 4 files: "
-        "Speed Parcel & Regd. Parcel, each for All Offices and (optionally) BOs. The two are summed together, "
-        "and Excluding-BOs = combined All Offices − combined BOs."
-    )
-    st.stop()
-
-st.markdown(f"""
-<div style='background:#f0f7ff;border-left:4px solid #1a73e8;padding:8px 16px;
-border-radius:6px;margin-bottom:16px;font-size:15px;'>
-<b>Report Period:</b> {period_str}
-</div>
-""", unsafe_allow_html=True)
-
-SORT_OPTIONS = {
-    "No sorting (office order)": None,
-    "% D+0 Successful Delivery — High to Low": ("pct_success", False),
-    "% D+0 Successful Delivery — Low to High": ("pct_success", True),
-    "%D+O (Received) — High to Low": ("pct_received", False),
-    "%D+O (Received) — Low to High": ("pct_received", True),
-    "%D+O (Invoiced) — High to Low": ("pct_invoiced", False),
-    "%D+O (Invoiced) — Low to High": ("pct_invoiced", True),
-}
-sort_choice = st.selectbox("Sort divisions by", list(SORT_OPTIONS.keys()), index=0)
-
-def apply_sort(df):
-    """Sort a table's division rows by the chosen % column (Total row is computed separately)."""
-    key = SORT_OPTIONS[sort_choice]
-    if key is None:
-        return df
-    col, ascending = key
-    return df.sort_values(col, ascending=ascending, na_position="last").reset_index(drop=True)
-
-st.markdown("<hr style='margin:2px 0 14px 0;border-color:#eee;'>", unsafe_allow_html=True)
-
-excel_sheets = []
-
-# ════════════════════════════════════════════════════════════════════════════
-# SECTION 1 — ALL PRODUCTS
-# ════════════════════════════════════════════════════════════════════════════
-if allprod_all is not None:
-    st.subheader("📦 All Products")
-    master_ap = make_master(allprod_all, allprod_bo)
-
-    df_ap_all = add_metrics(reindex_to_master(allprod_all, master_ap))
-    df_ap_all = apply_sort(df_ap_all)
-    title = f"Delivery Transit Analysis All Products -{period_str}"
-    st.markdown(render_html_table(title, df_ap_all), unsafe_allow_html=True)
-    excel_sheets.append(("AllProducts_AllOffices", title, df_ap_all))
-
-    if allprod_bo is not None:
-        df_ap_bo = add_metrics(reindex_to_master(allprod_bo, master_ap))
-        df_ap_bo_display = apply_sort(drop_empty_bo_rows(df_ap_bo))
-        title_bo = f"Delivery Transit Analysis All Products-B.O dated {period_str}"
-        st.markdown(render_html_table(title_bo, df_ap_bo_display), unsafe_allow_html=True)
-        excel_sheets.append(("AllProducts_BOs", title_bo, df_ap_bo_display))
-
-        df_ap_excl = add_metrics(subtract(allprod_all, allprod_bo, master_ap))
-        df_ap_excl = apply_sort(df_ap_excl)
-        title_excl = f"Delivery Transit Analysis All Products (Excl. B.O) dated {period_str}"
-        st.markdown(render_html_table(title_excl, df_ap_excl), unsafe_allow_html=True)
-        excel_sheets.append(("AllProducts_ExclBOs", title_excl, df_ap_excl))
-    else:
-        st.caption("Upload the BOs file above to also generate the BOs and Excluding-BOs reports for All Products.")
-
-# ════════════════════════════════════════════════════════════════════════════
-# SECTION 2 — SPEED POST DOCUMENT
-# ════════════════════════════════════════════════════════════════════════════
-if spd_all is not None or spd_bo is not None:
-    st.markdown("---")
-    st.subheader("✉️ Speed Post Document (Speed Letter)")
-
-    if spd_all is not None:
-        master_spd = make_master(spd_all, spd_bo)
-        df_spd_all = add_metrics(reindex_to_master(spd_all, master_spd))
-        df_spd_all = apply_sort(df_spd_all)
-        title = f"Delivery Transit Analysis Speed Post Document dated {period_str}"
-        st.markdown(render_html_table(title, df_spd_all), unsafe_allow_html=True)
-        excel_sheets.append(("SpeedDoc_AllOffices", title, df_spd_all))
-
-        if spd_bo is not None:
+if module == "Delivery Transit Analysis":
+    st.sidebar.header("Report Period")
+    c1, c2 = st.sidebar.columns(2)
+    from_date = c1.date_input("From", value=date.today())
+    to_date = c2.date_input("To", value=date.today())
+    period_str = f"{from_date.strftime('%d.%m.%Y')} to {to_date.strftime('%d.%m.%Y')}"
+    
+    st.sidebar.markdown("---")
+    st.sidebar.header("Upload Report Files")
+    
+    st.sidebar.subheader("1️⃣ All Products")
+    allprod_all_file = st.sidebar.file_uploader("All Offices file", type=["csv", "tsv"], key="allprod_all")
+    allprod_bo_file = st.sidebar.file_uploader("BOs file (optional)", type=["csv", "tsv"], key="allprod_bo")
+    
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("2️⃣ Speed Post Document (Speed Letter)")
+    spd_all_file = st.sidebar.file_uploader("All Offices file", type=["csv", "tsv"], key="spd_all")
+    spd_bo_file = st.sidebar.file_uploader("BOs file (optional)", type=["csv", "tsv"], key="spd_bo")
+    
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("3️⃣ Consolidated Parcels (Speed Parcel + Regd. Parcel)")
+    spp_all_file = st.sidebar.file_uploader("Speed Parcel – All Offices", type=["csv", "tsv"], key="spp_all")
+    rp_all_file = st.sidebar.file_uploader("Regd. Parcel – All Offices", type=["csv", "tsv"], key="rp_all")
+    spp_bo_file = st.sidebar.file_uploader("Speed Parcel – BOs (optional)", type=["csv", "tsv"], key="spp_bo")
+    rp_bo_file = st.sidebar.file_uploader("Regd. Parcel – BOs (optional)", type=["csv", "tsv"], key="rp_bo")
+    
+    # ── Read files ────────────────────────────────────────────────────────────────
+    def safe_read(f, label):
+        if f is None:
+            return None, []
+        try:
+            df, cats = read_transit_csv(f)
+            st.sidebar.success(f"✅ {label}: {len(df)} offices")
+            return df, cats
+        except Exception as e:
+            st.sidebar.error(f"❌ {label}: {e}")
+            return None, []
+    
+    allprod_all, cat_ap_all = safe_read(allprod_all_file, "All Products / All Offices")
+    allprod_bo, cat_ap_bo = safe_read(allprod_bo_file, "All Products / BOs")
+    spd_all, cat_spd_all = safe_read(spd_all_file, "Speed Post Doc / All Offices")
+    spd_bo, cat_spd_bo = safe_read(spd_bo_file, "Speed Post Doc / BOs")
+    spp_all, cat_spp_all = safe_read(spp_all_file, "Speed Parcel / All Offices")
+    rp_all, cat_rp_all = safe_read(rp_all_file, "Regd. Parcel / All Offices")
+    spp_bo, cat_spp_bo = safe_read(spp_bo_file, "Speed Parcel / BOs")
+    rp_bo, cat_rp_bo = safe_read(rp_bo_file, "Regd. Parcel / BOs")
+    
+    if spd_all is not None: validate_category(cat_spd_all, ["speed letter"], "Speed Post Doc / All Offices")
+    if spd_bo is not None: validate_category(cat_spd_bo, ["speed letter"], "Speed Post Doc / BOs")
+    if spp_all is not None: validate_category(cat_spp_all, ["speed parcel"], "Speed Parcel / All Offices")
+    if spp_bo is not None: validate_category(cat_spp_bo, ["speed parcel"], "Speed Parcel / BOs")
+    if rp_all is not None: validate_category(cat_rp_all, ["registered parcel", "regd"], "Regd. Parcel / All Offices")
+    if rp_bo is not None: validate_category(cat_rp_bo, ["registered parcel", "regd"], "Regd. Parcel / BOs")
+    
+    any_file = any(x is not None for x in
+                   [allprod_all, allprod_bo, spd_all, spd_bo, spp_all, rp_all, spp_bo, rp_bo])
+    
+    if not any_file:
+        st.info(
+            "Upload report files from the sidebar to generate D+0 Transit Analysis reports.  \n\n"
+            "**1) All Products** — upload the All Offices file, and optionally the BOs file "
+            "(to also generate the BOs and Excluding-BOs reports).  \n"
+            "**2) Speed Post Document** — same pattern, for files where Product Category = *Speed Letter*.  \n"
+            "**3) Consolidated Parcels (Speed Parcel + India Post/Regd. Parcel)** — upload up to 4 files: "
+            "Speed Parcel & Regd. Parcel, each for All Offices and (optionally) BOs. The two are summed together, "
+            "and Excluding-BOs = combined All Offices − combined BOs."
+        )
+        st.stop()
+    
+    st.markdown(f"""
+    <div style='background:#f0f7ff;border-left:4px solid #1a73e8;padding:8px 16px;
+    border-radius:6px;margin-bottom:16px;font-size:15px;'>
+    <b>Report Period:</b> {period_str}
+    </div>
+    """, unsafe_allow_html=True)
+    
+    SORT_OPTIONS = {
+        "No sorting (office order)": None,
+        "% D+0 Successful Delivery — High to Low": ("pct_success", False),
+        "% D+0 Successful Delivery — Low to High": ("pct_success", True),
+        "%D+O (Received) — High to Low": ("pct_received", False),
+        "%D+O (Received) — Low to High": ("pct_received", True),
+        "%D+O (Invoiced) — High to Low": ("pct_invoiced", False),
+        "%D+O (Invoiced) — Low to High": ("pct_invoiced", True),
+    }
+    sort_choice = st.selectbox("Sort divisions by", list(SORT_OPTIONS.keys()), index=0)
+    
+    def apply_sort(df):
+        """Sort a table's division rows by the chosen % column (Total row is computed separately)."""
+        key = SORT_OPTIONS[sort_choice]
+        if key is None:
+            return df
+        col, ascending = key
+        return df.sort_values(col, ascending=ascending, na_position="last").reset_index(drop=True)
+    
+    st.markdown("<hr style='margin:2px 0 14px 0;border-color:#eee;'>", unsafe_allow_html=True)
+    
+    excel_sheets = []
+    
+    # ════════════════════════════════════════════════════════════════════════════
+    # SECTION 1 — ALL PRODUCTS
+    # ════════════════════════════════════════════════════════════════════════════
+    if allprod_all is not None:
+        st.subheader("📦 All Products")
+        master_ap = make_master(allprod_all, allprod_bo)
+    
+        df_ap_all = add_metrics(reindex_to_master(allprod_all, master_ap))
+        df_ap_all = apply_sort(df_ap_all)
+        title = f"Delivery Transit Analysis All Products -{period_str}"
+        st.markdown(render_html_table(title, df_ap_all), unsafe_allow_html=True)
+        excel_sheets.append(("AllProducts_AllOffices", title, df_ap_all))
+    
+        if allprod_bo is not None:
+            df_ap_bo = add_metrics(reindex_to_master(allprod_bo, master_ap))
+            df_ap_bo_display = apply_sort(drop_empty_bo_rows(df_ap_bo))
+            title_bo = f"Delivery Transit Analysis All Products-B.O dated {period_str}"
+            st.markdown(render_html_table(title_bo, df_ap_bo_display), unsafe_allow_html=True)
+            excel_sheets.append(("AllProducts_BOs", title_bo, df_ap_bo_display))
+    
+            df_ap_excl = add_metrics(subtract(allprod_all, allprod_bo, master_ap))
+            df_ap_excl = apply_sort(df_ap_excl)
+            title_excl = f"Delivery Transit Analysis All Products (Excl. B.O) dated {period_str}"
+            st.markdown(render_html_table(title_excl, df_ap_excl), unsafe_allow_html=True)
+            excel_sheets.append(("AllProducts_ExclBOs", title_excl, df_ap_excl))
+        else:
+            st.caption("Upload the BOs file above to also generate the BOs and Excluding-BOs reports for All Products.")
+    
+    # ════════════════════════════════════════════════════════════════════════════
+    # SECTION 2 — SPEED POST DOCUMENT
+    # ════════════════════════════════════════════════════════════════════════════
+    if spd_all is not None or spd_bo is not None:
+        st.markdown("---")
+        st.subheader("✉️ Speed Post Document (Speed Letter)")
+    
+        if spd_all is not None:
+            master_spd = make_master(spd_all, spd_bo)
+            df_spd_all = add_metrics(reindex_to_master(spd_all, master_spd))
+            df_spd_all = apply_sort(df_spd_all)
+            title = f"Delivery Transit Analysis Speed Post Document dated {period_str}"
+            st.markdown(render_html_table(title, df_spd_all), unsafe_allow_html=True)
+            excel_sheets.append(("SpeedDoc_AllOffices", title, df_spd_all))
+    
+            if spd_bo is not None:
+                df_spd_bo = add_metrics(reindex_to_master(spd_bo, master_spd))
+                df_spd_bo_display = apply_sort(drop_empty_bo_rows(df_spd_bo))
+                title_bo = f"Delivery Transit Analysis Speed Post Document-B.O dated {period_str}"
+                st.markdown(render_html_table(title_bo, df_spd_bo_display), unsafe_allow_html=True)
+                excel_sheets.append(("SpeedDoc_BOs", title_bo, df_spd_bo_display))
+    
+                df_spd_excl = add_metrics(subtract(spd_all, spd_bo, master_spd))
+                df_spd_excl = apply_sort(df_spd_excl)
+                title_excl = f"Delivery Transit Analysis Speed Post Document (Excl. B.O) dated {period_str}"
+                st.markdown(render_html_table(title_excl, df_spd_excl), unsafe_allow_html=True)
+                excel_sheets.append(("SpeedDoc_ExclBOs", title_excl, df_spd_excl))
+            else:
+                st.caption("Upload the BOs file above to also generate the BOs and Excluding-BOs reports for Speed Post Document.")
+        else:
+            st.warning("Upload the All Offices file for Speed Post Document to generate this section (the BOs file alone cannot build the Excluding-BOs report).")
+            master_spd = make_master(spd_bo)
             df_spd_bo = add_metrics(reindex_to_master(spd_bo, master_spd))
             df_spd_bo_display = apply_sort(drop_empty_bo_rows(df_spd_bo))
             title_bo = f"Delivery Transit Analysis Speed Post Document-B.O dated {period_str}"
             st.markdown(render_html_table(title_bo, df_spd_bo_display), unsafe_allow_html=True)
             excel_sheets.append(("SpeedDoc_BOs", title_bo, df_spd_bo_display))
-
-            df_spd_excl = add_metrics(subtract(spd_all, spd_bo, master_spd))
-            df_spd_excl = apply_sort(df_spd_excl)
-            title_excl = f"Delivery Transit Analysis Speed Post Document (Excl. B.O) dated {period_str}"
-            st.markdown(render_html_table(title_excl, df_spd_excl), unsafe_allow_html=True)
-            excel_sheets.append(("SpeedDoc_ExclBOs", title_excl, df_spd_excl))
+    
+    # ════════════════════════════════════════════════════════════════════════════
+    # SECTION 3 — CONSOLIDATED PARCELS (Speed Parcel + India Post/Regd. Parcel)
+    # ════════════════════════════════════════════════════════════════════════════
+    if spp_all is not None or rp_all is not None or spp_bo is not None or rp_bo is not None:
+        st.markdown("---")
+        st.subheader("📮 Consolidated Parcels (Speed Parcel + India Post Parcel)")
+    
+        have_all = spp_all is not None or rp_all is not None
+        have_bo = spp_bo is not None or rp_bo is not None
+    
+        if have_all:
+            master_pc = make_master(spp_all, rp_all, spp_bo, rp_bo)
+            df_pc_all = add_metrics(combine_sum(spp_all, rp_all, master_pc))
+            title = f"Delivery Transit Analysis Consolidated Parcels (SPP+IPP R) dated {period_str}"
+            st.markdown(render_html_table(title, apply_sort(df_pc_all)), unsafe_allow_html=True)
+            excel_sheets.append(("Parcels_AllOffices", title, apply_sort(df_pc_all)))
+    
+            if have_bo:
+                df_pc_bo = add_metrics(combine_sum(spp_bo, rp_bo, master_pc))
+    
+                df_pc_excl = add_metrics(subtract(
+                    df_pc_all.rename(columns={}), df_pc_bo.rename(columns={}), master_pc
+                ))
+    
+                df_pc_bo_display = apply_sort(drop_empty_bo_rows(df_pc_bo))
+                title_bo = f"Delivery Transit Analysis Consolidated Parcels( SPP+IPP R)-B.O dated  {period_str}"
+                st.markdown(render_html_table(title_bo, df_pc_bo_display), unsafe_allow_html=True)
+                excel_sheets.append(("Parcels_BOs", title_bo, df_pc_bo_display))
+    
+                df_pc_excl = apply_sort(df_pc_excl)
+                title_excl = f"Delivery Transit Analysis Consolidated Parcels( SPP+IPP R) (Excl. B.O) dated {period_str}"
+                st.markdown(render_html_table(title_excl, df_pc_excl), unsafe_allow_html=True)
+                excel_sheets.append(("Parcels_ExclBOs", title_excl, df_pc_excl))
+            else:
+                st.caption("Upload the BOs files above (Speed Parcel and/or Regd. Parcel) to also generate the BOs and Excluding-BOs reports.")
         else:
-            st.caption("Upload the BOs file above to also generate the BOs and Excluding-BOs reports for Speed Post Document.")
-    else:
-        st.warning("Upload the All Offices file for Speed Post Document to generate this section (the BOs file alone cannot build the Excluding-BOs report).")
-        master_spd = make_master(spd_bo)
-        df_spd_bo = add_metrics(reindex_to_master(spd_bo, master_spd))
-        df_spd_bo_display = apply_sort(drop_empty_bo_rows(df_spd_bo))
-        title_bo = f"Delivery Transit Analysis Speed Post Document-B.O dated {period_str}"
-        st.markdown(render_html_table(title_bo, df_spd_bo_display), unsafe_allow_html=True)
-        excel_sheets.append(("SpeedDoc_BOs", title_bo, df_spd_bo_display))
+            st.warning("Upload at least one All Offices file (Speed Parcel and/or Regd. Parcel) to generate this section.")
+    
+    # ── Download master workbook ──────────────────────────────────────────────────
+    if excel_sheets:
+        st.markdown("---")
+        excel_bytes = build_master_workbook(excel_sheets)
+        st.download_button(
+            "⬇️ Download All Reports (Master Excel Workbook)",
+            data=excel_bytes,
+            file_name=f"Delivery_Transit_Analysis_{from_date.strftime('%d%m%Y')}_{to_date.strftime('%d%m%Y')}.xlsx",
+    elif module == "Division-wise Daily Monitoring":
 
-# ════════════════════════════════════════════════════════════════════════════
-# SECTION 3 — CONSOLIDATED PARCELS (Speed Parcel + India Post/Regd. Parcel)
-# ════════════════════════════════════════════════════════════════════════════
-if spp_all is not None or rp_all is not None or spp_bo is not None or rp_bo is not None:
-    st.markdown("---")
-    st.subheader("📮 Consolidated Parcels (Speed Parcel + India Post Parcel)")
-
-    have_all = spp_all is not None or rp_all is not None
-    have_bo = spp_bo is not None or rp_bo is not None
-
-    if have_all:
-        master_pc = make_master(spp_all, rp_all, spp_bo, rp_bo)
-        df_pc_all = add_metrics(combine_sum(spp_all, rp_all, master_pc))
-        title = f"Delivery Transit Analysis Consolidated Parcels (SPP+IPP R) dated {period_str}"
-        st.markdown(render_html_table(title, apply_sort(df_pc_all)), unsafe_allow_html=True)
-        excel_sheets.append(("Parcels_AllOffices", title, apply_sort(df_pc_all)))
-
-        if have_bo:
-            df_pc_bo = add_metrics(combine_sum(spp_bo, rp_bo, master_pc))
-
-            df_pc_excl = add_metrics(subtract(
-                df_pc_all.rename(columns={}), df_pc_bo.rename(columns={}), master_pc
-            ))
-
-            df_pc_bo_display = apply_sort(drop_empty_bo_rows(df_pc_bo))
-            title_bo = f"Delivery Transit Analysis Consolidated Parcels( SPP+IPP R)-B.O dated  {period_str}"
-            st.markdown(render_html_table(title_bo, df_pc_bo_display), unsafe_allow_html=True)
-            excel_sheets.append(("Parcels_BOs", title_bo, df_pc_bo_display))
-
-            df_pc_excl = apply_sort(df_pc_excl)
-            title_excl = f"Delivery Transit Analysis Consolidated Parcels( SPP+IPP R) (Excl. B.O) dated {period_str}"
-            st.markdown(render_html_table(title_excl, df_pc_excl), unsafe_allow_html=True)
-            excel_sheets.append(("Parcels_ExclBOs", title_excl, df_pc_excl))
-        else:
-            st.caption("Upload the BOs files above (Speed Parcel and/or Regd. Parcel) to also generate the BOs and Excluding-BOs reports.")
-    else:
-        st.warning("Upload at least one All Offices file (Speed Parcel and/or Regd. Parcel) to generate this section.")
-
-# ── Download master workbook ──────────────────────────────────────────────────
-if excel_sheets:
-    st.markdown("---")
-    excel_bytes = build_master_workbook(excel_sheets)
-    st.download_button(
-        "⬇️ Download All Reports (Master Excel Workbook)",
-        data=excel_bytes,
-        file_name=f"Delivery_Transit_Analysis_{from_date.strftime('%d%m%Y')}_{to_date.strftime('%d%m%Y')}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+        st.title("📈 Division-wise Daily Monitoring")
+    
+        st.info("🚧 Module under construction")
+    
+    elif module == "100% Deposit Offices":
+    
+        st.title("📦 100% Deposit Offices")
+    
+        st.info("🚧 Module under construction")
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
