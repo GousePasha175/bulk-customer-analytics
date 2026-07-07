@@ -317,41 +317,92 @@ other_delivery = (
     )
     .head(15)
 )
-st.markdown("## 🚚 Lowest Delivery Percentage")
+with st.expander("🚚 Lowest Delivery Percentage", expanded=True):
 
-col1, col2 = st.columns(2)
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if len(other_delivery):
+            st.markdown("### SPO / HPO / GPO / IDC / NDC")
+    
+            st.dataframe(
+                other_delivery[
+                    [
+                        "office-name",
+                        "office-type-code",
+                        "invoice-count",
+                        "delivery-count",
+                        "Delivery %"
+                    ]
+                ],
+                use_container_width=True,
+                hide_index=True
+            )
+    
+    with col2:
+        if len(bo_delivery):
+            st.markdown("### Branch Post Offices")
+    
+            st.dataframe(
+                bo_delivery[
+                    [
+                        "office-name",
+                        "invoice-count",
+                        "delivery-count",
+                        "Delivery %"
+                    ]
+                ],
+                use_container_width=True,
+                hide_index=True
+            )
+# Highest Deposit %
 
-with col1:
-    if len(other_delivery):
-        st.markdown("### SPO / HPO / GPO / IDC / NDC")
+bo_deposit = (
+    bo_df.sort_values(
+        ["Deposit %", "invoice-count"],
+        ascending=[False, False]
+    ).head(25)
+)
 
-        st.dataframe(
-            other_delivery[
-                [
-                    "office-name",
-                    "office-type-code",
-                    "invoice-count",
-                    "delivery-count",
-                    "Delivery %"
-                ]
-            ],
-            use_container_width=True,
-            hide_index=True
-        )
+other_deposit = (
+    other_df.sort_values(
+        ["Deposit %", "invoice-count"],
+        ascending=[False, False]
+    ).head(15)
+)
 
-with col2:
-    if len(bo_delivery):
-        st.markdown("### Branch Post Offices")
+with st.expander("📥 Highest Deposit Percentage"):
 
-        st.dataframe(
-            bo_delivery[
-                [
-                    "office-name",
-                    "invoice-count",
-                    "delivery-count",
-                    "Delivery %"
-                ]
-            ],
-            use_container_width=True,
-            hide_index=True
-        )
+    c1, c2 = st.columns(2)
+
+    with c1:
+        if len(other_deposit):
+            st.markdown("### SPO/HPO/GPO/IDC/NDC")
+            st.dataframe(
+                other_deposit[
+                    [
+                        "office-name",
+                        "invoice-count",
+                        "deposit-count",
+                        "Deposit %"
+                    ]
+                ],
+                hide_index=True,
+                use_container_width=True
+            )
+
+    with c2:
+        if len(bo_deposit):
+            st.markdown("### Branch Post Offices")
+            st.dataframe(
+                bo_deposit[
+                    [
+                        "office-name",
+                        "invoice-count",
+                        "deposit-count",
+                        "Deposit %"
+                    ]
+                ],
+                hide_index=True,
+                use_container_width=True
+            )
