@@ -277,3 +277,43 @@ division_df = daily[
 ].copy()
 
 st.subheader(selected_division)
+# ==========================================================
+# Lowest Delivery % Report
+# ==========================================================
+
+division_data = division_df.copy()
+
+# Split BO and Others
+bo_df = division_data[
+    division_data["office-type-code"] == "BPO"
+].copy()
+
+other_df = division_data[
+    division_data["office-type-code"] != "BPO"
+].copy()
+
+# Apply minimum invoice criteria
+bo_df = bo_df[
+    bo_df["invoice-count"] >= min_bo
+]
+
+other_df = other_df[
+    other_df["invoice-count"] >= min_other
+]
+
+# Lowest Delivery %
+bo_delivery = (
+    bo_df.sort_values(
+        ["Delivery %", "invoice-count"],
+        ascending=[True, False]
+    )
+    .head(25)
+)
+
+other_delivery = (
+    other_df.sort_values(
+        ["Delivery %", "invoice-count"],
+        ascending=[True, False]
+    )
+    .head(15)
+)
