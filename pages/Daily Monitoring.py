@@ -144,7 +144,38 @@ show_100 = st.sidebar.checkbox(
     "100% Deposit Offices",
     value=False
 )
+uploaded_file = None
 
+if show_lowest or show_100:
+    uploaded_file = st.file_uploader(
+        "Upload Daily Monitoring CSV",
+        type=["csv"]
+    )
+
+if uploaded_file is None:
+    st.info("Please upload the Daily Monitoring CSV.")
+    st.stop()
+
+    MASTER_FILE = "data/Delivery Productivity/Office Master.csv"
+    master = pd.read_csv(MASTER_FILE)
+    master.columns = master.columns.str.strip()
+
+    VALID_TYPES = [
+        "BPO",
+        "SPO",
+        "HPO",
+        "GPO",
+        "IDC",
+        "NDC"
+    ]
+    
+    master = master[
+        master["office-type-code"].isin(VALID_TYPES)
+    ].copy()
+
+daily = pd.read_csv(uploaded_file)
+
+daily.columns = daily.columns.str.strip()
 # --------------------------------------------------------
 # Header
 # --------------------------------------------------------
