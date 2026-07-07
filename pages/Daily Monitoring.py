@@ -240,24 +240,6 @@ st.success("✅ Office Master merged successfully")
 
 st.success("✅ Master merge successful")
 
-st.dataframe(
-
-    daily[
-        [
-            "division-office-name",
-            "office-name",
-            "office-type-code",
-            "invoice-count",
-            "Delivery %",
-            "Deposit %",
-            "Redirect %",
-            "Return %"
-        ]
-    ],
-
-    use_container_width=True
-)
-)
 # --------------------------------------------------------
 # Percentage Calculations
 # --------------------------------------------------------
@@ -279,3 +261,20 @@ daily["Return %"] = (
 ).round(2)
 
 daily = daily.fillna(0)
+st.dataframe(
+
+    daily[
+        [
+            "division-office-name",
+            "office-name",
+            "office-type-code",
+            "invoice-count",
+            "Delivery %",
+            "Deposit %",
+            "Redirect %",
+            "Return %"
+        ]
+    ],
+
+    use_container_width=True
+)
