@@ -236,10 +236,6 @@ daily = daily.rename(columns={
 # Remove uploaded office name
 if "office-name_x" in daily.columns:
     daily = daily.drop(columns=["office-name_x"])
-st.success("✅ Office Master merged successfully")
-
-st.success("✅ Master merge successful")
-
 # --------------------------------------------------------
 # Percentage Calculations
 # --------------------------------------------------------
@@ -261,20 +257,23 @@ daily["Return %"] = (
 ).round(2)
 
 daily = daily.fillna(0)
-st.dataframe(
+# ==========================================================
+# Division Selector
+# ==========================================================
 
-    daily[
-        [
-            "division-office-name",
-            "office-name",
-            "office-type-code",
-            "invoice-count",
-            "Delivery %",
-            "Deposit %",
-            "Redirect %",
-            "Return %"
-        ]
-    ],
-
-    use_container_width=True
+divisions = sorted(
+    daily["division-office-name"]
+    .dropna()
+    .unique()
 )
+
+selected_division = st.selectbox(
+    "Select Division",
+    divisions
+)
+
+division_df = daily[
+    daily["division-office-name"] == selected_division
+].copy()
+
+st.subheader(selected_division)
