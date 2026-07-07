@@ -812,8 +812,9 @@ summary = (
 )
 summary["Not Marked"] = summary["Total"] - summary["Marked"]
 summary["% AEBAS"] = (summary["Marked"] / summary["Total"] * 100).round(2)
-summary["_order"] = summary["division"].map(lambda x: DIV_ORDER_MAP.get(x, 99))
-summary = summary.sort_values("_order").drop(columns="_order").reset_index(drop=True)
+summary = summary.sort_values(by=["% AEBAS", "Marked"],ascending=[False, False]).reset_index(drop=True)
+summary.insert(0, "Sl.", range(1, len(summary)+1))
+summary.columns = ["Sl.","Division/Unit","Total","Marked","Not Marked","% AEBAS"]
 summary.insert(0, "Sl.", range(1, len(summary) + 1))
 summary.columns = ["Sl.", "Division/Unit", "Total", "Marked", "Not Marked", "% AEBAS"]
 
