@@ -406,3 +406,113 @@ with st.expander("📥 Highest Deposit Percentage"):
                 hide_index=True,
                 use_container_width=True
             )
+# ==========================================================
+# Highest Redirect Percentage
+# ==========================================================
+
+bo_redirect = (
+    bo_df.sort_values(
+        ["Redirect %", "invoice-count"],
+        ascending=[False, False]
+    ).head(25)
+)
+
+other_redirect = (
+    other_df.sort_values(
+        ["Redirect %", "invoice-count"],
+        ascending=[False, False]
+    ).head(15)
+)
+
+with st.expander("🔀 Highest Redirect Percentage"):
+
+    c1, c2 = st.columns(2)
+
+    with c1:
+        if len(other_redirect):
+            st.markdown("### SPO/HPO/GPO/IDC/NDC")
+
+            st.dataframe(
+                other_redirect[
+                    [
+                        "office-name",
+                        "invoice-count",
+                        "redirection-count",
+                        "Redirect %"
+                    ]
+                ],
+                hide_index=True,
+                use_container_width=True
+            )
+
+    with c2:
+        if len(bo_redirect):
+            st.markdown("### Branch Post Offices")
+
+            st.dataframe(
+                bo_redirect[
+                    [
+                        "office-name",
+                        "invoice-count",
+                        "redirection-count",
+                        "Redirect %"
+                    ]
+                ],
+                hide_index=True,
+                use_container_width=True
+            )
+# ==========================================================
+# Highest Return Percentage
+# ==========================================================
+
+bo_return = (
+    bo_df.sort_values(
+        ["Return %", "invoice-count"],
+        ascending=[False, False]
+    ).head(25)
+)
+
+other_return = (
+    other_df.sort_values(
+        ["Return %", "invoice-count"],
+        ascending=[False, False]
+    ).head(15)
+)
+
+with st.expander("↩ Highest Return Percentage"):
+
+    c1, c2 = st.columns(2)
+
+    with c1:
+        if len(other_return):
+            st.markdown("### SPO/HPO/GPO/IDC/NDC")
+
+            st.dataframe(
+                other_return[
+                    [
+                        "office-name",
+                        "invoice-count",
+                        "return-count",
+                        "Return %"
+                    ]
+                ],
+                hide_index=True,
+                use_container_width=True
+            )
+
+    with c2:
+        if len(bo_return):
+            st.markdown("### Branch Post Offices")
+
+            st.dataframe(
+                bo_return[
+                    [
+                        "office-name",
+                        "invoice-count",
+                        "return-count",
+                        "Return %"
+                    ]
+                ],
+                hide_index=True,
+                use_container_width=True
+            )
