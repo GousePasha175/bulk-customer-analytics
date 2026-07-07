@@ -164,6 +164,22 @@ show_100 = st.sidebar.checkbox(
     "100% Deposit Offices",
     value=False
 )
+st.sidebar.markdown("---")
+st.sidebar.subheader("📌 Minimum Invoiced Count")
+
+min_bo = st.sidebar.number_input(
+    "BPO Minimum Invoiced",
+    min_value=1,
+    value=30,
+    step=1
+)
+
+min_other = st.sidebar.number_input(
+    "SPO/HPO/GPO/IDC/NDC Minimum Invoiced",
+    min_value=1,
+    value=100,
+    step=1
+)
 uploaded_file = None
 
 if show_lowest or show_100:
@@ -256,6 +272,7 @@ if uploaded_file is None:
     st.info("Please upload the Daily Monitoring CSV.")
 
     st.stop()
+    
 
 # --------------------------------------------------------
 # Read Upload
