@@ -192,12 +192,12 @@ if uploaded_file is None:
     st.info("Please upload the Daily Monitoring CSV.")
     st.stop()
 
-    MASTER_FILE = "data/Delivery Productivity/Office Master.csv"
-    master = pd.read_csv(MASTER_FILE)
-    master.columns = master.columns.str.strip()
-    st.subheader("Master Columns")
-    st.write(master.columns.tolist())
-    st.stop()
+MASTER_FILE = "data/Delivery Productivity/Office Master.csv"
+master = pd.read_csv(MASTER_FILE)
+master.columns = master.columns.str.strip()
+st.subheader("Master Columns")
+st.write(master.columns.tolist())
+st.stop()
 
     VALID_TYPES = [
         "BPO",
