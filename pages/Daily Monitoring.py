@@ -317,3 +317,41 @@ other_delivery = (
     )
     .head(15)
 )
+st.markdown("## 🚚 Lowest Delivery Percentage")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    if len(other_delivery):
+        st.markdown("### SPO / HPO / GPO / IDC / NDC")
+
+        st.dataframe(
+            other_delivery[
+                [
+                    "office-name",
+                    "office-type-code",
+                    "invoice-count",
+                    "delivery-count",
+                    "Delivery %"
+                ]
+            ],
+            use_container_width=True,
+            hide_index=True
+        )
+
+with col2:
+    if len(bo_delivery):
+        st.markdown("### Branch Post Offices")
+
+        st.dataframe(
+            bo_delivery[
+                [
+                    "office-name",
+                    "invoice-count",
+                    "delivery-count",
+                    "Delivery %"
+                ]
+            ],
+            use_container_width=True,
+            hide_index=True
+        )
