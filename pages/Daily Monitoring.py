@@ -238,6 +238,35 @@ daily = daily.rename(columns={
 # Remove uploaded office name
 if "office-name_x" in daily.columns:
     daily = daily.drop(columns=["office-name_x"])
+
+# --------------------------------------------------------
+# Collapse to exactly one row per office
+# --------------------------------------------------------
+# The daily upload may contain more than one row per office (e.g. one row per
+# postman/beat rather than one row per office). If left as-is, every count,
+# KPI, and "top offices" ranking below would silently treat each such row as
+# a separate office — inflating totals and letting the same office dominate
+# multiple rows of a ranked list. This aggregation is a no-op when the file
+# already has one row per office.
+_sum_cols = [c for c in [
+    "postman-count", "invoice-count", "delivery-count", "deposit-count",
+    "return-count", "redirection-count", "beat-diversion-count"
+] if c in daily.columns]
+_first_cols = [c for c in daily.columns
+               if c not in _sum_cols and c != "office-id"]
+
+if daily["office-id"].duplicated().any():
+    _dup_offices = daily["office-id"].duplicated().sum()
+    st.info(
+        f"ℹ️ The uploaded file had {_dup_offices} extra row(s) sharing an Office ID "
+        "with another row (e.g. multiple postmen per office) — these were combined "
+        "into a single row per office before computing any figures below."
+    )
+
+_agg_dict = {c: "sum" for c in _sum_cols}
+_agg_dict.update({c: "first" for c in _first_cols})
+daily = daily.groupby("office-id", as_index=False).agg(_agg_dict)
+
 # --------------------------------------------------------
 # Percentage Calculations
 # --------------------------------------------------------
@@ -601,6 +630,54 @@ if show_lowest:
 
     with c8:
         kpi("Return",f"{avg_ret:.2f}%")
+
+    # ----------------------------------------------------------
+    # EXCEL EXPORT — Division Summary + selected Division detail
+    # ----------------------------------------------------------
+    _dm_xl_buf = BytesIO()
+    with pd.ExcelWriter(_dm_xl_buf, engine="xlsxwriter") as _writer:
+        _wb = _writer.book
+        _hdr_fmt = _wb.add_format({"bold": True, "bg_color": "#0B5CAD",
+                                    "font_color": "white", "border": 1})
+        _pct_fmt = _wb.add_format({"num_format": "0.00", "border": 1})
+        _cell_fmt = _wb.add_format({"border": 1})
+
+        def _write_df(sheet_name, df_out):
+            df_out.to_excel(_writer, index=False, sheet_name=sheet_name)
+            ws = _writer.sheets[sheet_name]
+            for ci, col in enumerate(df_out.columns):
+                ws.write(0, ci, col, _hdr_fmt)
+                fmt = _pct_fmt if "%" in col else _cell_fmt
+                for ri, val in enumerate(df_out[col], start=1):
+                    ws.write(ri, ci, val, fmt)
+                width = max(df_out[col].astype(str).map(len).max(), len(col)) + 3
+                ws.set_column(ci, ci, width)
+
+        _write_df("Division Summary", division_summary.rename(columns={
+            "division-office-name": "Division",
+            "Offices": "Offices", "Articles": "Articles",
+            "Delivery": "Delivery %", "Deposit": "Deposit %",
+            "Redirect": "Redirect %", "Return": "Return %",
+        }))
+
+        _div_detail_cols = {
+            "office-name": "Office", "office-type-code": "Type",
+            "invoice-count": "Invoiced", "delivery-count": "Delivered",
+            "Delivery %": "Delivery %", "deposit-count": "Deposited",
+            "Deposit %": "Deposit %", "redirection-count": "Redirected",
+            "Redirect %": "Redirect %", "return-count": "Returned",
+            "Return %": "Return %",
+        }
+        _div_detail = division_df[list(_div_detail_cols.keys())].rename(columns=_div_detail_cols)
+        _sheet_name = selected_division[:31].replace("/", "-")
+        _write_df(_sheet_name, _div_detail)
+
+    st.download_button(
+        "⬇ Download Excel (Daily Monitoring)",
+        data=_dm_xl_buf.getvalue(),
+        file_name=f"Daily_Monitoring_{selected_division.replace(' ', '_')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
     # ==========================================================
     # TABS
