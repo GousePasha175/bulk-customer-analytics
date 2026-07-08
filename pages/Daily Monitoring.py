@@ -744,6 +744,92 @@ def render_report(
             hide_index=True,
             use_container_width=True
         )
+# ==========================================================
+# DELIVERY TAB
+# ==========================================================
 
+with delivery_tab:
+
+    st.markdown("""
+    ### 🚚 Lowest Delivery Percentage
+
+    Offices are arranged in ascending order of **Delivery %**
+    after applying the minimum invoiced article criteria.
+    """)
+
+    render_report(
+        other_df,
+        bo_df,
+        "Delivery %",
+        "delivery-count",
+        "Delivered",
+        ascending=True
+    )
+
+# ==========================================================
+# DEPOSIT TAB
+# ==========================================================
+
+with deposit_tab:
+
+    st.markdown("""
+    ### 📥 Highest Deposit Percentage
+
+    Offices are arranged in descending order of **Deposit %**
+    after applying the minimum invoiced article criteria.
+    """)
+
+    render_report(
+        other_df,
+        bo_df,
+        "Deposit %",
+        "deposit-count",
+        "Deposited",
+        ascending=False
+    )
+
+# ==========================================================
+# REDIRECT TAB
+# ==========================================================
+
+with redirect_tab:
+
+    st.markdown("""
+    ### 🔀 Highest Redirect Percentage
+
+    Offices are arranged in descending order of **Redirect %**
+    after applying the minimum invoiced article criteria.
+    """)
+
+    render_report(
+        other_df,
+        bo_df,
+        "Redirect %",
+        "redirection-count",
+        "Redirected",
+        ascending=False
+    )
+
+# ==========================================================
+# RETURN TAB
+# ==========================================================
+
+with return_tab:
+
+    st.markdown("""
+    ### ↩ Highest Return Percentage
+
+    Offices are arranged in descending order of **Return %**
+    after applying the minimum invoiced article criteria.
+    """)
+
+    render_report(
+        other_df,
+        bo_df,
+        "Return %",
+        "return-count",
+        "Returned",
+        ascending=False
+    )
 
 
