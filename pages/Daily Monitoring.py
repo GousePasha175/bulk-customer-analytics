@@ -248,3 +248,286 @@ daily["Redirect %"] = (daily["redirection-count"] / daily["invoice-count"] * 100
 daily["Return %"] = (daily["return-count"] / daily["invoice-count"] * 100).round(2)
 
 daily = daily.fillna(0)
+# ==========================================================
+# DAILY MONITORING REPORTING ENGINE - PART 1A
+# ==========================================================
+
+# ----------------------------------------------------------
+# Optional Settings
+# ----------------------------------------------------------
+
+st.sidebar.markdown("---")
+
+show_full = st.sidebar.checkbox(
+    "Show Complete Office List",
+    value=False
+)
+
+show_priority = st.sidebar.checkbox(
+    "Include Priority Score",
+    value=False,
+    help="Priority Score will be added to Excel and tables."
+)
+
+critical_delivery = st.sidebar.slider(
+    "Critical Delivery %",
+    40,
+    100,
+    60
+)
+
+# ----------------------------------------------------------
+# Additional Calculations
+# ----------------------------------------------------------
+
+daily["Priority Score"] = (
+    daily["invoice-count"] *
+    (100 - daily["Delivery %"])
+).round(0)
+
+daily["Undelivered"] = (
+    daily["invoice-count"] -
+    daily["delivery-count"]
+)
+
+# ----------------------------------------------------------
+# HQ SUMMARY
+# ----------------------------------------------------------
+
+division_summary = (
+    daily.groupby("division-office-name", as_index=False)
+    .agg(
+        Offices=("office-id", "count"),
+        Articles=("invoice-count", "sum"),
+        Delivery=("Delivery %", "mean"),
+        Deposit=("Deposit %", "mean"),
+        Redirect=("Redirect %", "mean"),
+        Return=("Return %", "mean"),
+    )
+)
+
+division_summary = division_summary.round(2)
+
+# ----------------------------------------------------------
+# KPI VALUES
+# ----------------------------------------------------------
+
+total_divisions = division_summary.shape[0]
+
+total_offices = len(daily)
+
+total_articles = int(
+    daily["invoice-count"].sum()
+)
+
+total_bo = (
+    daily["office-type-code"] == "BPO"
+).sum()
+
+total_other = total_offices - total_bo
+
+avg_delivery = daily["Delivery %"].mean()
+
+avg_deposit = daily["Deposit %"].mean()
+
+avg_redirect = daily["Redirect %"].mean()
+
+avg_return = daily["Return %"].mean()
+
+# ----------------------------------------------------------
+# CSS
+# ----------------------------------------------------------
+
+st.markdown("""
+<style>
+
+.dm-title{
+background:#0B5CAD;
+padding:14px;
+border-radius:10px;
+color:white;
+font-size:28px;
+font-weight:700;
+margin-bottom:18px;
+}
+
+.kpi{
+background:white;
+border-radius:14px;
+padding:16px;
+text-align:center;
+box-shadow:0 2px 10px rgba(0,0,0,.10);
+border-top:6px solid #0B5CAD;
+margin-bottom:15px;
+}
+
+.kpi_head{
+font-size:15px;
+font-weight:600;
+color:#666;
+}
+
+.kpi_val{
+font-size:30px;
+font-weight:700;
+color:#0B5CAD;
+}
+
+.section{
+background:#0B5CAD;
+padding:10px 18px;
+border-radius:8px;
+color:white;
+font-size:20px;
+font-weight:bold;
+margin-top:18px;
+margin-bottom:10px;
+}
+
+.good{
+background:#70AD47;
+color:white;
+font-weight:bold;
+}
+
+.medium{
+background:#FFC000;
+font-weight:bold;
+}
+
+.bad{
+background:#FF4D4F;
+color:white;
+font-weight:bold;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+# ----------------------------------------------------------
+# KPI CARD FUNCTION
+# ----------------------------------------------------------
+
+def kpi(title, value):
+
+    st.markdown(f"""
+    <div class="kpi">
+        <div class="kpi_head">{title}</div>
+        <div class="kpi_val">{value}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ----------------------------------------------------------
+# HQ DASHBOARD
+# ----------------------------------------------------------
+
+st.markdown(
+    "<div class='dm-title'>🏛 Headquarters Region Dashboard</div>",
+    unsafe_allow_html=True
+)
+
+r1, r2, r3, r4 = st.columns(4)
+
+with r1:
+    kpi("Divisions", total_divisions)
+
+with r2:
+    kpi("Offices", f"{total_offices:,}")
+
+with r3:
+    kpi("Articles", f"{total_articles:,}")
+
+with r4:
+    kpi("Branch Offices", f"{total_bo:,}")
+
+r5, r6, r7, r8 = st.columns(4)
+
+with r5:
+    kpi("Average Delivery", f"{avg_delivery:.2f}%")
+
+with r6:
+    kpi("Average Deposit", f"{avg_deposit:.2f}%")
+
+with r7:
+    kpi("Average Redirect", f"{avg_redirect:.2f}%")
+
+with r8:
+    kpi("Average Return", f"{avg_return:.2f}%")
+
+# ----------------------------------------------------------
+# TOP / BOTTOM DIVISIONS
+# ----------------------------------------------------------
+
+top_delivery = (
+    division_summary
+    .sort_values("Delivery", ascending=False)
+    .head(10)
+)
+
+bottom_delivery = (
+    division_summary
+    .sort_values("Delivery", ascending=True)
+    .head(10)
+)
+
+c1, c2 = st.columns(2)
+
+with c1:
+
+    st.markdown(
+        "<div class='section'>🏆 Top Delivery Divisions</div>",
+        unsafe_allow_html=True
+    )
+
+    st.dataframe(
+        top_delivery[
+            [
+                "division-office-name",
+                "Delivery",
+                "Articles"
+            ]
+        ],
+        hide_index=True,
+        use_container_width=True
+    )
+
+with c2:
+
+    st.markdown(
+        "<div class='section'>⚠ Bottom Delivery Divisions</div>",
+        unsafe_allow_html=True
+    )
+
+    st.dataframe(
+        bottom_delivery[
+            [
+                "division-office-name",
+                "Delivery",
+                "Articles"
+            ]
+        ],
+        hide_index=True,
+        use_container_width=True
+    )
+
+# ----------------------------------------------------------
+# DIVISION SELECTION
+# ----------------------------------------------------------
+
+divisions = sorted(
+    daily["division-office-name"]
+    .dropna()
+    .unique()
+)
+
+selected_division = st.selectbox(
+    "📍 Select Division",
+    divisions
+)
+
+division_df = daily[
+    daily["division-office-name"] == selected_division
+].copy()
+
+
+
