@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from datetime import date
 from PIL import Image
 import os
 import glob as _glob
@@ -155,6 +156,14 @@ with col_title:
 
 st.markdown("<hr style='margin-top:20px;margin-bottom:30px;'>", unsafe_allow_html=True)
 st.sidebar.markdown("---")
+st.sidebar.subheader("📅 Report Period")
+_dr1, _dr2 = st.sidebar.columns(2)
+with _dr1:
+    report_from = st.date_input("From", value=date.today())
+with _dr2:
+    report_to = st.date_input("To", value=date.today())
+date_range_str = f"{report_from.strftime('%d.%m.%Y')} to {report_to.strftime('%d.%m.%Y')}"
+
 st.sidebar.header("📊 Reports")
 
 show_lowest = st.sidebar.checkbox(
@@ -470,7 +479,7 @@ if show_lowest:
     # ----------------------------------------------------------
 
     st.markdown(
-        "<div class='dm-title'>🏛 Headquarters Region Dashboard</div>",
+        f"<div class='dm-title'>🏛 Headquarters Region Dashboard — {date_range_str}</div>",
         unsafe_allow_html=True
     )
 
@@ -610,7 +619,7 @@ if show_lowest:
     avg_ret = division_df["Return %"].mean()
 
     st.markdown(
-        f"<div class='dm-title'>📍 {selected_division}</div>",
+        f"<div class='dm-title'>📍 {selected_division} — {date_range_str}</div>",
         unsafe_allow_html=True
     )
 
@@ -648,28 +657,53 @@ if show_lowest:
     _dm_xl_buf = BytesIO()
     with pd.ExcelWriter(_dm_xl_buf, engine="xlsxwriter") as _writer:
         _wb = _writer.book
-        _hdr_fmt = _wb.add_format({"bold": True, "bg_color": "#0B5CAD",
-                                    "font_color": "white", "border": 1})
-        _pct_fmt = _wb.add_format({"num_format": "0.00", "border": 1})
+        _title_fmt = _wb.add_format({"bold": True, "font_size": 13, "bg_color": "#0B5CAD",
+                                      "font_color": "white", "align": "center",
+                                      "valign": "vcenter", "border": 1})
+        _hdr_fmt = _wb.add_format({"bold": True, "bg_color": "#2f3343",
+                                    "font_color": "white", "border": 1,
+                                    "align": "center", "valign": "vcenter", "text_wrap": True})
+        _pct_fmt = _wb.add_format({"num_format": "0.00\"%\"", "border": 1, "align": "center"})
+        _num_fmt = _wb.add_format({"num_format": "#,##0", "border": 1, "align": "center"})
         _cell_fmt = _wb.add_format({"border": 1})
+        _total_fmt = _wb.add_format({"bold": True, "bg_color": "#FFD700", "border": 1, "align": "center"})
+        _total_lft = _wb.add_format({"bold": True, "bg_color": "#FFD700", "border": 1})
 
-        def _write_df(sheet_name, df_out):
-            df_out.to_excel(_writer, index=False, sheet_name=sheet_name)
-            ws = _writer.sheets[sheet_name]
+        def _write_df(sheet_name, df_out, title):
+            ncols = len(df_out.columns)
+            ws = _wb.add_worksheet(sheet_name)
+            _writer.sheets[sheet_name] = ws
+
+            ws.merge_range(0, 0, 0, ncols - 1, title, _title_fmt)
+            ws.set_row(0, 24)
             for ci, col in enumerate(df_out.columns):
-                ws.write(0, ci, col, _hdr_fmt)
-                fmt = _pct_fmt if "%" in col else _cell_fmt
-                for ri, val in enumerate(df_out[col], start=1):
-                    ws.write(ri, ci, val, fmt)
-                width = max(df_out[col].astype(str).map(len).max(), len(col)) + 3
-                ws.set_column(ci, ci, width)
+                ws.write(1, ci, col, _hdr_fmt)
+            ws.set_row(1, 30)
+
+            for ri, (_, row) in enumerate(df_out.iterrows(), start=2):
+                for ci, col in enumerate(df_out.columns):
+                    val = row[col]
+                    if "%" in col:
+                        ws.write_number(ri, ci, float(val), _pct_fmt)
+                    elif isinstance(val, (int, float)) and col != "Office" and col != "Type" and col != "Division":
+                        ws.write_number(ri, ci, val, _num_fmt)
+                    else:
+                        ws.write(ri, ci, val, _cell_fmt)
+
+            for ci, col in enumerate(df_out.columns):
+                max_data_len = df_out[col].astype(str).map(len).max() if len(df_out) else 0
+                width = max(max_data_len, len(col)) + 4
+                ws.set_column(ci, ci, min(width, 45))
+
+            ws.freeze_panes(2, 0)
+            ws.autofilter(1, 0, 1 + len(df_out), ncols - 1)
 
         _write_df("Division Summary", division_summary.rename(columns={
             "division-office-name": "Division",
             "Offices": "Offices", "Articles": "Articles",
             "Delivery": "Delivery %", "Deposit": "Deposit %",
             "Redirect": "Redirect %", "Return": "Return %",
-        }))
+        }), f"Division-wise Daily Monitoring — {date_range_str}")
 
         _div_detail_cols = {
             "office-name": "Office", "office-type-code": "Type",
@@ -681,7 +715,7 @@ if show_lowest:
         }
         _div_detail = division_df[list(_div_detail_cols.keys())].rename(columns=_div_detail_cols)
         _sheet_name = selected_division[:31].replace("/", "-")
-        _write_df(_sheet_name, _div_detail)
+        _write_df(_sheet_name, _div_detail, f"{selected_division} — {date_range_str}")
 
     st.download_button(
         "⬇ Download Excel (Daily Monitoring)",
@@ -864,7 +898,7 @@ else:
 if show_100:
     st.markdown("<hr style='margin-top:30px;margin-bottom:20px;'>", unsafe_allow_html=True)
     st.markdown(
-        "<div class='dm-title'>🚩 100% Deposit Offices (Nothing Delivered)</div>",
+        f"<div class='dm-title'>🚩 100% Deposit Offices (Nothing Delivered) — {date_range_str}</div>",
         unsafe_allow_html=True
     )
 
@@ -898,18 +932,48 @@ if show_100:
         # Excel download
         xl_buf = BytesIO()
         with pd.ExcelWriter(xl_buf, engine="xlsxwriter") as writer:
-            red_flag_display.to_excel(writer, index=False, sheet_name="100pct Deposit")
             wb = writer.book
-            ws = writer.sheets["100pct Deposit"]
-            hdr_fmt = wb.add_format({"bold": True, "bg_color": "#0B5CAD",
-                                      "font_color": "white", "border": 1})
+            ncols = len(red_flag_display.columns)
+            ws = wb.add_worksheet("100pct Deposit")
+            writer.sheets["100pct Deposit"] = ws
+
+            title_fmt = wb.add_format({"bold": True, "font_size": 13, "bg_color": "#cc0000",
+                                        "font_color": "white", "align": "center",
+                                        "valign": "vcenter", "border": 1})
+            hdr_fmt = wb.add_format({"bold": True, "bg_color": "#2f3343",
+                                      "font_color": "white", "border": 1,
+                                      "align": "center", "valign": "vcenter"})
+            pct_fmt = wb.add_format({"num_format": "0.00\"%\"", "border": 1, "align": "center"})
+            num_fmt = wb.add_format({"num_format": "#,##0", "border": 1, "align": "center"})
+            cell_fmt = wb.add_format({"border": 1})
+
+            ws.merge_range(0, 0, 0, ncols - 1,
+                            f"100% Deposit Offices (Nothing Delivered) — {date_range_str}", title_fmt)
+            ws.set_row(0, 24)
             for ci, col in enumerate(red_flag_display.columns):
-                ws.write(0, ci, col, hdr_fmt)
-                width = max(red_flag_display[col].astype(str).map(len).max(), len(col)) + 3
-                ws.set_column(ci, ci, width)
+                ws.write(1, ci, col, hdr_fmt)
+
+            for ri, (_, row) in enumerate(red_flag_display.iterrows(), start=2):
+                for ci, col in enumerate(red_flag_display.columns):
+                    val = row[col]
+                    if "%" in col:
+                        ws.write_number(ri, ci, float(val), pct_fmt)
+                    elif isinstance(val, (int, float)):
+                        ws.write_number(ri, ci, val, num_fmt)
+                    else:
+                        ws.write(ri, ci, val, cell_fmt)
+
+            for ci, col in enumerate(red_flag_display.columns):
+                max_data_len = red_flag_display[col].astype(str).map(len).max() if len(red_flag_display) else 0
+                width = max(max_data_len, len(col)) + 4
+                ws.set_column(ci, ci, min(width, 45))
+
+            ws.freeze_panes(2, 0)
+            ws.autofilter(1, 0, 1 + len(red_flag_display), ncols - 1)
+
         st.download_button(
             "⬇ Download 100% Deposit Offices (Excel)",
             data=xl_buf.getvalue(),
-            file_name="100_Percent_Deposit_Offices.xlsx",
+            file_name=f"100_Percent_Deposit_Offices_{report_from.strftime('%d%m%Y')}_{report_to.strftime('%d%m%Y')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
