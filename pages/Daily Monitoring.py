@@ -461,13 +461,13 @@ with r8:
 top_delivery = (
     division_summary
     .sort_values("Delivery", ascending=False)
-    .head(10)
+    .head(3)
 )
 
 bottom_delivery = (
     division_summary
     .sort_values("Delivery", ascending=True)
-    .head(10)
+    .head(3)
 )
 
 c1, c2 = st.columns(2)
