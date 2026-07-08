@@ -479,6 +479,7 @@ with c1:
         unsafe_allow_html=True
     )
 
+    
     st.dataframe(
         top_delivery[
             [
@@ -610,141 +611,51 @@ delivery_tab,deposit_tab,redirect_tab,return_tab = st.tabs(
 # REPORT FUNCTION
 # ==========================================================
 
-def render_report(
-    df_other,
-    df_bo,
-    metric,
-    count_col,
-    title,
-    ascending=False
-):
+def render_report(df_other, df_bo, metric, count_col, title, ascending=False):
 
     other = (
         df_other
-        .sort_values(
-            [metric,"invoice-count"],
-            ascending=[ascending,False]
-        )
+        .sort_values([metric, "invoice-count"], ascending=[ascending, False])
         .head(15)
     )
 
     bo = (
         df_bo
-        .sort_values(
-            [metric,"invoice-count"],
-            ascending=[ascending,False]
-        )
+        .sort_values([metric, "invoice-count"], ascending=[ascending, False])
         .head(25)
     )
 
-    left,right = st.columns(2)
+    left, right = st.columns(2)
+
+    def show_table(df, heading):
+
+        st.markdown(f"### {heading}")
+
+        display = pd.DataFrame({
+            "Office": df["office-name"],
+            "Invoiced": df["invoice-count"],
+            "Delivered": df["delivery-count"]
+        })
+
+        if count_col != "delivery-count":
+            display[title] = df[count_col]
+
+        display[metric] = df[metric]
+
+        if show_priority:
+            display["Priority"] = df["Priority Score"].astype(int)
+
+        st.dataframe(
+            display,
+            hide_index=True,
+            use_container_width=True
+        )
 
     with left:
-
-        st.markdown(f"### 🏤 Head / Sub Offices ({len(other)})")
-
-        display = other.copy()
-
-        if count_col == "delivery-count":
-    
-            cols = [
-                "office-name",
-                "invoice-count",
-                "delivery-count",
-                metric
-            ]
-        
-            names = [
-                "Office",
-                "Invoiced",
-                "Delivered",
-                metric
-            ]
-        
-        else:
-        
-            cols = [
-                "office-name",
-                "invoice-count",
-                "delivery-count",
-                count_col,
-                metric
-            ]
-        
-            names = [
-                "Office",
-                "Invoiced",
-                "Delivered",
-                title,
-                metric
-            ]
-        display = display[cols]
-
-        display.columns = names
-
-        if not show_priority:
-            st.dataframe(
-                display,
-                hide_index=True,
-                use_container_width=True
-            )
-        else:
-
-            display["Priority"] = (
-                other["Priority Score"]
-            ).astype(int)
-
-            st.dataframe(
-                display,
-                hide_index=True,
-                use_container_width=True
-            )
+        show_table(other, f"🏤 Head / Sub Offices ({len(other)})")
 
     with right:
-
-        st.markdown(f"### 🏣 Branch Offices ({len(bo)})")
-
-        display = bo.copy()
-
-        cols = [
-            "office-name",
-            "invoice-count",
-            "delivery-count",
-            count_col,
-            metric
-        ]
-
-        names = [
-            "Office",
-            "Invoiced",
-            "Delivered",
-            title,
-            metric
-        ]
-
-        display = display[cols]
-
-        display.columns = names
-
-        if not show_priority:
-
-            st.dataframe(
-                display,
-                hide_index=True,
-                use_container_width=True
-            )
-
-        else:
-
-            display["Priority"] = (
-                bo["Priority Score"]
-            ).astype(int)
-
-            st.dataframe(
-                display,
-                hide_index=True,
-                use_container_width=True
-            )
+        show_table(bo, f"🏣 Branch Offices ({len(bo)})")
 
     if show_full:
 
@@ -752,12 +663,8 @@ def render_report(
 
         st.subheader("Complete Office List")
 
-        full = pd.concat(
-            [other,bo]
-        )
-
         st.dataframe(
-            full,
+            pd.concat([other, bo]),
             hide_index=True,
             use_container_width=True
         )
