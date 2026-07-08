@@ -645,39 +645,39 @@ def render_report(
 
         display = other.copy()
 
-    if count_col == "delivery-count":
-
-        cols = [
-            "office-name",
-            "invoice-count",
-            "delivery-count",
-            metric
-        ]
+        if count_col == "delivery-count":
     
-        names = [
-            "Office",
-            "Invoiced",
-            "Delivered",
-            metric
-        ]
-    
-    else:
-    
-        cols = [
-            "office-name",
-            "invoice-count",
-            "delivery-count",
-            count_col,
-            metric
-        ]
-    
-        names = [
-            "Office",
-            "Invoiced",
-            "Delivered",
-            title,
-            metric
-        ]
+            cols = [
+                "office-name",
+                "invoice-count",
+                "delivery-count",
+                metric
+            ]
+        
+            names = [
+                "Office",
+                "Invoiced",
+                "Delivered",
+                metric
+            ]
+        
+        else:
+        
+            cols = [
+                "office-name",
+                "invoice-count",
+                "delivery-count",
+                count_col,
+                metric
+            ]
+        
+            names = [
+                "Office",
+                "Invoiced",
+                "Delivered",
+                title,
+                metric
+            ]
         display = display[cols]
 
         display.columns = names
