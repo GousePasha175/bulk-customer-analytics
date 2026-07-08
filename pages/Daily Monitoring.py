@@ -645,6 +645,24 @@ def render_report(
 
         display = other.copy()
 
+    if count_col == "delivery-count":
+
+        cols = [
+            "office-name",
+            "invoice-count",
+            "delivery-count",
+            metric
+        ]
+    
+        names = [
+            "Office",
+            "Invoiced",
+            "Delivered",
+            metric
+        ]
+    
+    else:
+    
         cols = [
             "office-name",
             "invoice-count",
@@ -652,7 +670,7 @@ def render_report(
             count_col,
             metric
         ]
-
+    
         names = [
             "Office",
             "Invoiced",
@@ -660,7 +678,6 @@ def render_report(
             title,
             metric
         ]
-
         display = display[cols]
 
         display.columns = names
