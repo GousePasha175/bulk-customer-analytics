@@ -242,98 +242,20 @@ if "office-name_x" in daily.columns:
 # Percentage Calculations
 # --------------------------------------------------------
 
-daily["Delivery %"] = (daily["delivery-count"] / daily["invoice-count"] * 100).round(2)
-daily["Deposit %"] = (daily["deposit-count"] / daily["invoice-count"] * 100).round(2)
-daily["Redirect %"] = (daily["redirection-count"] / daily["invoice-count"] * 100).round(2)
-daily["Return %"] = (daily["return-count"] / daily["invoice-count"] * 100).round(2)
+_inv_safe = daily["invoice-count"].replace(0, pd.NA)
+daily["Delivery %"] = (daily["delivery-count"] / _inv_safe * 100).round(2)
+daily["Deposit %"] = (daily["deposit-count"] / _inv_safe * 100).round(2)
+daily["Redirect %"] = (daily["redirection-count"] / _inv_safe * 100).round(2)
+daily["Return %"] = (daily["return-count"] / _inv_safe * 100).round(2)
 
-daily = daily.fillna(0)
+# Fill missing values precisely rather than a blanket fillna(0), which would
+# otherwise turn any unmatched division-office-name / office-type-code into
+# the literal number 0 instead of a readable label.
+for _c in ["Delivery %", "Deposit %", "Redirect %", "Return %"]:
+    daily[_c] = daily[_c].fillna(0)
+daily["division-office-name"] = daily["division-office-name"].fillna("Unmapped")
+daily["office-type-code"] = daily["office-type-code"].fillna("UNK")
 # ==========================================================
-# DAILY MONITORING REPORTING ENGINE - PART 1A
-# ==========================================================
-
-# ----------------------------------------------------------
-# Optional Settings
-# ----------------------------------------------------------
-
-st.sidebar.markdown("---")
-
-show_full = st.sidebar.checkbox(
-    "Show Complete Office List",
-    value=False
-)
-
-show_priority = st.sidebar.checkbox(
-    "Include Priority Score",
-    value=False,
-    help="Priority Score will be added to Excel and tables."
-)
-
-critical_delivery = st.sidebar.slider(
-    "Critical Delivery %",
-    40,
-    100,
-    60
-)
-
-# ----------------------------------------------------------
-# Additional Calculations
-# ----------------------------------------------------------
-
-daily["Priority Score"] = (
-    daily["invoice-count"] *
-    (100 - daily["Delivery %"])
-).round(0)
-
-daily["Undelivered"] = (
-    daily["invoice-count"] -
-    daily["delivery-count"]
-)
-
-# ----------------------------------------------------------
-# HQ SUMMARY
-# ----------------------------------------------------------
-
-division_summary = (
-    daily.groupby("division-office-name", as_index=False)
-    .agg(
-        Offices=("office-id", "count"),
-        Articles=("invoice-count", "sum"),
-        Delivery=("Delivery %", "mean"),
-        Deposit=("Deposit %", "mean"),
-        Redirect=("Redirect %", "mean"),
-        Return=("Return %", "mean"),
-    )
-)
-
-division_summary = division_summary.round(2)
-
-# ----------------------------------------------------------
-# KPI VALUES
-# ----------------------------------------------------------
-
-total_divisions = division_summary.shape[0]
-
-total_offices = len(daily)
-
-total_articles = int(
-    daily["invoice-count"].sum()
-)
-
-total_bo = (
-    daily["office-type-code"] == "BPO"
-).sum()
-
-total_other = total_offices - total_bo
-
-avg_delivery = daily["Delivery %"].mean()
-
-avg_deposit = daily["Deposit %"].mean()
-
-avg_redirect = daily["Redirect %"].mean()
-
-avg_return = daily["Return %"].mean()
-
 # ----------------------------------------------------------
 # CSS
 # ----------------------------------------------------------
@@ -416,344 +338,490 @@ def kpi(title, value):
         <div class="kpi_val">{value}</div>
     </div>
     """, unsafe_allow_html=True)
+if show_lowest:
+    # DAILY MONITORING REPORTING ENGINE - PART 1A
+    # ==========================================================
 
-# ----------------------------------------------------------
-# HQ DASHBOARD
-# ----------------------------------------------------------
+    # ----------------------------------------------------------
+    # Optional Settings
+    # ----------------------------------------------------------
 
-st.markdown(
-    "<div class='dm-title'>🏛 Headquarters Region Dashboard</div>",
-    unsafe_allow_html=True
-)
+    st.sidebar.markdown("---")
 
-r1, r2, r3, r4 = st.columns(4)
+    show_full = st.sidebar.checkbox(
+        "Show Complete Office List",
+        value=False
+    )
 
-with r1:
-    kpi("Divisions", total_divisions)
+    show_priority = st.sidebar.checkbox(
+        "Include Priority Score",
+        value=False,
+        help="Priority Score will be added to Excel and tables."
+    )
 
-with r2:
-    kpi("Offices", f"{total_offices:,}")
+    critical_delivery = st.sidebar.slider(
+        "Critical Delivery %",
+        40,
+        100,
+        60
+    )
 
-with r3:
-    kpi("Articles", f"{total_articles:,}")
+    # ----------------------------------------------------------
+    # Additional Calculations
+    # ----------------------------------------------------------
 
-with r4:
-    kpi("Branch Offices", f"{total_bo:,}")
+    daily["Priority Score"] = (
+        daily["invoice-count"] *
+        (100 - daily["Delivery %"])
+    ).round(0)
 
-r5, r6, r7, r8 = st.columns(4)
+    daily["Undelivered"] = (
+        daily["invoice-count"] -
+        daily["delivery-count"]
+    )
 
-with r5:
-    kpi("Average Delivery", f"{avg_delivery:.2f}%")
+    # ----------------------------------------------------------
+    # HQ SUMMARY
+    # ----------------------------------------------------------
 
-with r6:
-    kpi("Average Deposit", f"{avg_deposit:.2f}%")
+    division_summary = (
+        daily.groupby("division-office-name", as_index=False)
+        .agg(
+            Offices=("office-id", "count"),
+            Articles=("invoice-count", "sum"),
+            Delivery=("Delivery %", "mean"),
+            Deposit=("Deposit %", "mean"),
+            Redirect=("Redirect %", "mean"),
+            Return=("Return %", "mean"),
+        )
+    )
 
-with r7:
-    kpi("Average Redirect", f"{avg_redirect:.2f}%")
+    division_summary = division_summary.round(2)
 
-with r8:
-    kpi("Average Return", f"{avg_return:.2f}%")
+    # ----------------------------------------------------------
+    # KPI VALUES
+    # ----------------------------------------------------------
 
-# ----------------------------------------------------------
-# TOP / BOTTOM DIVISIONS
-# ----------------------------------------------------------
+    total_divisions = division_summary.shape[0]
 
-top_delivery = (
-    division_summary
-    .sort_values("Delivery", ascending=False)
-    .head(3)
-)
+    total_offices = len(daily)
 
-bottom_delivery = (
-    division_summary
-    .sort_values("Delivery", ascending=True)
-    .head(3)
-)
+    total_articles = int(
+        daily["invoice-count"].sum()
+    )
 
-c1, c2 = st.columns(2)
+    total_bo = (
+        daily["office-type-code"] == "BPO"
+    ).sum()
 
-with c1:
+    total_other = total_offices - total_bo
+
+    avg_delivery = daily["Delivery %"].mean()
+
+    avg_deposit = daily["Deposit %"].mean()
+
+    avg_redirect = daily["Redirect %"].mean()
+
+    avg_return = daily["Return %"].mean()
+
+
+    # ----------------------------------------------------------
+    # HQ DASHBOARD
+    # ----------------------------------------------------------
 
     st.markdown(
-        "<div class='section'>🏆 Top Delivery Divisions</div>",
+        "<div class='dm-title'>🏛 Headquarters Region Dashboard</div>",
         unsafe_allow_html=True
     )
+
+    r1, r2, r3, r4 = st.columns(4)
+
+    with r1:
+        kpi("Divisions", total_divisions)
+
+    with r2:
+        kpi("Offices", f"{total_offices:,}")
+
+    with r3:
+        kpi("Articles", f"{total_articles:,}")
+
+    with r4:
+        kpi("Branch Offices", f"{total_bo:,}")
+
+    r5, r6, r7, r8 = st.columns(4)
+
+    with r5:
+        kpi("Average Delivery", f"{avg_delivery:.2f}%")
+
+    with r6:
+        kpi("Average Deposit", f"{avg_deposit:.2f}%")
+
+    with r7:
+        kpi("Average Redirect", f"{avg_redirect:.2f}%")
+
+    with r8:
+        kpi("Average Return", f"{avg_return:.2f}%")
+
+    # ----------------------------------------------------------
+    # TOP / BOTTOM DIVISIONS
+    # ----------------------------------------------------------
+
+    top_delivery = (
+        division_summary
+        .sort_values("Delivery", ascending=False)
+        .head(3)
+    )
+
+    bottom_delivery = (
+        division_summary
+        .sort_values("Delivery", ascending=True)
+        .head(3)
+    )
+
+    c1, c2 = st.columns(2)
+
+    with c1:
+
+        st.markdown(
+            "<div class='section'>🏆 Top Delivery Divisions</div>",
+            unsafe_allow_html=True
+        )
 
     
-    st.dataframe(
-        top_delivery[
-            [
-                "division-office-name",
-                "Delivery",
-                "Articles"
-            ]
-        ],
-        hide_index=True,
-        use_container_width=True
+        st.dataframe(
+            top_delivery[
+                [
+                    "division-office-name",
+                    "Delivery",
+                    "Articles"
+                ]
+            ],
+            hide_index=True,
+            use_container_width=True
+        )
+
+    with c2:
+
+        st.markdown(
+            "<div class='section'>⚠ Bottom Delivery Divisions</div>",
+            unsafe_allow_html=True
+        )
+
+        st.dataframe(
+            bottom_delivery[
+                [
+                    "division-office-name",
+                    "Delivery",
+                    "Articles"
+                ]
+            ],
+            hide_index=True,
+            use_container_width=True
+        )
+
+    # ----------------------------------------------------------
+    # DIVISION SELECTION
+    # ----------------------------------------------------------
+
+    divisions = sorted(
+        daily["division-office-name"]
+        .dropna()
+        .unique()
     )
 
-with c2:
+    selected_division = st.selectbox(
+        "📍 Select Division",
+        divisions
+    )
+
+    division_df = daily[
+        daily["division-office-name"] == selected_division
+    ].copy()
+    # ==========================================================
+    # DIVISION SUMMARY
+    # ==========================================================
+
+    bo_df = division_df[
+        division_df["office-type-code"] == "BPO"
+    ].copy()
+
+    other_df = division_df[
+        division_df["office-type-code"] != "BPO"
+    ].copy()
+
+    bo_df = bo_df[
+        bo_df["invoice-count"] >= min_bo
+    ]
+
+    other_df = other_df[
+        other_df["invoice-count"] >= min_other
+    ]
+
+    division_articles = int(
+        division_df["invoice-count"].sum()
+    )
+
+    avg_del = division_df["Delivery %"].mean()
+
+    avg_dep = division_df["Deposit %"].mean()
+
+    avg_red = division_df["Redirect %"].mean()
+
+    avg_ret = division_df["Return %"].mean()
 
     st.markdown(
-        "<div class='section'>⚠ Bottom Delivery Divisions</div>",
+        f"<div class='dm-title'>📍 {selected_division}</div>",
         unsafe_allow_html=True
     )
 
-    st.dataframe(
-        bottom_delivery[
-            [
-                "division-office-name",
-                "Delivery",
-                "Articles"
-            ]
-        ],
-        hide_index=True,
-        use_container_width=True
+    c1,c2,c3,c4 = st.columns(4)
+
+    with c1:
+        kpi("Total Offices",len(division_df))
+
+    with c2:
+        kpi("Branch Offices",len(bo_df))
+
+    with c3:
+        kpi("HO/SO/IDC/NDC",len(other_df))
+
+    with c4:
+        kpi("Articles",f"{division_articles:,}")
+
+    c5,c6,c7,c8 = st.columns(4)
+
+    with c5:
+        kpi("Delivery",f"{avg_del:.2f}%")
+
+    with c6:
+        kpi("Deposit",f"{avg_dep:.2f}%")
+
+    with c7:
+        kpi("Redirect",f"{avg_red:.2f}%")
+
+    with c8:
+        kpi("Return",f"{avg_ret:.2f}%")
+
+    # ==========================================================
+    # TABS
+    # ==========================================================
+
+    delivery_tab,deposit_tab,redirect_tab,return_tab = st.tabs(
+    [
+    "🚚 Delivery",
+    "📥 Deposit",
+    "🔀 Redirect",
+    "↩ Return"
+    ]
     )
 
-# ----------------------------------------------------------
-# DIVISION SELECTION
-# ----------------------------------------------------------
+    # ==========================================================
+    # REPORT FUNCTION
+    # ==========================================================
 
-divisions = sorted(
-    daily["division-office-name"]
-    .dropna()
-    .unique()
-)
+    def render_report(df_other, df_bo, metric, count_col, title, ascending=False):
 
-selected_division = st.selectbox(
-    "📍 Select Division",
-    divisions
-)
+        other = (
+            df_other
+            .sort_values([metric, "invoice-count"], ascending=[ascending, False])
+            .head(15)
+        )
 
-division_df = daily[
-    daily["division-office-name"] == selected_division
-].copy()
+        bo = (
+            df_bo
+            .sort_values([metric, "invoice-count"], ascending=[ascending, False])
+            .head(25)
+        )
+
+        left, right = st.columns(2)
+
+        def show_table(df, heading):
+
+            st.markdown(f"### {heading}")
+
+            display = pd.DataFrame({
+                "Office": df["office-name"],
+                "Invoiced": df["invoice-count"],
+                "Delivered": df["delivery-count"]
+            })
+
+            if count_col != "delivery-count":
+                display[title] = df[count_col]
+
+            display[metric] = df[metric]
+
+            if show_priority:
+                display["Priority"] = df["Priority Score"].astype(int)
+
+            st.dataframe(
+                display,
+                hide_index=True,
+                use_container_width=True
+            )
+
+        with left:
+            show_table(other, f"🏤 Head / Sub Offices ({len(other)})")
+
+        with right:
+            show_table(bo, f"🏣 Branch Offices ({len(bo)})")
+
+        if show_full:
+
+            st.markdown("---")
+
+            st.subheader("Complete Office List")
+
+            st.dataframe(
+                pd.concat([other, bo]),
+                hide_index=True,
+                use_container_width=True
+            )
+    # ==========================================================
+    # DELIVERY TAB
+    # ==========================================================
+
+    with delivery_tab:
+
+        st.markdown("""
+        ### 🚚 Lowest Delivery Percentage
+
+        Offices are arranged in ascending order of **Delivery %**
+        after applying the minimum invoiced article criteria.
+        """)
+
+        render_report(
+            other_df,
+            bo_df,
+            "Delivery %",
+            "delivery-count",
+            "Delivered",
+            ascending=True
+        )
+
+    # ==========================================================
+    # DEPOSIT TAB
+    # ==========================================================
+
+    with deposit_tab:
+
+        st.markdown("""
+        ### 📥 Highest Deposit Percentage
+
+        Offices are arranged in descending order of **Deposit %**
+        after applying the minimum invoiced article criteria.
+        """)
+
+        render_report(
+            other_df,
+            bo_df,
+            "Deposit %",
+            "deposit-count",
+            "Deposited",
+            ascending=False
+        )
+
+    # ==========================================================
+    # REDIRECT TAB
+    # ==========================================================
+
+    with redirect_tab:
+
+        st.markdown("""
+        ### 🔀 Highest Redirect Percentage
+
+        Offices are arranged in descending order of **Redirect %**
+        after applying the minimum invoiced article criteria.
+        """)
+
+        render_report(
+            other_df,
+            bo_df,
+            "Redirect %",
+            "redirection-count",
+            "Redirected",
+            ascending=False
+        )
+
+    # ==========================================================
+    # RETURN TAB
+    # ==========================================================
+
+    with return_tab:
+
+        st.markdown("""
+        ### ↩ Highest Return Percentage
+
+        Offices are arranged in descending order of **Return %**
+        after applying the minimum invoiced article criteria.
+        """)
+
+        render_report(
+            other_df,
+            bo_df,
+            "Return %",
+            "return-count",
+            "Returned",
+            ascending=False
+        )
+else:
+    st.info("Enable 'Division-wise Daily Monitoring' from the sidebar to view this report.")
+
 # ==========================================================
-# DIVISION SUMMARY
+# 100% DEPOSIT OFFICES (RED-FLAG LIST)
 # ==========================================================
+# Offices where Deposit % = 100 — every invoiced article was deposited back
+# and nothing delivered. Independent of the dashboard above: works whether
+# or not "Division-wise Daily Monitoring" is also enabled.
 
-bo_df = division_df[
-    division_df["office-type-code"] == "BPO"
-].copy()
-
-other_df = division_df[
-    division_df["office-type-code"] != "BPO"
-].copy()
-
-bo_df = bo_df[
-    bo_df["invoice-count"] >= min_bo
-]
-
-other_df = other_df[
-    other_df["invoice-count"] >= min_other
-]
-
-division_articles = int(
-    division_df["invoice-count"].sum()
-)
-
-avg_del = division_df["Delivery %"].mean()
-
-avg_dep = division_df["Deposit %"].mean()
-
-avg_red = division_df["Redirect %"].mean()
-
-avg_ret = division_df["Return %"].mean()
-
-st.markdown(
-    f"<div class='dm-title'>📍 {selected_division}</div>",
-    unsafe_allow_html=True
-)
-
-c1,c2,c3,c4 = st.columns(4)
-
-with c1:
-    kpi("Total Offices",len(division_df))
-
-with c2:
-    kpi("Branch Offices",len(bo_df))
-
-with c3:
-    kpi("HO/SO/IDC/NDC",len(other_df))
-
-with c4:
-    kpi("Articles",f"{division_articles:,}")
-
-c5,c6,c7,c8 = st.columns(4)
-
-with c5:
-    kpi("Delivery",f"{avg_del:.2f}%")
-
-with c6:
-    kpi("Deposit",f"{avg_dep:.2f}%")
-
-with c7:
-    kpi("Redirect",f"{avg_red:.2f}%")
-
-with c8:
-    kpi("Return",f"{avg_ret:.2f}%")
-
-# ==========================================================
-# TABS
-# ==========================================================
-
-delivery_tab,deposit_tab,redirect_tab,return_tab = st.tabs(
-[
-"🚚 Delivery",
-"📥 Deposit",
-"🔀 Redirect",
-"↩ Return"
-]
-)
-
-# ==========================================================
-# REPORT FUNCTION
-# ==========================================================
-
-def render_report(df_other, df_bo, metric, count_col, title, ascending=False):
-
-    other = (
-        df_other
-        .sort_values([metric, "invoice-count"], ascending=[ascending, False])
-        .head(15)
+if show_100:
+    st.markdown("<hr style='margin-top:30px;margin-bottom:20px;'>", unsafe_allow_html=True)
+    st.markdown(
+        "<div class='dm-title'>🚩 100% Deposit Offices (Nothing Delivered)</div>",
+        unsafe_allow_html=True
     )
 
-    bo = (
-        df_bo
-        .sort_values([metric, "invoice-count"], ascending=[ascending, False])
-        .head(25)
+    red_flag = daily[daily["Deposit %"] == 100].copy()
+    red_flag = red_flag.sort_values(
+        ["division-office-name", "invoice-count"], ascending=[True, False]
     )
 
-    left, right = st.columns(2)
+    if red_flag.empty:
+        st.success("✅ No offices found with 100% Deposit — nothing to flag today.")
+    else:
+        rf1, rf2, rf3 = st.columns(3)
+        with rf1:
+            kpi("Flagged Offices", len(red_flag))
+        with rf2:
+            kpi("Divisions Affected", red_flag["division-office-name"].nunique())
+        with rf3:
+            kpi("Articles Involved", f"{int(red_flag['invoice-count'].sum()):,}")
 
-    def show_table(df, heading):
-
-        st.markdown(f"### {heading}")
-
-        display = pd.DataFrame({
-            "Office": df["office-name"],
-            "Invoiced": df["invoice-count"],
-            "Delivered": df["delivery-count"]
+        red_flag_display = pd.DataFrame({
+            "Division": red_flag["division-office-name"],
+            "Office": red_flag["office-name"],
+            "Type": red_flag["office-type-code"],
+            "Invoiced": red_flag["invoice-count"],
+            "Deposited": red_flag["deposit-count"],
+            "Deposit %": red_flag["Deposit %"],
         })
 
-        if count_col != "delivery-count":
-            display[title] = df[count_col]
+        st.dataframe(red_flag_display, hide_index=True, use_container_width=True)
 
-        display[metric] = df[metric]
-
-        if show_priority:
-            display["Priority"] = df["Priority Score"].astype(int)
-
-        st.dataframe(
-            display,
-            hide_index=True,
-            use_container_width=True
+        # Excel download
+        xl_buf = BytesIO()
+        with pd.ExcelWriter(xl_buf, engine="xlsxwriter") as writer:
+            red_flag_display.to_excel(writer, index=False, sheet_name="100pct Deposit")
+            wb = writer.book
+            ws = writer.sheets["100pct Deposit"]
+            hdr_fmt = wb.add_format({"bold": True, "bg_color": "#0B5CAD",
+                                      "font_color": "white", "border": 1})
+            for ci, col in enumerate(red_flag_display.columns):
+                ws.write(0, ci, col, hdr_fmt)
+                width = max(red_flag_display[col].astype(str).map(len).max(), len(col)) + 3
+                ws.set_column(ci, ci, width)
+        st.download_button(
+            "⬇ Download 100% Deposit Offices (Excel)",
+            data=xl_buf.getvalue(),
+            file_name="100_Percent_Deposit_Offices.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-
-    with left:
-        show_table(other, f"🏤 Head / Sub Offices ({len(other)})")
-
-    with right:
-        show_table(bo, f"🏣 Branch Offices ({len(bo)})")
-
-    if show_full:
-
-        st.markdown("---")
-
-        st.subheader("Complete Office List")
-
-        st.dataframe(
-            pd.concat([other, bo]),
-            hide_index=True,
-            use_container_width=True
-        )
-# ==========================================================
-# DELIVERY TAB
-# ==========================================================
-
-with delivery_tab:
-
-    st.markdown("""
-    ### 🚚 Lowest Delivery Percentage
-
-    Offices are arranged in ascending order of **Delivery %**
-    after applying the minimum invoiced article criteria.
-    """)
-
-    render_report(
-        other_df,
-        bo_df,
-        "Delivery %",
-        "delivery-count",
-        "Delivered",
-        ascending=True
-    )
-
-# ==========================================================
-# DEPOSIT TAB
-# ==========================================================
-
-with deposit_tab:
-
-    st.markdown("""
-    ### 📥 Highest Deposit Percentage
-
-    Offices are arranged in descending order of **Deposit %**
-    after applying the minimum invoiced article criteria.
-    """)
-
-    render_report(
-        other_df,
-        bo_df,
-        "Deposit %",
-        "deposit-count",
-        "Deposited",
-        ascending=False
-    )
-
-# ==========================================================
-# REDIRECT TAB
-# ==========================================================
-
-with redirect_tab:
-
-    st.markdown("""
-    ### 🔀 Highest Redirect Percentage
-
-    Offices are arranged in descending order of **Redirect %**
-    after applying the minimum invoiced article criteria.
-    """)
-
-    render_report(
-        other_df,
-        bo_df,
-        "Redirect %",
-        "redirection-count",
-        "Redirected",
-        ascending=False
-    )
-
-# ==========================================================
-# RETURN TAB
-# ==========================================================
-
-with return_tab:
-
-    st.markdown("""
-    ### ↩ Highest Return Percentage
-
-    Offices are arranged in descending order of **Return %**
-    after applying the minimum invoiced article criteria.
-    """)
-
-    render_report(
-        other_df,
-        bo_df,
-        "Return %",
-        "return-count",
-        "Returned",
-        ascending=False
-    )
-
-
