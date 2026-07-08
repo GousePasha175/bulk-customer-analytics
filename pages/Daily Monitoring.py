@@ -162,7 +162,10 @@ with _dr1:
     report_from = st.date_input("From", value=date.today())
 with _dr2:
     report_to = st.date_input("To", value=date.today())
-date_range_str = f"{report_from.strftime('%d.%m.%Y')} to {report_to.strftime('%d.%m.%Y')}"
+date_range_str = (
+    report_from.strftime('%d.%m.%Y') if report_from == report_to
+    else f"{report_from.strftime('%d.%m.%Y')} to {report_to.strftime('%d.%m.%Y')}"
+)
 
 st.sidebar.header("📊 Reports")
 
