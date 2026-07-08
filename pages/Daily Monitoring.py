@@ -169,19 +169,30 @@ show_100 = st.sidebar.checkbox(
 st.sidebar.markdown("---")
 st.sidebar.subheader("📌 Minimum Invoiced Count")
 
-min_bo = st.sidebar.number_input(
-    "BPO Minimum Invoiced",
-    min_value=1,
-    value=30,
-    step=1
+enable_min_criteria = st.sidebar.checkbox(
+    "Enable Minimum Invoiced Criteria",
+    value=False,
+    help="Off by default — shows all offices regardless of invoice count (minimum = 0). "
+         "Turn on to set a minimum invoiced threshold below."
 )
 
-min_other = st.sidebar.number_input(
-    "SPO/HPO/GPO/IDC/NDC Minimum Invoiced",
-    min_value=1,
-    value=100,
-    step=1
-)
+if enable_min_criteria:
+    min_bo = st.sidebar.number_input(
+        "BPO Minimum Invoiced",
+        min_value=0,
+        value=30,
+        step=1
+    )
+
+    min_other = st.sidebar.number_input(
+        "SPO/HPO/GPO/IDC/NDC Minimum Invoiced",
+        min_value=0,
+        value=100,
+        step=1
+    )
+else:
+    min_bo = 0
+    min_other = 0
 uploaded_file = None
 
 if show_lowest or show_100:
