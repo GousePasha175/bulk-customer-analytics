@@ -528,6 +528,222 @@ selected_division = st.selectbox(
 division_df = daily[
     daily["division-office-name"] == selected_division
 ].copy()
+# ==========================================================
+# DIVISION SUMMARY
+# ==========================================================
+
+bo_df = division_df[
+    division_df["office-type-code"] == "BPO"
+].copy()
+
+other_df = division_df[
+    division_df["office-type-code"] != "BPO"
+].copy()
+
+bo_df = bo_df[
+    bo_df["invoice-count"] >= min_bo
+]
+
+other_df = other_df[
+    other_df["invoice-count"] >= min_other
+]
+
+division_articles = int(
+    division_df["invoice-count"].sum()
+)
+
+avg_del = division_df["Delivery %"].mean()
+
+avg_dep = division_df["Deposit %"].mean()
+
+avg_red = division_df["Redirect %"].mean()
+
+avg_ret = division_df["Return %"].mean()
+
+st.markdown(
+    f"<div class='dm-title'>📍 {selected_division}</div>",
+    unsafe_allow_html=True
+)
+
+c1,c2,c3,c4 = st.columns(4)
+
+with c1:
+    kpi("Total Offices",len(division_df))
+
+with c2:
+    kpi("Branch Offices",len(bo_df))
+
+with c3:
+    kpi("HO/SO/IDC/NDC",len(other_df))
+
+with c4:
+    kpi("Articles",f"{division_articles:,}")
+
+c5,c6,c7,c8 = st.columns(4)
+
+with c5:
+    kpi("Delivery",f"{avg_del:.2f}%")
+
+with c6:
+    kpi("Deposit",f"{avg_dep:.2f}%")
+
+with c7:
+    kpi("Redirect",f"{avg_red:.2f}%")
+
+with c8:
+    kpi("Return",f"{avg_ret:.2f}%")
+
+# ==========================================================
+# TABS
+# ==========================================================
+
+delivery_tab,deposit_tab,redirect_tab,return_tab = st.tabs(
+[
+"🚚 Delivery",
+"📥 Deposit",
+"🔀 Redirect",
+"↩ Return"
+]
+)
+
+# ==========================================================
+# REPORT FUNCTION
+# ==========================================================
+
+def render_report(
+    df_other,
+    df_bo,
+    metric,
+    count_col,
+    title,
+    ascending=False
+):
+
+    other = (
+        df_other
+        .sort_values(
+            [metric,"invoice-count"],
+            ascending=[ascending,False]
+        )
+        .head(15)
+    )
+
+    bo = (
+        df_bo
+        .sort_values(
+            [metric,"invoice-count"],
+            ascending=[ascending,False]
+        )
+        .head(25)
+    )
+
+    left,right = st.columns(2)
+
+    with left:
+
+        st.markdown(f"### 🏤 Head / Sub Offices ({len(other)})")
+
+        display = other.copy()
+
+        cols = [
+            "office-name",
+            "invoice-count",
+            "delivery-count",
+            count_col,
+            metric
+        ]
+
+        names = [
+            "Office",
+            "Invoiced",
+            "Delivered",
+            title,
+            metric
+        ]
+
+        display = display[cols]
+
+        display.columns = names
+
+        if not show_priority:
+            st.dataframe(
+                display,
+                hide_index=True,
+                use_container_width=True
+            )
+        else:
+
+            display["Priority"] = (
+                other["Priority Score"]
+            ).astype(int)
+
+            st.dataframe(
+                display,
+                hide_index=True,
+                use_container_width=True
+            )
+
+    with right:
+
+        st.markdown(f"### 🏣 Branch Offices ({len(bo)})")
+
+        display = bo.copy()
+
+        cols = [
+            "office-name",
+            "invoice-count",
+            "delivery-count",
+            count_col,
+            metric
+        ]
+
+        names = [
+            "Office",
+            "Invoiced",
+            "Delivered",
+            title,
+            metric
+        ]
+
+        display = display[cols]
+
+        display.columns = names
+
+        if not show_priority:
+
+            st.dataframe(
+                display,
+                hide_index=True,
+                use_container_width=True
+            )
+
+        else:
+
+            display["Priority"] = (
+                bo["Priority Score"]
+            ).astype(int)
+
+            st.dataframe(
+                display,
+                hide_index=True,
+                use_container_width=True
+            )
+
+    if show_full:
+
+        st.markdown("---")
+
+        st.subheader("Complete Office List")
+
+        full = pd.concat(
+            [other,bo]
+        )
+
+        st.dataframe(
+            full,
+            hide_index=True,
+            use_container_width=True
+        )
 
 
 
