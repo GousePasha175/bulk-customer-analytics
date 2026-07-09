@@ -708,35 +708,59 @@ if show_lowest:
             "Redirect": "Redirect %", "Return": "Return %",
         }), f"Division-wise Daily Monitoring — {date_range_str}")
 
-        # ---- Four region-wide sheets (all Divisions except Hyderabad GPO Division) ----
+        # ---- 4 sheets PER Division (excl. Hyderabad GPO Division) ----
+        # Total sheets = 1 Division Summary + (5 Divisions x 4 metrics) = 21
         _detail_cols = {
-            "division-office-name": "Division", "office-name": "Office",
-            "office-type-code": "Type", "invoice-count": "Invoiced",
-            "delivery-count": "Delivered", "Delivery %": "Delivery %",
-            "deposit-count": "Deposited", "Deposit %": "Deposit %",
-            "redirection-count": "Redirected", "Redirect %": "Redirect %",
-            "return-count": "Returned", "Return %": "Return %",
+            "office-name": "Office", "office-type-code": "Type",
+            "invoice-count": "Invoiced", "delivery-count": "Delivered",
+            "Delivery %": "Delivery %", "deposit-count": "Deposited",
+            "Deposit %": "Deposit %", "redirection-count": "Redirected",
+            "Redirect %": "Redirect %", "return-count": "Returned",
+            "Return %": "Return %",
         }
-        _region_pool = daily[daily["division-office-name"] != "Hyderabad GPO Division"].copy()
-        _region_pool = _region_pool[
-            ((_region_pool["office-type-code"] == "BPO") & (_region_pool["invoice-count"] >= min_bo)) |
-            ((_region_pool["office-type-code"] != "BPO") & (_region_pool["invoice-count"] >= min_other))
-        ]
-        _region_detail = _region_pool[list(_detail_cols.keys())].rename(columns=_detail_cols)
-
-        for _sheet_label, _metric_col, _ascending in [
+        _short_div_name = {
+            "Hyderabad City Division":       "Hyd City",
+            "Hyderabad South East Division": "Hyd South East",
+            "Secunderabad Division":         "Secunderabad",
+            "Medak Division":                "Medak",
+            "Sangareddy Division":            "Sangareddy",
+            "Hyderabad Sorting Division":     "Hyd Sorting",
+        }
+        _metric_order = [
             ("Delivery", "Delivery %", True),
             ("Return",   "Return %",   False),
             ("Redirect", "Redirect %", False),
             ("Deposit",  "Deposit %",  False),
-        ]:
-            _sheet_df = _region_detail.sort_values(
-                [_metric_col, "Invoiced"], ascending=[_ascending, False]
-            ).reset_index(drop=True)
-            _write_df(
-                _sheet_label, _sheet_df,
-                f"{_sheet_label} — All Divisions (excl. Hyderabad GPO Division) — {date_range_str}"
-            )
+        ]
+        _all_divisions = [d for d in division_summary["division-office-name"]
+                           if d != "Hyderabad GPO Division"]
+
+        _used_sheet_names = set(_writer.sheets.keys())
+        for _div in _all_divisions:
+            _div_pool = daily[daily["division-office-name"] == _div].copy()
+            _div_pool = _div_pool[
+                ((_div_pool["office-type-code"] == "BPO") & (_div_pool["invoice-count"] >= min_bo)) |
+                ((_div_pool["office-type-code"] != "BPO") & (_div_pool["invoice-count"] >= min_other))
+            ]
+            _div_detail = _div_pool[list(_detail_cols.keys())].rename(columns=_detail_cols)
+            _short = _short_div_name.get(_div, _div[:15])
+
+            for _sheet_label, _metric_col, _ascending in _metric_order:
+                _sheet_df = _div_detail.sort_values(
+                    [_metric_col, "Invoiced"], ascending=[_ascending, False]
+                ).reset_index(drop=True)
+
+                _sheet_name = f"{_short} - {_sheet_label}"[:31]
+                _dedupe_i = 1
+                while _sheet_name in _used_sheet_names:
+                    _dedupe_i += 1
+                    _sheet_name = f"{_short[:24]} - {_sheet_label[:3]}{_dedupe_i}"[:31]
+                _used_sheet_names.add(_sheet_name)
+
+                _write_df(
+                    _sheet_name, _sheet_df,
+                    f"{_div} — {_sheet_label} — {date_range_str}"
+                )
 
     st.download_button(
         "⬇ Download Excel (Daily Monitoring)",
