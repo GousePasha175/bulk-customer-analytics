@@ -40,7 +40,8 @@ def _render_nav():
             _glob.glob("pages/*[Dd]igital*.py"))
     if _dig:
         st.sidebar.page_link(_dig[0].replace("\\", "/"), label="\U0001f4bb Digital Transactions")
-     _daily = (_glob.glob("pages/Daily Monitoring.py") +
+    
+    _daily = (_glob.glob("pages/Daily Monitoring.py") +
               _glob.glob("pages/*[Dd]aily*[Mm]onitoring*.py"))
     if _daily:
         st.sidebar.page_link(_daily[0].replace("\\", "/"),label="📈 Daily Monitoring")
