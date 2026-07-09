@@ -441,9 +441,13 @@ if show_lowest:
         .agg(
             Offices=("office-id", "count"),
             Articles=("invoice-count", "sum"),
+            Delivered=("delivery-count", "sum"),
             Delivery=("Delivery %", "mean"),
+            Deposited=("deposit-count", "sum"),
             Deposit=("Deposit %", "mean"),
+            Redirected=("redirection-count", "sum"),
             Redirect=("Redirect %", "mean"),
+            Returned=("return-count", "sum"),
             Return=("Return %", "mean"),
         )
     )
@@ -655,7 +659,7 @@ if show_lowest:
         kpi("Return",f"{avg_ret:.2f}%")
 
     # ----------------------------------------------------------
-    # EXCEL EXPORT — Division Summary + selected Division detail
+    # EXCEL EXPORT — replica of the on-screen Division dashboard
     # ----------------------------------------------------------
     _dm_xl_buf = BytesIO()
     with pd.ExcelWriter(_dm_xl_buf, engine="xlsxwriter") as _writer:
@@ -663,16 +667,18 @@ if show_lowest:
         _title_fmt = _wb.add_format({"bold": True, "font_size": 13, "bg_color": "#0B5CAD",
                                       "font_color": "white", "align": "center",
                                       "valign": "vcenter", "border": 1})
+        _section_fmt = _wb.add_format({"bold": True, "font_size": 11, "bg_color": "#D9E1F2",
+                                        "font_color": "#1F3864", "align": "left",
+                                        "valign": "vcenter", "border": 1})
         _hdr_fmt = _wb.add_format({"bold": True, "bg_color": "#2f3343",
                                     "font_color": "white", "border": 1,
                                     "align": "center", "valign": "vcenter", "text_wrap": True})
         _pct_fmt = _wb.add_format({"num_format": "0.00\"%\"", "border": 1, "align": "center"})
         _num_fmt = _wb.add_format({"num_format": "#,##0", "border": 1, "align": "center"})
         _cell_fmt = _wb.add_format({"border": 1})
-        _total_fmt = _wb.add_format({"bold": True, "bg_color": "#FFD700", "border": 1, "align": "center"})
-        _total_lft = _wb.add_format({"bold": True, "bg_color": "#FFD700", "border": 1})
 
-        def _write_df(sheet_name, df_out, title):
+        def _write_flat_sheet(sheet_name, df_out, title):
+            """A single flat table with title + header (used for Division Summary)."""
             ncols = len(df_out.columns)
             ws = _wb.add_worksheet(sheet_name)
             _writer.sheets[sheet_name] = ws
@@ -688,7 +694,7 @@ if show_lowest:
                     val = row[col]
                     if "%" in col:
                         ws.write_number(ri, ci, float(val), _pct_fmt)
-                    elif isinstance(val, (int, float)) and col != "Office" and col != "Type" and col != "Division":
+                    elif isinstance(val, (int, float)) and col not in ("Office", "Type", "Division"):
                         ws.write_number(ri, ci, val, _num_fmt)
                     else:
                         ws.write(ri, ci, val, _cell_fmt)
@@ -701,23 +707,59 @@ if show_lowest:
             ws.freeze_panes(2, 0)
             ws.autofilter(1, 0, 1 + len(df_out), ncols - 1)
 
-        _write_df("Division Summary", division_summary.rename(columns={
+        def _write_block(ws, row, block_df, heading):
+            """Write one titled, bordered table block starting at `row`. Returns next free row."""
+            ncols = len(block_df.columns)
+            ws.merge_range(row, 0, row, ncols - 1, heading, _section_fmt)
+            row += 1
+            for ci, col in enumerate(block_df.columns):
+                ws.write(row, ci, col, _hdr_fmt)
+            row += 1
+            for _, r in block_df.iterrows():
+                for ci, col in enumerate(block_df.columns):
+                    val = r[col]
+                    if "%" in col:
+                        ws.write_number(row, ci, float(val), _pct_fmt)
+                    elif isinstance(val, (int, float)):
+                        ws.write_number(row, ci, val, _num_fmt)
+                    else:
+                        ws.write(row, ci, val, _cell_fmt)
+                row += 1
+            return row + 1  # one blank spacer row before the next block
+
+        def _write_report_sheet(sheet_name, title, bo_display, other_display):
+            """Replica of the on-screen render_report(): BPO (top 25) block, then
+            Head/Sub Offices (top 15) block, stacked one below the other."""
+            ncols = len(bo_display.columns)
+            ws = _wb.add_worksheet(sheet_name)
+            _writer.sheets[sheet_name] = ws
+
+            ws.merge_range(0, 0, 0, ncols - 1, title, _title_fmt)
+            ws.set_row(0, 24)
+
+            row = 1
+            row = _write_block(ws, row, bo_display, f"🏣 Branch Offices ({len(bo_display)})")
+            row = _write_block(ws, row, other_display, f"🏤 Head / Sub Offices ({len(other_display)})")
+
+            for ci, col in enumerate(bo_display.columns):
+                max_len = max(
+                    bo_display[col].astype(str).map(len).max() if len(bo_display) else 0,
+                    other_display[col].astype(str).map(len).max() if len(other_display) else 0,
+                    len(col)
+                )
+                ws.set_column(ci, ci, min(max_len + 4, 40))
+
+        # ---- Sheet 1: Division Summary (counts + percentages) ----
+        _write_flat_sheet("Division Summary", division_summary.rename(columns={
             "division-office-name": "Division",
-            "Offices": "Offices", "Articles": "Articles",
             "Delivery": "Delivery %", "Deposit": "Deposit %",
             "Redirect": "Redirect %", "Return": "Return %",
         }), f"Division-wise Daily Monitoring — {date_range_str}")
 
         # ---- 4 sheets PER Division (excl. Hyderabad GPO Division) ----
+        # Each sheet exactly replicates the on-screen tab: Branch Offices (top 25)
+        # then Head/Sub Offices (top 15), for that Division + that metric.
         # Total sheets = 1 Division Summary + (5 Divisions x 4 metrics) = 21
-        _detail_cols = {
-            "office-name": "Office", "office-type-code": "Type",
-            "invoice-count": "Invoiced", "delivery-count": "Delivered",
-            "Delivery %": "Delivery %", "deposit-count": "Deposited",
-            "Deposit %": "Deposit %", "redirection-count": "Redirected",
-            "Redirect %": "Redirect %", "return-count": "Returned",
-            "Return %": "Return %",
-        }
         _short_div_name = {
             "Hyderabad City Division":       "Hyd City",
             "Hyderabad South East Division": "Hyd South East",
@@ -726,40 +768,59 @@ if show_lowest:
             "Sangareddy Division":            "Sangareddy",
             "Hyderabad Sorting Division":     "Hyd Sorting",
         }
-        _metric_order = [
-            ("Delivery", "Delivery %", True),
-            ("Return",   "Return %",   False),
-            ("Redirect", "Redirect %", False),
-            ("Deposit",  "Deposit %",  False),
+        # (label, metric column, raw count column, count column label, sort ascending)
+        _metric_configs = [
+            ("Delivery", "Delivery %", "delivery-count",    "Delivered", True),
+            ("Return",   "Return %",   "return-count",      "Returned",  False),
+            ("Redirect", "Redirect %", "redirection-count", "Redirected",False),
+            ("Deposit",  "Deposit %",  "deposit-count",     "Deposited", False),
         ]
         _all_divisions = [d for d in division_summary["division-office-name"]
                            if d != "Hyderabad GPO Division"]
 
+        def _build_display(df, metric, count_col, count_label):
+            d = pd.DataFrame({
+                "Office": df["office-name"].values,
+                "Invoiced": df["invoice-count"].values,
+                "Delivered": df["delivery-count"].values,
+            })
+            if count_col != "delivery-count":
+                d[count_label] = df[count_col].values
+            d[metric] = df[metric].values
+            return d
+
         _used_sheet_names = set(_writer.sheets.keys())
         for _div in _all_divisions:
-            _div_pool = daily[daily["division-office-name"] == _div].copy()
-            _div_pool = _div_pool[
-                ((_div_pool["office-type-code"] == "BPO") & (_div_pool["invoice-count"] >= min_bo)) |
-                ((_div_pool["office-type-code"] != "BPO") & (_div_pool["invoice-count"] >= min_other))
-            ]
-            _div_detail = _div_pool[list(_detail_cols.keys())].rename(columns=_detail_cols)
+            _div_pool = daily[daily["division-office-name"] == _div]
+            _div_bo = _div_pool[_div_pool["office-type-code"] == "BPO"]
+            _div_bo = _div_bo[_div_bo["invoice-count"] >= min_bo]
+            _div_other = _div_pool[_div_pool["office-type-code"] != "BPO"]
+            _div_other = _div_other[_div_other["invoice-count"] >= min_other]
+
             _short = _short_div_name.get(_div, _div[:15])
 
-            for _sheet_label, _metric_col, _ascending in _metric_order:
-                _sheet_df = _div_detail.sort_values(
-                    [_metric_col, "Invoiced"], ascending=[_ascending, False]
-                ).reset_index(drop=True)
+            for _label, _metric, _count_col, _count_label, _ascending in _metric_configs:
+                _bo_top = _div_bo.sort_values(
+                    [_metric, "invoice-count"], ascending=[_ascending, False]
+                ).head(25)
+                _other_top = _div_other.sort_values(
+                    [_metric, "invoice-count"], ascending=[_ascending, False]
+                ).head(15)
 
-                _sheet_name = f"{_short} - {_sheet_label}"[:31]
+                _bo_display = _build_display(_bo_top, _metric, _count_col, _count_label)
+                _other_display = _build_display(_other_top, _metric, _count_col, _count_label)
+
+                _sheet_name = f"{_short} - {_label}"[:31]
                 _dedupe_i = 1
                 while _sheet_name in _used_sheet_names:
                     _dedupe_i += 1
-                    _sheet_name = f"{_short[:24]} - {_sheet_label[:3]}{_dedupe_i}"[:31]
+                    _sheet_name = f"{_short[:24]} - {_label[:3]}{_dedupe_i}"[:31]
                 _used_sheet_names.add(_sheet_name)
 
-                _write_df(
-                    _sheet_name, _sheet_df,
-                    f"{_div} — {_sheet_label} — {date_range_str}"
+                _write_report_sheet(
+                    _sheet_name,
+                    f"{_div} — {_label} — {date_range_str}",
+                    _bo_display, _other_display
                 )
 
     st.download_button(
