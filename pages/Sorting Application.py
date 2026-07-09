@@ -30,6 +30,7 @@ def _render_nav():
         ("pages/Bulk_Analytics.py|pages/*[Bb]ulk*.py", "📊 Bulk Customer Analytics"),
         ("pages/Delivery_Productivity.py|pages/*[Dd]elivery*.py", "📦 Delivery Productivity"),
         ("pages/1_Digital_Transactions.py|pages/*[Dd]igital*.py", "💻 Digital Transactions"),
+        ("pages/Daily Monitoring.py","📈 Daily Monitoring"),
         ("pages/POSB Daily Report.py|pages/*[Pp][Oo][Ss][Bb]*.py", "📮 POSB Daily Report"),
         ("pages/Sorting Application.py|pages/*[Ss]orting*.py", "📮 Sorting Assistance"),
     ]:
