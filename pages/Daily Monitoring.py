@@ -708,22 +708,40 @@ if show_lowest:
             "Redirect": "Redirect %", "Return": "Return %",
         }), f"Division-wise Daily Monitoring — {date_range_str}")
 
-        _div_detail_cols = {
-            "office-name": "Office", "office-type-code": "Type",
-            "invoice-count": "Invoiced", "delivery-count": "Delivered",
-            "Delivery %": "Delivery %", "deposit-count": "Deposited",
-            "Deposit %": "Deposit %", "redirection-count": "Redirected",
-            "Redirect %": "Redirect %", "return-count": "Returned",
-            "Return %": "Return %",
+        # ---- Four region-wide sheets (all Divisions except Hyderabad GPO Division) ----
+        _detail_cols = {
+            "division-office-name": "Division", "office-name": "Office",
+            "office-type-code": "Type", "invoice-count": "Invoiced",
+            "delivery-count": "Delivered", "Delivery %": "Delivery %",
+            "deposit-count": "Deposited", "Deposit %": "Deposit %",
+            "redirection-count": "Redirected", "Redirect %": "Redirect %",
+            "return-count": "Returned", "Return %": "Return %",
         }
-        _div_detail = division_df[list(_div_detail_cols.keys())].rename(columns=_div_detail_cols)
-        _sheet_name = selected_division[:31].replace("/", "-")
-        _write_df(_sheet_name, _div_detail, f"{selected_division} — {date_range_str}")
+        _region_pool = daily[daily["division-office-name"] != "Hyderabad GPO Division"].copy()
+        _region_pool = _region_pool[
+            ((_region_pool["office-type-code"] == "BPO") & (_region_pool["invoice-count"] >= min_bo)) |
+            ((_region_pool["office-type-code"] != "BPO") & (_region_pool["invoice-count"] >= min_other))
+        ]
+        _region_detail = _region_pool[list(_detail_cols.keys())].rename(columns=_detail_cols)
+
+        for _sheet_label, _metric_col, _ascending in [
+            ("Delivery", "Delivery %", True),
+            ("Return",   "Return %",   False),
+            ("Redirect", "Redirect %", False),
+            ("Deposit",  "Deposit %",  False),
+        ]:
+            _sheet_df = _region_detail.sort_values(
+                [_metric_col, "Invoiced"], ascending=[_ascending, False]
+            ).reset_index(drop=True)
+            _write_df(
+                _sheet_label, _sheet_df,
+                f"{_sheet_label} — All Divisions (excl. Hyderabad GPO Division) — {date_range_str}"
+            )
 
     st.download_button(
         "⬇ Download Excel (Daily Monitoring)",
         data=_dm_xl_buf.getvalue(),
-        file_name=f"Daily_Monitoring_{selected_division.replace(' ', '_')}.xlsx",
+        file_name=f"Daily_Monitoring_{report_from.strftime('%d%m%Y')}_{report_to.strftime('%d%m%Y')}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
