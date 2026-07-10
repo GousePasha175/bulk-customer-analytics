@@ -896,31 +896,39 @@ if show_lowest:
     for _i, _div in enumerate(_all_divisions):
         _short = _short_div_name.get(_div, _div[:15])
         with _dl_cols[_i]:
-            st.download_button(
-                f"⬇ {_short}",
-                data=_build_division_excel(_div),
-                file_name=(f"Daily_Monitoring_{_short.replace(' ', '_')}_"
-                           f"{report_from.strftime('%d%m%Y')}_{report_to.strftime('%d%m%Y')}.xlsx"),
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key=f"dl_{_div}"
-            )
-            _div_pool_for_nh = daily[daily["division-office-name"] == _div]
-            _div_nh_display = compute_not_handled_display(_div_pool_for_nh, include_division_col=False)
-            _div_nh_xl = write_not_handled_excel(
-                _div_nh_display if not _div_nh_display.empty
-                else pd.DataFrame(columns=["Sl. No.", "Office", "Type", "Invoiced", "Delivered",
-                                            "Deposited", "Returned", "Redirected",
-                                            "Handled Total", "Discrepancy"]),
-                f"{_div} — Not Handled — {date_range_str}"
-            )
-            st.download_button(
-                f"⬇ {_short} (Not Handled)",
-                data=_div_nh_xl,
-                file_name=(f"Not_Handled_{_short.replace(' ', '_')}_"
-                           f"{report_from.strftime('%d%m%Y')}_{report_to.strftime('%d%m%Y')}.xlsx"),
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key=f"dl_nh_{_div}"
-            )
+            with st.container(border=True):
+                st.markdown(
+                    f"<div style='text-align:center;font-weight:700;font-size:14px;"
+                    f"margin-bottom:8px;color:#1F3864;'>{_short}</div>",
+                    unsafe_allow_html=True
+                )
+                st.download_button(
+                    "📊 Full Report",
+                    data=_build_division_excel(_div),
+                    file_name=(f"Daily_Monitoring_{_short.replace(' ', '_')}_"
+                               f"{report_from.strftime('%d%m%Y')}_{report_to.strftime('%d%m%Y')}.xlsx"),
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key=f"dl_{_div}",
+                    use_container_width=True
+                )
+                _div_pool_for_nh = daily[daily["division-office-name"] == _div]
+                _div_nh_display = compute_not_handled_display(_div_pool_for_nh, include_division_col=False)
+                _div_nh_xl = write_not_handled_excel(
+                    _div_nh_display if not _div_nh_display.empty
+                    else pd.DataFrame(columns=["Sl. No.", "Office", "Type", "Invoiced", "Delivered",
+                                                "Deposited", "Returned", "Redirected",
+                                                "Handled Total", "Discrepancy"]),
+                    f"{_div} — Not Handled — {date_range_str}"
+                )
+                st.download_button(
+                    "⚠️ Not Handled",
+                    data=_div_nh_xl,
+                    file_name=(f"Not_Handled_{_short.replace(' ', '_')}_"
+                               f"{report_from.strftime('%d%m%Y')}_{report_to.strftime('%d%m%Y')}.xlsx"),
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key=f"dl_nh_{_div}",
+                    use_container_width=True
+                )
 
     # ==========================================================
     # TABS
