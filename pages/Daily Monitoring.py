@@ -398,6 +398,89 @@ def kpi(title, value):
         <div class="kpi_val">{value}</div>
     </div>
     """, unsafe_allow_html=True)
+
+# ----------------------------------------------------------
+# "All Invoiced Articles Not Handled" — shared computation
+# ----------------------------------------------------------
+
+def compute_not_handled_display(df_scope, include_division_col=True):
+    """
+    Flags offices where Invoiced != Delivered + Deposited + Returned +
+    Redirected + Beat Diversion. Returns a display-ready DataFrame with a
+    Sl. No. column, sorted by highest absolute Discrepancy first. The
+    Beat Diversion column is dropped entirely if every value in scope is 0.
+    """
+    d = df_scope.copy()
+    d["Handled Total"] = (
+        d["delivery-count"] + d["deposit-count"] + d["return-count"]
+        + d["redirection-count"] + d["beat-diversion-count"]
+    )
+    d["Discrepancy"] = d["invoice-count"] - d["Handled Total"]
+    d = d[d["Discrepancy"] != 0].copy()
+    d["_abs_disc"] = d["Discrepancy"].abs()
+    d = d.sort_values("_abs_disc", ascending=False)
+
+    show_beat_col = bool(d["beat-diversion-count"].sum() != 0) if len(d) else False
+
+    cols = {}
+    if include_division_col:
+        cols["Division"] = d["division-office-name"].values
+    cols["Office"] = d["office-name"].values
+    cols["Type"] = d["office-type-code"].values
+    cols["Invoiced"] = d["invoice-count"].values
+    cols["Delivered"] = d["delivery-count"].values
+    cols["Deposited"] = d["deposit-count"].values
+    cols["Returned"] = d["return-count"].values
+    cols["Redirected"] = d["redirection-count"].values
+    if show_beat_col:
+        cols["Beat Diversion"] = d["beat-diversion-count"].values
+    cols["Handled Total"] = d["Handled Total"].values
+    cols["Discrepancy"] = d["Discrepancy"].values
+
+    display = pd.DataFrame(cols)
+    display.insert(0, "Sl. No.", range(1, len(display) + 1))
+    return display
+
+def write_not_handled_excel(display_df, title, sheet_name="Not Handled"):
+    """Build a standalone one-sheet Excel workbook for a Not-Handled listing."""
+    buf = BytesIO()
+    with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
+        wb = writer.book
+        ncols = len(display_df.columns)
+        ws = wb.add_worksheet(sheet_name)
+        writer.sheets[sheet_name] = ws
+
+        title_fmt = wb.add_format({"bold": True, "font_size": 13, "bg_color": "#cc0000",
+                                    "font_color": "white", "align": "center",
+                                    "valign": "vcenter", "border": 1})
+        hdr_fmt = wb.add_format({"bold": True, "bg_color": "#2f3343",
+                                  "font_color": "white", "border": 1,
+                                  "align": "center", "valign": "vcenter"})
+        num_fmt = wb.add_format({"num_format": "#,##0", "border": 1, "align": "center"})
+        cell_fmt = wb.add_format({"border": 1})
+
+        ws.merge_range(0, 0, 0, ncols - 1, title, title_fmt)
+        ws.set_row(0, 24)
+        for ci, col in enumerate(display_df.columns):
+            ws.write(1, ci, col, hdr_fmt)
+
+        for ri, (_, row) in enumerate(display_df.iterrows(), start=2):
+            for ci, col in enumerate(display_df.columns):
+                val = row[col]
+                if isinstance(val, (int, float)):
+                    ws.write_number(ri, ci, val, num_fmt)
+                else:
+                    ws.write(ri, ci, val, cell_fmt)
+
+        for ci, col in enumerate(display_df.columns):
+            max_data_len = display_df[col].astype(str).map(len).max() if len(display_df) else 0
+            width = max(max_data_len, len(col)) + 4
+            ws.set_column(ci, ci, min(width, 45))
+
+        ws.freeze_panes(2, 0)
+        ws.autofilter(1, 0, 1 + len(display_df), ncols - 1)
+    return buf.getvalue()
+
 if show_lowest:
     # DAILY MONITORING REPORTING ENGINE - PART 1A
     # ==========================================================
@@ -821,6 +904,23 @@ if show_lowest:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key=f"dl_{_div}"
             )
+            _div_pool_for_nh = daily[daily["division-office-name"] == _div]
+            _div_nh_display = compute_not_handled_display(_div_pool_for_nh, include_division_col=False)
+            _div_nh_xl = write_not_handled_excel(
+                _div_nh_display if not _div_nh_display.empty
+                else pd.DataFrame(columns=["Sl. No.", "Office", "Type", "Invoiced", "Delivered",
+                                            "Deposited", "Returned", "Redirected",
+                                            "Handled Total", "Discrepancy"]),
+                f"{_div} — Not Handled — {date_range_str}"
+            )
+            st.download_button(
+                f"⬇ {_short} (Not Handled)",
+                data=_div_nh_xl,
+                file_name=(f"Not_Handled_{_short.replace(' ', '_')}_"
+                           f"{report_from.strftime('%d%m%Y')}_{report_to.strftime('%d%m%Y')}.xlsx"),
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key=f"dl_nh_{_div}"
+            )
 
     # ==========================================================
     # TABS
@@ -983,6 +1083,23 @@ if show_lowest:
             "Returned",
             ascending=False
         )
+
+    # ---- Embedded: All Invoiced Articles Not Handled, for the SELECTED Division ----
+    st.markdown("<hr style='margin-top:24px;margin-bottom:16px;'>", unsafe_allow_html=True)
+    st.markdown(
+        f"<div class='dm-title'>⚠️ All Invoiced Articles Not Handled — {selected_division} — {date_range_str}</div>",
+        unsafe_allow_html=True
+    )
+    _div_not_handled = compute_not_handled_display(division_df, include_division_col=False)
+    if _div_not_handled.empty:
+        st.success(f"✅ All invoiced articles tally in {selected_division} — nothing to flag today.")
+    else:
+        _dnh1, _dnh2 = st.columns(2)
+        with _dnh1:
+            kpi("Flagged Offices", len(_div_not_handled))
+        with _dnh2:
+            kpi("Articles Not Tallying", f"{int(_div_not_handled['Discrepancy'].abs().sum()):,}")
+        st.dataframe(_div_not_handled, hide_index=True, use_container_width=True)
 else:
     st.info("Enable 'Division-wise Daily Monitoring' from the sidebar to view this report.")
 
@@ -1091,87 +1208,28 @@ if show_not_handled:
         unsafe_allow_html=True
     )
 
-    _handled_total = (
-        daily["delivery-count"] + daily["deposit-count"] + daily["return-count"]
-        + daily["redirection-count"] + daily["beat-diversion-count"]
-    )
-    not_handled = daily.copy()
-    not_handled["Handled Total"] = _handled_total
-    not_handled["Discrepancy"] = not_handled["invoice-count"] - not_handled["Handled Total"]
-    not_handled = not_handled[not_handled["Discrepancy"] != 0]
-    not_handled = not_handled.sort_values(
-        ["division-office-name", "Discrepancy"], ascending=[True, False]
-    )
+    not_handled_display = compute_not_handled_display(daily, include_division_col=True)
 
-    if not_handled.empty:
+    if not_handled_display.empty:
         st.success("✅ All invoiced articles tally with Delivered + Deposited + Returned + Redirected + Beat Diversion — nothing to flag today.")
     else:
         nh1, nh2, nh3 = st.columns(3)
         with nh1:
-            kpi("Flagged Offices", len(not_handled))
+            kpi("Flagged Offices", len(not_handled_display))
         with nh2:
-            kpi("Divisions Affected", not_handled["division-office-name"].nunique())
+            kpi("Divisions Affected", not_handled_display["Division"].nunique())
         with nh3:
-            kpi("Articles Not Tallying", f"{int(not_handled['Discrepancy'].abs().sum()):,}")
-
-        not_handled_display = pd.DataFrame({
-            "Division": not_handled["division-office-name"],
-            "Office": not_handled["office-name"],
-            "Type": not_handled["office-type-code"],
-            "Invoiced": not_handled["invoice-count"],
-            "Delivered": not_handled["delivery-count"],
-            "Deposited": not_handled["deposit-count"],
-            "Returned": not_handled["return-count"],
-            "Redirected": not_handled["redirection-count"],
-            "Beat Diversion": not_handled["beat-diversion-count"],
-            "Handled Total": not_handled["Handled Total"],
-            "Discrepancy": not_handled["Discrepancy"],
-        })
+            kpi("Articles Not Tallying", f"{int(not_handled_display['Discrepancy'].abs().sum()):,}")
 
         st.dataframe(not_handled_display, hide_index=True, use_container_width=True)
 
-        # Excel download — one sheet, all Divisions together (same as 100% Deposit)
-        nh_xl_buf = BytesIO()
-        with pd.ExcelWriter(nh_xl_buf, engine="xlsxwriter") as writer:
-            wb = writer.book
-            ncols = len(not_handled_display.columns)
-            ws = wb.add_worksheet("Not Handled")
-            writer.sheets["Not Handled"] = ws
-
-            title_fmt = wb.add_format({"bold": True, "font_size": 13, "bg_color": "#cc0000",
-                                        "font_color": "white", "align": "center",
-                                        "valign": "vcenter", "border": 1})
-            hdr_fmt = wb.add_format({"bold": True, "bg_color": "#2f3343",
-                                      "font_color": "white", "border": 1,
-                                      "align": "center", "valign": "vcenter"})
-            num_fmt = wb.add_format({"num_format": "#,##0", "border": 1, "align": "center"})
-            cell_fmt = wb.add_format({"border": 1})
-
-            ws.merge_range(0, 0, 0, ncols - 1,
-                            f"All Invoiced Articles Not Handled — {date_range_str}", title_fmt)
-            ws.set_row(0, 24)
-            for ci, col in enumerate(not_handled_display.columns):
-                ws.write(1, ci, col, hdr_fmt)
-
-            for ri, (_, row) in enumerate(not_handled_display.iterrows(), start=2):
-                for ci, col in enumerate(not_handled_display.columns):
-                    val = row[col]
-                    if isinstance(val, (int, float)):
-                        ws.write_number(ri, ci, val, num_fmt)
-                    else:
-                        ws.write(ri, ci, val, cell_fmt)
-
-            for ci, col in enumerate(not_handled_display.columns):
-                max_data_len = not_handled_display[col].astype(str).map(len).max() if len(not_handled_display) else 0
-                width = max(max_data_len, len(col)) + 4
-                ws.set_column(ci, ci, min(width, 45))
-
-            ws.freeze_panes(2, 0)
-            ws.autofilter(1, 0, 1 + len(not_handled_display), ncols - 1)
-
+        nh_xl_buf = write_not_handled_excel(
+            not_handled_display,
+            f"All Invoiced Articles Not Handled — {date_range_str}"
+        )
         st.download_button(
             "⬇ Download All Invoiced Articles Not Handled (Excel)",
-            data=nh_xl_buf.getvalue(),
+            data=nh_xl_buf,
             file_name=f"Invoiced_Articles_Not_Handled_{report_from.strftime('%d%m%Y')}_{report_to.strftime('%d%m%Y')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
