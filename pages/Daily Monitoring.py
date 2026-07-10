@@ -178,6 +178,14 @@ show_100 = st.sidebar.checkbox(
     "100% Deposit Offices",
     value=False
 )
+
+show_not_handled = st.sidebar.checkbox(
+    "All Invoiced Articles Not Handled",
+    value=False,
+    help="Flags offices where Delivered + Deposited + Returned + Redirected + "
+         "Beat Diversion does not add up to Invoiced — i.e. some invoiced "
+         "articles weren't accounted for/updated the same day."
+)
 st.sidebar.markdown("---")
 st.sidebar.subheader("📌 Minimum Invoiced Count")
 
@@ -207,7 +215,7 @@ else:
     min_other = 0
 uploaded_file = None
 
-if show_lowest or show_100:
+if show_lowest or show_100 or show_not_handled:
     uploaded_file = st.file_uploader(
         "Upload Daily Monitoring CSV",
         type=["csv"]
@@ -1065,5 +1073,105 @@ if show_100:
             "⬇ Download 100% Deposit Offices (Excel)",
             data=xl_buf.getvalue(),
             file_name=f"100_Percent_Deposit_Offices_{report_from.strftime('%d%m%Y')}_{report_to.strftime('%d%m%Y')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+# ==========================================================
+# ALL INVOICED ARTICLES NOT HANDLED (TALLY CHECK)
+# ==========================================================
+# Invoiced count should equal Delivered + Deposited + Returned + Redirected +
+# Beat Diversion. Any office where these don't tally means some invoiced
+# articles weren't accounted for / updated the same day. Independent of the
+# other reports: works whether or not they're also enabled.
+
+if show_not_handled:
+    st.markdown("<hr style='margin-top:30px;margin-bottom:20px;'>", unsafe_allow_html=True)
+    st.markdown(
+        f"<div class='dm-title'>⚠️ All Invoiced Articles Not Handled — {date_range_str}</div>",
+        unsafe_allow_html=True
+    )
+
+    _handled_total = (
+        daily["delivery-count"] + daily["deposit-count"] + daily["return-count"]
+        + daily["redirection-count"] + daily["beat-diversion-count"]
+    )
+    not_handled = daily.copy()
+    not_handled["Handled Total"] = _handled_total
+    not_handled["Discrepancy"] = not_handled["invoice-count"] - not_handled["Handled Total"]
+    not_handled = not_handled[not_handled["Discrepancy"] != 0]
+    not_handled = not_handled.sort_values(
+        ["division-office-name", "Discrepancy"], ascending=[True, False]
+    )
+
+    if not_handled.empty:
+        st.success("✅ All invoiced articles tally with Delivered + Deposited + Returned + Redirected + Beat Diversion — nothing to flag today.")
+    else:
+        nh1, nh2, nh3 = st.columns(3)
+        with nh1:
+            kpi("Flagged Offices", len(not_handled))
+        with nh2:
+            kpi("Divisions Affected", not_handled["division-office-name"].nunique())
+        with nh3:
+            kpi("Articles Not Tallying", f"{int(not_handled['Discrepancy'].abs().sum()):,}")
+
+        not_handled_display = pd.DataFrame({
+            "Division": not_handled["division-office-name"],
+            "Office": not_handled["office-name"],
+            "Type": not_handled["office-type-code"],
+            "Invoiced": not_handled["invoice-count"],
+            "Delivered": not_handled["delivery-count"],
+            "Deposited": not_handled["deposit-count"],
+            "Returned": not_handled["return-count"],
+            "Redirected": not_handled["redirection-count"],
+            "Beat Diversion": not_handled["beat-diversion-count"],
+            "Handled Total": not_handled["Handled Total"],
+            "Discrepancy": not_handled["Discrepancy"],
+        })
+
+        st.dataframe(not_handled_display, hide_index=True, use_container_width=True)
+
+        # Excel download — one sheet, all Divisions together (same as 100% Deposit)
+        nh_xl_buf = BytesIO()
+        with pd.ExcelWriter(nh_xl_buf, engine="xlsxwriter") as writer:
+            wb = writer.book
+            ncols = len(not_handled_display.columns)
+            ws = wb.add_worksheet("Not Handled")
+            writer.sheets["Not Handled"] = ws
+
+            title_fmt = wb.add_format({"bold": True, "font_size": 13, "bg_color": "#cc0000",
+                                        "font_color": "white", "align": "center",
+                                        "valign": "vcenter", "border": 1})
+            hdr_fmt = wb.add_format({"bold": True, "bg_color": "#2f3343",
+                                      "font_color": "white", "border": 1,
+                                      "align": "center", "valign": "vcenter"})
+            num_fmt = wb.add_format({"num_format": "#,##0", "border": 1, "align": "center"})
+            cell_fmt = wb.add_format({"border": 1})
+
+            ws.merge_range(0, 0, 0, ncols - 1,
+                            f"All Invoiced Articles Not Handled — {date_range_str}", title_fmt)
+            ws.set_row(0, 24)
+            for ci, col in enumerate(not_handled_display.columns):
+                ws.write(1, ci, col, hdr_fmt)
+
+            for ri, (_, row) in enumerate(not_handled_display.iterrows(), start=2):
+                for ci, col in enumerate(not_handled_display.columns):
+                    val = row[col]
+                    if isinstance(val, (int, float)):
+                        ws.write_number(ri, ci, val, num_fmt)
+                    else:
+                        ws.write(ri, ci, val, cell_fmt)
+
+            for ci, col in enumerate(not_handled_display.columns):
+                max_data_len = not_handled_display[col].astype(str).map(len).max() if len(not_handled_display) else 0
+                width = max(max_data_len, len(col)) + 4
+                ws.set_column(ci, ci, min(width, 45))
+
+            ws.freeze_panes(2, 0)
+            ws.autofilter(1, 0, 1 + len(not_handled_display), ncols - 1)
+
+        st.download_button(
+            "⬇ Download All Invoiced Articles Not Handled (Excel)",
+            data=nh_xl_buf.getvalue(),
+            file_name=f"Invoiced_Articles_Not_Handled_{report_from.strftime('%d%m%Y')}_{report_to.strftime('%d%m%Y')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
