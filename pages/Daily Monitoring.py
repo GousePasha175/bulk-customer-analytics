@@ -659,176 +659,160 @@ if show_lowest:
         kpi("Return",f"{avg_ret:.2f}%")
 
     # ----------------------------------------------------------
-    # EXCEL EXPORT — replica of the on-screen Division dashboard
+    # EXCEL EXPORT — one workbook PER Division, each a replica of
+    # the on-screen Division dashboard for that Division only.
     # ----------------------------------------------------------
-    _dm_xl_buf = BytesIO()
-    with pd.ExcelWriter(_dm_xl_buf, engine="xlsxwriter") as _writer:
-        _wb = _writer.book
-        _title_fmt = _wb.add_format({"bold": True, "font_size": 13, "bg_color": "#0B5CAD",
-                                      "font_color": "white", "align": "center",
-                                      "valign": "vcenter", "border": 1})
-        _section_fmt = _wb.add_format({"bold": True, "font_size": 11, "bg_color": "#D9E1F2",
-                                        "font_color": "#1F3864", "align": "left",
+    _short_div_name = {
+        "Hyderabad City Division":       "Hyd City",
+        "Hyderabad South East Division": "Hyd South East",
+        "Secunderabad Division":         "Secunderabad",
+        "Medak Division":                "Medak",
+        "Sangareddy Division":            "Sangareddy",
+        "Hyderabad Sorting Division":     "Hyd Sorting",
+    }
+    # (label, metric column, raw count column, count column label, sort ascending)
+    _metric_configs = [
+        ("Delivery", "Delivery %", "delivery-count",    "Delivered", True),
+        ("Return",   "Return %",   "return-count",      "Returned",  False),
+        ("Redirect", "Redirect %", "redirection-count", "Redirected",False),
+        ("Deposit",  "Deposit %",  "deposit-count",     "Deposited", False),
+    ]
+    _all_divisions = [d for d in division_summary["division-office-name"]
+                       if d != "Hyderabad GPO Division"]
+
+    def _build_display(df, metric, count_col, count_label):
+        d = pd.DataFrame({
+            "Office": df["office-name"].values,
+            "Invoiced": df["invoice-count"].values,
+            "Delivered": df["delivery-count"].values,
+        })
+        if count_col != "delivery-count":
+            d[count_label] = df[count_col].values
+        d[metric] = df[metric].values
+        return d
+
+    def _build_division_excel(div):
+        """Build a single self-contained workbook for one Division: a Summary
+        sheet plus 4 metric sheets, each replicating the on-screen tab exactly
+        (Branch Offices top-25, then Head/Sub Offices top-15, stacked)."""
+        buf = BytesIO()
+        with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
+            wb = writer.book
+            title_fmt = wb.add_format({"bold": True, "font_size": 13, "bg_color": "#0B5CAD",
+                                        "font_color": "white", "align": "center",
                                         "valign": "vcenter", "border": 1})
-        _hdr_fmt = _wb.add_format({"bold": True, "bg_color": "#2f3343",
-                                    "font_color": "white", "border": 1,
-                                    "align": "center", "valign": "vcenter", "text_wrap": True})
-        _pct_fmt = _wb.add_format({"num_format": "0.00\"%\"", "border": 1, "align": "center"})
-        _num_fmt = _wb.add_format({"num_format": "#,##0", "border": 1, "align": "center"})
-        _cell_fmt = _wb.add_format({"border": 1})
+            section_fmt = wb.add_format({"bold": True, "font_size": 11, "bg_color": "#D9E1F2",
+                                          "font_color": "#1F3864", "align": "left",
+                                          "valign": "vcenter", "border": 1})
+            hdr_fmt = wb.add_format({"bold": True, "bg_color": "#2f3343",
+                                      "font_color": "white", "border": 1,
+                                      "align": "center", "valign": "vcenter", "text_wrap": True})
+            pct_fmt = wb.add_format({"num_format": "0.00\"%\"", "border": 1, "align": "center"})
+            num_fmt = wb.add_format({"num_format": "#,##0", "border": 1, "align": "center"})
+            cell_fmt = wb.add_format({"border": 1})
 
-        def _write_flat_sheet(sheet_name, df_out, title):
-            """A single flat table with title + header (used for Division Summary)."""
-            ncols = len(df_out.columns)
-            ws = _wb.add_worksheet(sheet_name)
-            _writer.sheets[sheet_name] = ws
-
-            ws.merge_range(0, 0, 0, ncols - 1, title, _title_fmt)
-            ws.set_row(0, 24)
-            for ci, col in enumerate(df_out.columns):
-                ws.write(1, ci, col, _hdr_fmt)
-            ws.set_row(1, 30)
-
-            for ri, (_, row) in enumerate(df_out.iterrows(), start=2):
+            def write_flat_sheet(sheet_name, df_out, title):
+                ncols = len(df_out.columns)
+                ws = wb.add_worksheet(sheet_name)
+                writer.sheets[sheet_name] = ws
+                ws.merge_range(0, 0, 0, ncols - 1, title, title_fmt)
+                ws.set_row(0, 24)
                 for ci, col in enumerate(df_out.columns):
-                    val = row[col]
-                    if "%" in col:
-                        ws.write_number(ri, ci, float(val), _pct_fmt)
-                    elif isinstance(val, (int, float)) and col not in ("Office", "Type", "Division"):
-                        ws.write_number(ri, ci, val, _num_fmt)
-                    else:
-                        ws.write(ri, ci, val, _cell_fmt)
+                    ws.write(1, ci, col, hdr_fmt)
+                ws.set_row(1, 30)
+                for ri, (_, row) in enumerate(df_out.iterrows(), start=2):
+                    for ci, col in enumerate(df_out.columns):
+                        val = row[col]
+                        if "%" in col:
+                            ws.write_number(ri, ci, float(val), pct_fmt)
+                        elif isinstance(val, (int, float)) and col not in ("Office", "Type", "Division"):
+                            ws.write_number(ri, ci, val, num_fmt)
+                        else:
+                            ws.write(ri, ci, val, cell_fmt)
+                for ci, col in enumerate(df_out.columns):
+                    max_data_len = df_out[col].astype(str).map(len).max() if len(df_out) else 0
+                    width = max(max_data_len, len(col)) + 4
+                    ws.set_column(ci, ci, min(width, 45))
 
-            for ci, col in enumerate(df_out.columns):
-                max_data_len = df_out[col].astype(str).map(len).max() if len(df_out) else 0
-                width = max(max_data_len, len(col)) + 4
-                ws.set_column(ci, ci, min(width, 45))
-
-            ws.freeze_panes(2, 0)
-            ws.autofilter(1, 0, 1 + len(df_out), ncols - 1)
-
-        def _write_block(ws, row, block_df, heading):
-            """Write one titled, bordered table block starting at `row`. Returns next free row."""
-            ncols = len(block_df.columns)
-            ws.merge_range(row, 0, row, ncols - 1, heading, _section_fmt)
-            row += 1
-            for ci, col in enumerate(block_df.columns):
-                ws.write(row, ci, col, _hdr_fmt)
-            row += 1
-            for _, r in block_df.iterrows():
-                for ci, col in enumerate(block_df.columns):
-                    val = r[col]
-                    if "%" in col:
-                        ws.write_number(row, ci, float(val), _pct_fmt)
-                    elif isinstance(val, (int, float)):
-                        ws.write_number(row, ci, val, _num_fmt)
-                    else:
-                        ws.write(row, ci, val, _cell_fmt)
+            def write_block(ws, row, block_df, heading):
+                ncols = len(block_df.columns)
+                ws.merge_range(row, 0, row, ncols - 1, heading, section_fmt)
                 row += 1
-            return row + 1  # one blank spacer row before the next block
+                for ci, col in enumerate(block_df.columns):
+                    ws.write(row, ci, col, hdr_fmt)
+                row += 1
+                for _, r in block_df.iterrows():
+                    for ci, col in enumerate(block_df.columns):
+                        val = r[col]
+                        if "%" in col:
+                            ws.write_number(row, ci, float(val), pct_fmt)
+                        elif isinstance(val, (int, float)):
+                            ws.write_number(row, ci, val, num_fmt)
+                        else:
+                            ws.write(row, ci, val, cell_fmt)
+                    row += 1
+                return row + 1
 
-        def _write_report_sheet(sheet_name, title, bo_display, other_display):
-            """Replica of the on-screen render_report(): BPO (top 25) block, then
-            Head/Sub Offices (top 15) block, stacked one below the other."""
-            ncols = len(bo_display.columns)
-            ws = _wb.add_worksheet(sheet_name)
-            _writer.sheets[sheet_name] = ws
+            def write_report_sheet(sheet_name, title, bo_display, other_display):
+                ncols = len(bo_display.columns)
+                ws = wb.add_worksheet(sheet_name)
+                writer.sheets[sheet_name] = ws
+                ws.merge_range(0, 0, 0, ncols - 1, title, title_fmt)
+                ws.set_row(0, 24)
+                row = 1
+                row = write_block(ws, row, bo_display, f"🏣 Branch Offices ({len(bo_display)})")
+                row = write_block(ws, row, other_display, f"🏤 Head / Sub Offices ({len(other_display)})")
+                for ci, col in enumerate(bo_display.columns):
+                    max_len = max(
+                        bo_display[col].astype(str).map(len).max() if len(bo_display) else 0,
+                        other_display[col].astype(str).map(len).max() if len(other_display) else 0,
+                        len(col)
+                    )
+                    ws.set_column(ci, ci, min(max_len + 4, 40))
 
-            ws.merge_range(0, 0, 0, ncols - 1, title, _title_fmt)
-            ws.set_row(0, 24)
-
-            row = 1
-            row = _write_block(ws, row, bo_display, f"🏣 Branch Offices ({len(bo_display)})")
-            row = _write_block(ws, row, other_display, f"🏤 Head / Sub Offices ({len(other_display)})")
-
-            for ci, col in enumerate(bo_display.columns):
-                max_len = max(
-                    bo_display[col].astype(str).map(len).max() if len(bo_display) else 0,
-                    other_display[col].astype(str).map(len).max() if len(other_display) else 0,
-                    len(col)
-                )
-                ws.set_column(ci, ci, min(max_len + 4, 40))
-
-        # ---- Sheet 1: Division Summary (counts + percentages) ----
-        _write_flat_sheet("Division Summary", division_summary.rename(columns={
-            "division-office-name": "Division",
-            "Delivery": "Delivery %", "Deposit": "Deposit %",
-            "Redirect": "Redirect %", "Return": "Return %",
-        }), f"Division-wise Daily Monitoring — {date_range_str}")
-
-        # ---- 4 sheets PER Division (excl. Hyderabad GPO Division) ----
-        # Each sheet exactly replicates the on-screen tab: Branch Offices (top 25)
-        # then Head/Sub Offices (top 15), for that Division + that metric.
-        # Total sheets = 1 Division Summary + (5 Divisions x 4 metrics) = 21
-        _short_div_name = {
-            "Hyderabad City Division":       "Hyd City",
-            "Hyderabad South East Division": "Hyd South East",
-            "Secunderabad Division":         "Secunderabad",
-            "Medak Division":                "Medak",
-            "Sangareddy Division":            "Sangareddy",
-            "Hyderabad Sorting Division":     "Hyd Sorting",
-        }
-        # (label, metric column, raw count column, count column label, sort ascending)
-        _metric_configs = [
-            ("Delivery", "Delivery %", "delivery-count",    "Delivered", True),
-            ("Return",   "Return %",   "return-count",      "Returned",  False),
-            ("Redirect", "Redirect %", "redirection-count", "Redirected",False),
-            ("Deposit",  "Deposit %",  "deposit-count",     "Deposited", False),
-        ]
-        _all_divisions = [d for d in division_summary["division-office-name"]
-                           if d != "Hyderabad GPO Division"]
-
-        def _build_display(df, metric, count_col, count_label):
-            d = pd.DataFrame({
-                "Office": df["office-name"].values,
-                "Invoiced": df["invoice-count"].values,
-                "Delivered": df["delivery-count"].values,
+            # Sheet 1: this Division's own summary row
+            div_row = division_summary[division_summary["division-office-name"] == div].rename(columns={
+                "division-office-name": "Division",
+                "Delivery": "Delivery %", "Deposit": "Deposit %",
+                "Redirect": "Redirect %", "Return": "Return %",
             })
-            if count_col != "delivery-count":
-                d[count_label] = df[count_col].values
-            d[metric] = df[metric].values
-            return d
+            write_flat_sheet("Summary", div_row, f"{div} — Summary — {date_range_str}")
 
-        _used_sheet_names = set(_writer.sheets.keys())
-        for _div in _all_divisions:
-            _div_pool = daily[daily["division-office-name"] == _div]
-            _div_bo = _div_pool[_div_pool["office-type-code"] == "BPO"]
-            _div_bo = _div_bo[_div_bo["invoice-count"] >= min_bo]
-            _div_other = _div_pool[_div_pool["office-type-code"] != "BPO"]
-            _div_other = _div_other[_div_other["invoice-count"] >= min_other]
+            # Sheets 2-5: the 4 metric sheets for this Division only
+            div_pool = daily[daily["division-office-name"] == div]
+            div_bo = div_pool[div_pool["office-type-code"] == "BPO"]
+            div_bo = div_bo[div_bo["invoice-count"] >= min_bo]
+            div_other = div_pool[div_pool["office-type-code"] != "BPO"]
+            div_other = div_other[div_other["invoice-count"] >= min_other]
 
-            _short = _short_div_name.get(_div, _div[:15])
-
-            for _label, _metric, _count_col, _count_label, _ascending in _metric_configs:
-                _bo_top = _div_bo.sort_values(
-                    [_metric, "invoice-count"], ascending=[_ascending, False]
+            for label, metric, count_col, count_label, ascending in _metric_configs:
+                bo_top = div_bo.sort_values(
+                    [metric, "invoice-count"], ascending=[ascending, False]
                 ).head(25)
-                _other_top = _div_other.sort_values(
-                    [_metric, "invoice-count"], ascending=[_ascending, False]
+                other_top = div_other.sort_values(
+                    [metric, "invoice-count"], ascending=[ascending, False]
                 ).head(15)
-
-                _bo_display = _build_display(_bo_top, _metric, _count_col, _count_label)
-                _other_display = _build_display(_other_top, _metric, _count_col, _count_label)
-
-                _sheet_name = f"{_short} - {_label}"[:31]
-                _dedupe_i = 1
-                while _sheet_name in _used_sheet_names:
-                    _dedupe_i += 1
-                    _sheet_name = f"{_short[:24]} - {_label[:3]}{_dedupe_i}"[:31]
-                _used_sheet_names.add(_sheet_name)
-
-                _write_report_sheet(
-                    _sheet_name,
-                    f"{_div} — {_label} — {date_range_str}",
-                    _bo_display, _other_display
+                bo_display = _build_display(bo_top, metric, count_col, count_label)
+                other_display = _build_display(other_top, metric, count_col, count_label)
+                write_report_sheet(
+                    label, f"{div} — {label} — {date_range_str}",
+                    bo_display, other_display
                 )
+        return buf.getvalue()
 
-    st.download_button(
-        "⬇ Download Excel (Daily Monitoring)",
-        data=_dm_xl_buf.getvalue(),
-        file_name=f"Daily_Monitoring_{report_from.strftime('%d%m%Y')}_{report_to.strftime('%d%m%Y')}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+    st.markdown("##### ⬇ Download Excel by Division")
+    _dl_cols = st.columns(len(_all_divisions))
+    for _i, _div in enumerate(_all_divisions):
+        _short = _short_div_name.get(_div, _div[:15])
+        with _dl_cols[_i]:
+            st.download_button(
+                f"⬇ {_short}",
+                data=_build_division_excel(_div),
+                file_name=(f"Daily_Monitoring_{_short.replace(' ', '_')}_"
+                           f"{report_from.strftime('%d%m%Y')}_{report_to.strftime('%d%m%Y')}.xlsx"),
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key=f"dl_{_div}"
+            )
 
     # ==========================================================
     # TABS
