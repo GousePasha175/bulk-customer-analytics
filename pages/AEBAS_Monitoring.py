@@ -791,7 +791,14 @@ export_norm_to_office_id = {norm: consolidated_exact_map.get(norm) for norm in e
 export_df["matched_office_id"] = export_df["office_norm"].map(export_norm_to_office_id)
 export_df["matched_valid"] = export_df["matched_office_id"].apply(lambda v: v in om_lookup if pd.notna(v) else False)
 
-marked_ids = set(export_df.loc[export_df["matched_valid"], "matched_office_id"].unique())
+export_df["is_present"] = export_df["Status"] == "P"
+# An office counts as "marked attendance" only if it has an exact name match
+# AND at least one row with Status == "P". An office whose export rows are
+# all "A" (absent) is NOT considered marked — it should still appear in the
+# "Not Marked" list even though its name matched an Office Location.
+marked_ids = set(
+    export_df.loc[export_df["matched_valid"] & export_df["is_present"], "matched_office_id"].unique()
+)
 
 # Export rows whose Office Location has no exact match in the Consolidated sheet at all
 unmatched_export = export_df[export_df["matched_office_id"].isna()].copy()
