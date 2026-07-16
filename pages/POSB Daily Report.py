@@ -577,24 +577,44 @@ def _net_total_col(df, div):
     return 0
 
 
-def build_daily_summary(
-    ao_date_df,      # accounts opened ON report date
-    ao_cumul_df,     # accounts opened UP TO report date (cumulative)
-    net_date_df,     # net accounts ON report date
-    net_cumul_df,    # net accounts UP TO report date (cumulative FY)
-    report_date: date,
-    month_name: str,
-    working_days_left: int,
+def build_daily_summary_generic(
+    entities, targets, entity_label,
+    report_date, month_name, working_days_left,
+    total_label="Total",
+    ao_date_df=None, ao_cumul_df=None, net_date_df=None, net_cumul_df=None,
+    parent_actuals=None,
 ) -> pd.DataFrame:
-    rows = []
-    for div in DIVISIONS:
-        annual = TARGETS_FY[div]
-        prop   = proportionate_target(annual, month_name)
+    """
+    Generic daily-summary builder used for both Division-wise and
+    Sub-Division-wise reports.
 
-        opened_today     = _sum_ac_cols(ao_date_df,  div) if ao_date_df  is not None else 0
-        opened_till_date = _sum_ac_cols(ao_cumul_df, div) if ao_cumul_df is not None else 0
-        net_today        = _net_total_col(net_date_df, div) if net_date_df is not None else 0
-        net_till_date    = _net_total_col(net_cumul_df, div) if net_cumul_df is not None else 0
+    Two data-sourcing modes:
+      * Direct  (parent_actuals=None): actuals are looked up straight from the
+        uploaded summary files by matching `entity` against the file's "Name"
+        column (this is the original Division-wise behaviour).
+      * Apportioned (parent_actuals given): actuals for each entity are taken
+        from a pre-computed dict {entity: {"opened_today":.., "opened_till_date":..,
+        "net_today":.., "net_till_date":..}} — used for Sub Divisions, whose
+        performance is apportioned from their parent Division's actual figures
+        in proportion to each Sub Division's baseline share (see
+        build_subdivision_structure).
+    """
+    rows = []
+    for ent in entities:
+        annual = targets.get(ent, 0)
+        prop = proportionate_target(annual, month_name)
+
+        if parent_actuals is not None:
+            act = parent_actuals.get(ent, {})
+            opened_today     = act.get("opened_today", 0)
+            opened_till_date = act.get("opened_till_date", 0)
+            net_today        = act.get("net_today", 0)
+            net_till_date    = act.get("net_till_date", 0)
+        else:
+            opened_today     = _sum_ac_cols(ao_date_df,  ent) if ao_date_df  is not None else 0
+            opened_till_date = _sum_ac_cols(ao_cumul_df, ent) if ao_cumul_df is not None else 0
+            net_today        = _net_total_col(net_date_df, ent) if net_date_df is not None else 0
+            net_till_date    = _net_total_col(net_cumul_df, ent) if net_cumul_df is not None else 0
 
         # Daily target = (Proportionate target − Net addition cumulative) ÷ working days left
         balance   = max(0, prop - net_till_date)
@@ -605,7 +625,7 @@ def build_daily_summary(
         pct_prop        = round((net_till_date / prop * 100), 0) if prop > 0 else 0
 
         rows.append({
-            "Division": div,
+            entity_label: ent,
             "Target FY 2026-27": annual,
             f"Proportionate Target upto {month_name}, {report_date.year}": prop,
             f"Daily Target upto {report_date.strftime('%d.%m.%Y')}": daily_tgt,
@@ -618,17 +638,17 @@ def build_daily_summary(
             "% achievement of proportionate Target": int(pct_prop),
         })
 
-    total_row = {"Division": "Total HQ Region"}
+    net_key = f"Net no. of a/cs opened upto {report_date.strftime('%d.%m.%Y')}"
+    total_row = {entity_label: total_label}
     for col in rows[0]:
-        if col == "Division": continue
+        if col == entity_label: continue
         if "%" in col:
-            prop_sum = sum(proportionate_target(TARGETS_FY[d], month_name) for d in DIVISIONS)
-            net_sum  = sum(r[f"Net no. of a/cs opened upto {report_date.strftime('%d.%m.%Y')}"] for r in rows)
+            prop_sum = sum(proportionate_target(targets.get(e, 0), month_name) for e in entities)
+            net_sum  = sum(r[net_key] for r in rows)
             total_row[col] = int(round(net_sum / prop_sum * 100, 0)) if prop_sum else 0
         elif "Daily Target" in col:
-            # Sum of individual daily targets is meaningless; recompute for total
-            total_balance   = max(0, sum(proportionate_target(TARGETS_FY[d], month_name) for d in DIVISIONS)
-                                   - sum(r[f"Net no. of a/cs opened upto {report_date.strftime('%d.%m.%Y')}"] for r in rows))
+            total_balance   = max(0, sum(proportionate_target(targets.get(e, 0), month_name) for e in entities)
+                                   - sum(r[net_key] for r in rows))
             total_row[col]  = max(0, int(round(total_balance / working_days_left))) if working_days_left > 0 else total_balance
         else:
             total_row[col] = sum(r[col] for r in rows)
@@ -636,29 +656,159 @@ def build_daily_summary(
     return pd.DataFrame(rows)
 
 
-def build_scheme_wise(accounts_opened_df: pd.DataFrame) -> pd.DataFrame:
-    rows = []
+def build_daily_summary(
+    ao_date_df,      # accounts opened ON report date
+    ao_cumul_df,     # accounts opened UP TO report date (cumulative)
+    net_date_df,     # net accounts ON report date
+    net_cumul_df,    # net accounts UP TO report date (cumulative FY)
+    report_date: date,
+    month_name: str,
+    working_days_left: int,
+) -> pd.DataFrame:
+    return build_daily_summary_generic(
+        DIVISIONS, TARGETS_FY, "Division",
+        report_date, month_name, working_days_left,
+        total_label="Total HQ Region",
+        ao_date_df=ao_date_df, ao_cumul_df=ao_cumul_df,
+        net_date_df=net_date_df, net_cumul_df=net_cumul_df,
+    )
+
+
+# ─── Sub-Division apportionment (derives Sub-Division structure & targets from
+#     the Master file, and apportions each Division's actuals down to its
+#     Sub Divisions in proportion to their baseline "Total Accounts opened"
+#     share — since Sub-Division level targets/actuals aren't independently
+#     reported in the uploaded summary files) ────────────────────────────────
+
+def build_subdivision_structure(master_df):
+    """
+    Returns (subdivisions, subdiv_parent, subdiv_weight, subdiv_targets):
+      subdivisions   – ordered list of Sub Division names (grouped by Division)
+      subdiv_parent  – {sub_division: parent Division}
+      subdiv_weight  – {sub_division: share (0-1) of its Division's baseline}
+      subdiv_targets – {sub_division: apportioned annual FY target}
+    """
+    if master_df is None or "Sub Division" not in master_df.columns or "Division" not in master_df.columns:
+        return [], {}, {}, {}
+
+    df = master_df.copy()
+    df["Division"] = df["Division"].astype(str).str.strip()
+    df["Sub Division"] = df["Sub Division"].astype(str).str.strip()
+    df = df[(df["Sub Division"] != "") & (df["Sub Division"].str.lower() != "nan")]
+
+    baseline_col = next(
+        (c for c in df.columns if "total accounts opened" in str(c).strip().lower()), None
+    )
+    df["_baseline"] = (
+        pd.to_numeric(df[baseline_col], errors="coerce").fillna(0) if baseline_col else 1.0
+    )
+
+    subdivisions, subdiv_parent, subdiv_weight, subdiv_targets = [], {}, {}, {}
     for div in DIVISIONS:
-        annual = TARGETS_FY[div]
-        ao_row = accounts_opened_df[
-            accounts_opened_df["Name"].str.contains(div, case=False, na=False)
-        ]
-        row_data = {"Division": div, "Target": annual}
-        if not ao_row.empty:
+        div_df = df[df["Division"] == div]
+        if div_df.empty:
+            continue
+        sub_groups = div_df.groupby("Sub Division")["_baseline"].sum()
+        div_total = sub_groups.sum()
+        annual = TARGETS_FY.get(div, 0)
+        for subdiv, base in sub_groups.items():
+            w = (base / div_total) if div_total > 0 else (1 / len(sub_groups))
+            subdivisions.append(subdiv)
+            subdiv_parent[subdiv] = div
+            subdiv_weight[subdiv] = w
+            subdiv_targets[subdiv] = int(round(annual * w))
+    return subdivisions, subdiv_parent, subdiv_weight, subdiv_targets
+
+
+def compute_division_actuals(ao_date_df, ao_cumul_df, net_date_df, net_cumul_df):
+    """Division-level actuals, computed once, so Sub-Division apportionment
+    doesn't need to re-scan the uploaded files per Sub Division."""
+    out = {}
+    for div in DIVISIONS:
+        out[div] = {
+            "opened_today":     _sum_ac_cols(ao_date_df,  div) if ao_date_df  is not None else 0,
+            "opened_till_date": _sum_ac_cols(ao_cumul_df, div) if ao_cumul_df is not None else 0,
+            "net_today":        _net_total_col(net_date_df, div) if net_date_df is not None else 0,
+            "net_till_date":    _net_total_col(net_cumul_df, div) if net_cumul_df is not None else 0,
+        }
+    return out
+
+
+def apportion_actuals_to_subdivisions(div_actuals, subdiv_parent, subdiv_weight):
+    out = {}
+    for subdiv, parent in subdiv_parent.items():
+        w = subdiv_weight.get(subdiv, 0)
+        base = div_actuals.get(parent, {})
+        out[subdiv] = {k: int(round(v * w)) for k, v in base.items()}
+    return out
+
+
+def build_scheme_wise_generic(
+    accounts_opened_df, entities, targets, entity_label, total_label="Total",
+    parent_scheme_actuals=None,
+) -> pd.DataFrame:
+    rows = []
+    for ent in entities:
+        annual = targets.get(ent, 0)
+        row_data = {entity_label: ent, "Target": annual}
+
+        if parent_scheme_actuals is not None:
+            act = parent_scheme_actuals.get(ent, {})
             for col in ACCOUNT_COLS:
-                row_data[col] = int(ao_row[col].iloc[0]) if col in ao_row.columns else 0
+                row_data[col] = int(round(act.get(col, 0)))
             row_data["Total POSB"] = sum(row_data.get(c, 0) for c in ACCOUNT_COLS)
         else:
-            for col in ACCOUNT_COLS:
-                row_data[col] = 0
-            row_data["Total POSB"] = 0
+            ao_row = (
+                accounts_opened_df[accounts_opened_df["Name"].str.contains(ent, case=False, na=False)]
+                if accounts_opened_df is not None and not accounts_opened_df.empty
+                else pd.DataFrame()
+            )
+            if not ao_row.empty:
+                for col in ACCOUNT_COLS:
+                    row_data[col] = int(ao_row[col].iloc[0]) if col in ao_row.columns else 0
+                row_data["Total POSB"] = sum(row_data.get(c, 0) for c in ACCOUNT_COLS)
+            else:
+                for col in ACCOUNT_COLS:
+                    row_data[col] = 0
+                row_data["Total POSB"] = 0
         rows.append(row_data)
 
-    total = {"Division": "Total HQ Region", "Target": sum(TARGETS_FY[d] for d in DIVISIONS)}
+    total = {entity_label: total_label, "Target": sum(targets.get(e, 0) for e in entities)}
     for col in ACCOUNT_COLS + ["Total POSB"]:
         total[col] = sum(r[col] for r in rows)
     rows.append(total)
     return pd.DataFrame(rows)
+
+
+def build_scheme_wise(accounts_opened_df: pd.DataFrame) -> pd.DataFrame:
+    return build_scheme_wise_generic(
+        accounts_opened_df, DIVISIONS, TARGETS_FY, "Division", "Total HQ Region"
+    )
+
+
+def compute_division_scheme_actuals(accounts_opened_df):
+    """Division-level scheme (product) actuals, computed once for apportionment."""
+    out = {}
+    for div in DIVISIONS:
+        ao_row = (
+            accounts_opened_df[accounts_opened_df["Name"].str.contains(div, case=False, na=False)]
+            if accounts_opened_df is not None and not accounts_opened_df.empty
+            else pd.DataFrame()
+        )
+        vals = {}
+        for col in ACCOUNT_COLS:
+            vals[col] = int(ao_row[col].iloc[0]) if (not ao_row.empty and col in ao_row.columns) else 0
+        out[div] = vals
+    return out
+
+
+def apportion_scheme_to_subdivisions(div_scheme_actuals, subdiv_parent, subdiv_weight):
+    out = {}
+    for subdiv, parent in subdiv_parent.items():
+        w = subdiv_weight.get(subdiv, 0)
+        base = div_scheme_actuals.get(parent, {})
+        out[subdiv] = {col: base.get(col, 0) * w for col in ACCOUNT_COLS}
+    return out
 
 
 def combine_product_dfs(dfs: list) -> "pd.DataFrame | None":
@@ -727,6 +877,184 @@ def combine_summary_dfs(dfs: list) -> "pd.DataFrame | None":
 
 
 # ─── Streamlit UI ─────────────────────────────────────────────────────────────
+
+# ─── Reusable render / export helpers (entity-agnostic: work for both
+#     "Division" and "Sub Division" wise reports) ───────────────────────────
+
+def render_daily_summary_table(summary_df, entity_col, report_date, report_month, total_label):
+    pct_col = "% achievement of proportionate Target"
+    col_labels = {
+        entity_col:                                                  entity_col,
+        "Target FY 2026-27":                                         "Annual<br>Target",
+        f"Proportionate Target upto {report_month}, {report_date.year}":
+                                                                     f"Prop.<br>Target<br>{report_month[:3]} {report_date.year}",
+        f"Daily Target upto {report_date.strftime('%d.%m.%Y')}":     f"Daily<br>Target<br>{report_date.strftime('%d.%m')}",
+        f"No. of Accounts Opened on {report_date.strftime('%d.%m.%Y')}":
+                                                                     f"A/cs<br>Opened<br>on {report_date.strftime('%d.%m')}",
+        f"No. of Accounts Opened up to {report_date.strftime('%d.%m.%Y')}":
+                                                                     f"A/cs<br>Opened<br>upto {report_date.strftime('%d.%m')}",
+        f"Net no. of a/cs opened on {report_date.strftime('%d.%m.%Y')}":
+                                                                     f"Net A/cs<br>on {report_date.strftime('%d.%m')}",
+        f"Net no. of a/cs opened upto {report_date.strftime('%d.%m.%Y')}":
+                                                                     f"Net A/cs<br>upto {report_date.strftime('%d.%m')}",
+        "Shortfall on daily target":                                 "Shortfall<br>Daily",
+        "Shortfall on proportionate target":                         "Shortfall<br>Prop.",
+        "% achievement of proportionate Target":                     "% Prop.<br>Achiev.",
+    }
+
+    def _pct_style(val):
+        try:
+            v = float(val)
+            if v < 50:   return "background:#FF0000;color:white;font-weight:700"
+            elif v < 75: return "background:#FFC000;font-weight:700"
+            elif v < 100:return "background:#FFFF00;font-weight:700"
+            else:        return "background:#70AD47;color:white;font-weight:700"
+        except: return ""
+
+    cols = list(summary_df.columns)
+
+    col_widths = {entity_col: 150}
+    for c in cols:
+        if c == entity_col: continue
+        col_widths[c] = 62 if "%" in c else 75
+
+    hdr_style = ("background:#2E75B6;color:white;font-size:11px;font-weight:700;"
+                 "text-align:center;vertical-align:bottom;padding:5px 3px;"
+                 "white-space:normal;line-height:1.3;border:1px solid #ccc;")
+    num_style  = "font-size:12px;text-align:right;padding:4px 6px;border:1px solid #e0e0e0;"
+    div_style  = "font-size:12px;text-align:left;padding:4px 6px;border:1px solid #e0e0e0;font-weight:600;"
+    tot_style  = "background:#1F3864;color:white;font-weight:700;font-size:12px;text-align:right;padding:4px 6px;border:1px solid #555;"
+    tot_div_st = "background:#1F3864;color:white;font-weight:700;font-size:12px;text-align:left;padding:4px 6px;border:1px solid #555;"
+
+    html = ["<div style='overflow-x:auto;'>",
+            "<table style='border-collapse:collapse;width:100%;table-layout:fixed;'>",
+            "<colgroup>"]
+    for c in cols:
+        html.append(f"<col style='width:{col_widths.get(c,75)}px;'>")
+    html.append("</colgroup><thead><tr>")
+    for c in cols:
+        lbl = col_labels.get(c, c)
+        html.append(f"<th style='{hdr_style}'>{lbl}</th>")
+    html.append("</tr></thead><tbody>")
+
+    for _, row in summary_df.iterrows():
+        is_total = (row[entity_col] == total_label)
+        html.append("<tr>")
+        for ci, c in enumerate(cols):
+            val = row[c]
+            disp = f"{int(val):,}" if isinstance(val, (int, float)) and not isinstance(val, bool) else str(val)
+            if c == entity_col:
+                html.append(f"<td style='{tot_div_st if is_total else div_style}'>{val}</td>")
+            elif c == pct_col:
+                cell_style = (tot_style if is_total else num_style + ";" + _pct_style(val))
+                html.append(f"<td style='{cell_style}'>{disp}</td>")
+            else:
+                html.append(f"<td style='{tot_style if is_total else num_style}'>{disp}</td>")
+        html.append("</tr>")
+
+    html.append("</tbody></table></div>")
+    st.markdown("".join(html), unsafe_allow_html=True)
+    st.caption("🟢 ≥100%  🟡 75–99%  🟠 50–74%  🔴 <50% of proportionate target")
+
+
+def render_scheme_wise_table(scheme_df):
+    def style_total_row(df):
+        styles = pd.DataFrame("", index=df.index, columns=df.columns)
+        styles.iloc[-1] = "background-color:#1F3864; color:white; font-weight:bold"
+        return styles
+
+    st.dataframe(
+        scheme_df.style.apply(style_total_row, axis=None),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
+def build_summary_excel(summary_df, scheme_df, report_date, report_month,
+                         entity_col="Division", total_label="Total HQ Region",
+                         sheet_suffix=""):
+    output = BytesIO()
+    wb = xlsxwriter.Workbook(output, {"in_memory": True})
+
+    title_fmt = wb.add_format({
+        "bold": True, "font_size": 12, "align": "center",
+        "valign": "vcenter", "bg_color": "#1F3864",
+        "font_color": "white", "border": 1,
+    })
+    hdr_fmt = wb.add_format({
+        "bold": True, "align": "center", "valign": "vcenter",
+        "bg_color": "#2E75B6", "font_color": "white",
+        "border": 1, "text_wrap": True,
+    })
+    data_fmt = wb.add_format({"align": "center", "border": 1})
+    data_left = wb.add_format({"align": "left", "border": 1})
+    total_fmt = wb.add_format({
+        "bold": True, "align": "center", "border": 1,
+        "bg_color": "#1F3864", "font_color": "white",
+    })
+    total_left = wb.add_format({
+        "bold": True, "align": "left", "border": 1,
+        "bg_color": "#1F3864", "font_color": "white",
+    })
+    green_fmt = wb.add_format({"align": "center", "border": 1, "bg_color": "#70AD47", "font_color": "white", "bold": True})
+    yellow_fmt = wb.add_format({"align": "center", "border": 1, "bg_color": "#FFFF00", "bold": True})
+    orange_fmt = wb.add_format({"align": "center", "border": 1, "bg_color": "#FFC000", "bold": True})
+    red_fmt = wb.add_format({"align": "center", "border": 1, "bg_color": "#FF0000", "font_color": "white", "bold": True})
+
+    # Sheet 1: Daily Summary
+    ws1 = wb.add_worksheet(f"Daily Summary{sheet_suffix}"[:31])
+    cols = list(summary_df.columns)
+    title = f"POSB Accounts Daily Report dated {report_date.strftime('%d.%m.%Y')}"
+    ws1.merge_range(0, 0, 0, len(cols) - 1, title, title_fmt)
+    ws1.set_row(0, 30)
+    ws1.set_row(1, 45)
+    for ci, col in enumerate(cols):
+        ws1.write(1, ci, col, hdr_fmt)
+    ws1.set_column(0, 0, 24)
+    ws1.set_column(1, len(cols) - 1, 14)
+    pct_col_idx = cols.index("% achievement of proportionate Target")
+    for ri, row in summary_df.iterrows():
+        is_total = row[entity_col] == total_label
+        for ci, col in enumerate(cols):
+            val = row[col]
+            if is_total:
+                fmt = total_left if ci == 0 else total_fmt
+            elif ci == 0:
+                fmt = data_left
+            elif ci == pct_col_idx:
+                try:
+                    v = float(val)
+                    fmt = green_fmt if v >= 100 else (yellow_fmt if v >= 75 else (orange_fmt if v >= 50 else red_fmt))
+                except Exception:
+                    fmt = data_fmt
+            else:
+                fmt = data_fmt
+            ws1.write(ri + 2, ci, val, fmt)
+
+    # Sheet 2: Scheme wise
+    ws2 = wb.add_worksheet(f"Scheme Wise Status{sheet_suffix}"[:31])
+    scheme_cols = list(scheme_df.columns)
+    title2 = f"Scheme wise status – up to {report_date.strftime('%d.%m.%Y')}"
+    ws2.merge_range(0, 0, 0, len(scheme_cols) - 1, title2, title_fmt)
+    ws2.set_row(0, 28)
+    ws2.set_row(1, 30)
+    ws2.set_column(0, 0, 28)
+    ws2.set_column(1, len(scheme_cols) - 1, 10)
+    for ci, col in enumerate(scheme_cols):
+        ws2.write(1, ci, col, hdr_fmt)
+    for ri, row in scheme_df.iterrows():
+        is_total = row[entity_col] == total_label
+        for ci, col in enumerate(scheme_cols):
+            val = row[col]
+            if is_total:
+                fmt = total_left if ci == 0 else total_fmt
+            else:
+                fmt = data_left if ci == 0 else data_fmt
+            ws2.write(ri + 2, ci, val, fmt)
+
+    wb.close()
+    return output.getvalue()
+
 
 def main():
     # set_page_config already called at module level above
@@ -916,8 +1244,17 @@ def main():
                 help="Upload the quarter total file(s) plus any later quarter/daily file(s) — "
                      "e.g. Q1 total + Q2-so-far file. All uploaded files are added together."
             )
-        
-        
+
+        master_file_sd = st.file_uploader(
+            "Optional: Upload Master Office Mapping (used to apportion the Sub Division wise tab)",
+            type=["xlsx", "xls"],
+            key="master_override_sd",
+            help="If not uploaded, the app falls back to the default Master file on the server. "
+                 "Sub Division figures are apportioned from each Division's actuals in proportion "
+                 "to every Sub Division's baseline share of accounts (Sub Division level targets/"
+                 "actuals are not separately reported in the uploaded summary files)."
+        )
+
         # Parse whichever files were uploaded (all optional; show partial results)
         def _parse_or_none(f):
             if f is None: return None
@@ -938,216 +1275,111 @@ def main():
         if not any_summary_file:
             st.warning("Please upload all 4 files above to generate this report.")
         else:
-                # ── Table 1: Daily Summary ─────────────────────────────────
+            # ── Division-level summary (always computed — feeds both tabs) ──
+            summary_df = build_daily_summary(
+                ao_date_df, ao_cumul_df, net_date_df, net_cumul_df,
+                report_date, report_month, working_days_left
+            )
+            scheme_df = build_scheme_wise(ao_cumul_df if ao_cumul_df is not None else pd.DataFrame())
+
+            # ── Sub-Division structure & apportioned summary (from Master file) ──
+            master_df_sd = load_master_file(master_file_sd)
+            subdivisions, subdiv_parent, subdiv_weight, subdiv_targets = build_subdivision_structure(master_df_sd)
+
+            summary_sub_df, scheme_sub_df = None, None
+            if subdivisions:
+                div_actuals = compute_division_actuals(ao_date_df, ao_cumul_df, net_date_df, net_cumul_df)
+                subdiv_actuals = apportion_actuals_to_subdivisions(div_actuals, subdiv_parent, subdiv_weight)
+                summary_sub_df = build_daily_summary_generic(
+                    subdivisions, subdiv_targets, "Sub Division",
+                    report_date, report_month, working_days_left,
+                    total_label="Total HQ Region",
+                    parent_actuals=subdiv_actuals,
+                )
+
+                div_scheme_actuals = compute_division_scheme_actuals(ao_cumul_df if ao_cumul_df is not None else pd.DataFrame())
+                subdiv_scheme_actuals = apportion_scheme_to_subdivisions(div_scheme_actuals, subdiv_parent, subdiv_weight)
+                scheme_sub_df = build_scheme_wise_generic(
+                    None, subdivisions, subdiv_targets, "Sub Division", "Total HQ Region",
+                    parent_scheme_actuals=subdiv_scheme_actuals,
+                )
+
+            # ════════════════════════════════════════════════════════════════
+            # Selection choice: Division wise / Sub Division wise
+            # ════════════════════════════════════════════════════════════════
+            tab_div, tab_sub = st.tabs(["🏢 Division wise", "🏘️ Sub Division wise"])
+
+            # ── TAB: Division wise ─────────────────────────────────────────
+            with tab_div:
                 st.subheader(
                     f"POSB Accounts Daily Report dated {report_date.strftime('%d.%m.%Y')}"
                 )
-        
-                summary_df = build_daily_summary(
-                    ao_date_df, ao_cumul_df, net_date_df, net_cumul_df,
-                    report_date, report_month, working_days_left
-                )
-        
-                # ── Render daily summary as HTML table (full column width control) ──
-                pct_col = "% achievement of proportionate Target"
-        
-                # Short header labels
-                col_labels = {
-                    "Division":                                                  "Division",
-                    "Target FY 2026-27":                                         "Annual<br>Target",
-                    f"Proportionate Target upto {report_month}, {report_date.year}":
-                                                                                 f"Prop.<br>Target<br>{report_month[:3]} {report_date.year}",
-                    f"Daily Target upto {report_date.strftime('%d.%m.%Y')}":     f"Daily<br>Target<br>{report_date.strftime('%d.%m')}",
-                    f"No. of Accounts Opened on {report_date.strftime('%d.%m.%Y')}":
-                                                                                 f"A/cs<br>Opened<br>on {report_date.strftime('%d.%m')}",
-                    f"No. of Accounts Opened up to {report_date.strftime('%d.%m.%Y')}":
-                                                                                 f"A/cs<br>Opened<br>upto {report_date.strftime('%d.%m')}",
-                    f"Net no. of a/cs opened on {report_date.strftime('%d.%m.%Y')}":
-                                                                                 f"Net A/cs<br>on {report_date.strftime('%d.%m')}",
-                    f"Net no. of a/cs opened upto {report_date.strftime('%d.%m.%Y')}":
-                                                                                 f"Net A/cs<br>upto {report_date.strftime('%d.%m')}",
-                    "Shortfall on daily target":                                 "Shortfall<br>Daily",
-                    "Shortfall on proportionate target":                         "Shortfall<br>Prop.",
-                    "% achievement of proportionate Target":                     "% Prop.<br>Achiev.",
-                }
-        
-                def _pct_style(val):
-                    try:
-                        v = float(val)
-                        if v < 50:   return "background:#FF0000;color:white;font-weight:700"
-                        elif v < 75: return "background:#FFC000;font-weight:700"
-                        elif v < 100:return "background:#FFFF00;font-weight:700"
-                        else:        return "background:#70AD47;color:white;font-weight:700"
-                    except: return ""
-        
-                cols = list(summary_df.columns)
-                pct_idx = cols.index(pct_col)
-        
-                # Column pixel widths
-                col_widths = {"Division": 150}
-                for c in cols:
-                    if c == "Division": continue
-                    col_widths[c] = 62 if "%" in c else 75
-        
-                # Build HTML
-                hdr_style = ("background:#2E75B6;color:white;font-size:11px;font-weight:700;"
-                             "text-align:center;vertical-align:bottom;padding:5px 3px;"
-                             "white-space:normal;line-height:1.3;border:1px solid #ccc;")
-                num_style  = "font-size:12px;text-align:right;padding:4px 6px;border:1px solid #e0e0e0;"
-                div_style  = "font-size:12px;text-align:left;padding:4px 6px;border:1px solid #e0e0e0;font-weight:600;"
-                tot_style  = "background:#1F3864;color:white;font-weight:700;font-size:12px;text-align:right;padding:4px 6px;border:1px solid #555;"
-                tot_div_st = "background:#1F3864;color:white;font-weight:700;font-size:12px;text-align:left;padding:4px 6px;border:1px solid #555;"
-        
-                html = ["<div style='overflow-x:auto;'>",
-                        "<table style='border-collapse:collapse;width:100%;table-layout:fixed;'>",
-                        "<colgroup>"]
-                for c in cols:
-                    html.append(f"<col style='width:{col_widths.get(c,75)}px;'>")
-                html.append("</colgroup><thead><tr>")
-                for c in cols:
-                    lbl = col_labels.get(c, c)
-                    html.append(f"<th style='{hdr_style}'>{lbl}</th>")
-                html.append("</tr></thead><tbody>")
-        
-                for _, row in summary_df.iterrows():
-                    is_total = (row["Division"] == "Total HQ Region")
-                    html.append("<tr>")
-                    for ci, c in enumerate(cols):
-                        val = row[c]
-                        disp = f"{int(val):,}" if isinstance(val, (int, float)) and not isinstance(val, bool) else str(val)
-                        if c == "Division":
-                            html.append(f"<td style='{tot_div_st if is_total else div_style}'>{val}</td>")
-                        elif c == pct_col:
-                            cell_style = (tot_style if is_total else
-                                          num_style + ";" + _pct_style(val))
-                            html.append(f"<td style='{cell_style}'>{disp}</td>")
-                        else:
-                            html.append(f"<td style='{tot_style if is_total else num_style}'>{disp}</td>")
-                    html.append("</tr>")
-        
-                html.append("</tbody></table></div>")
-                st.markdown("".join(html), unsafe_allow_html=True)
-                st.caption("🟢 ≥100%  🟡 75–99%  🟠 50–74%  🔴 <50% of proportionate target")
-        
-                # ── Table 2: Scheme-wise Status ───────────────────────────
+                render_daily_summary_table(summary_df, "Division", report_date, report_month, "Total HQ Region")
+
                 st.subheader(f"Scheme wise status – up to {report_date.strftime('%d.%m.%Y')}")
-        
-                scheme_df = build_scheme_wise(ao_cumul_df if ao_cumul_df is not None else pd.DataFrame())
-        
-                # Rename columns to full names for display
-                scheme_display = scheme_df.rename(columns={k: k for k in ACCOUNT_COLS})
-        
-                def style_total_row(df):
-                    styles = pd.DataFrame("", index=df.index, columns=df.columns)
-                    styles.iloc[-1] = "background-color:#1F3864; color:white; font-weight:bold"
-                    return styles
-        
-                st.dataframe(
-                    scheme_display.style.apply(style_total_row, axis=None),
-                    use_container_width=True,
-                    hide_index=True,
-                )
-        
-                # ── Legend / scheme names ──────────────────────────────────
+                render_scheme_wise_table(scheme_df)
+
                 with st.expander("ℹ️ Scheme Code Reference"):
                     legend = pd.DataFrame([
                         {"Code": k, "Full Name": v}
                         for k, v in SCHEME_FULL.items()
                     ])
                     st.dataframe(legend, hide_index=True, use_container_width=False)
-        
-                # ── Download both tables ───────────────────────────────────
-                def build_summary_excel(summary_df, scheme_df, report_date, report_month):
-                    output = BytesIO()
-                    wb = xlsxwriter.Workbook(output, {"in_memory": True})
-        
-                    title_fmt = wb.add_format({
-                        "bold": True, "font_size": 12, "align": "center",
-                        "valign": "vcenter", "bg_color": "#1F3864",
-                        "font_color": "white", "border": 1,
-                    })
-                    hdr_fmt = wb.add_format({
-                        "bold": True, "align": "center", "valign": "vcenter",
-                        "bg_color": "#2E75B6", "font_color": "white",
-                        "border": 1, "text_wrap": True,
-                    })
-                    data_fmt = wb.add_format({"align": "center", "border": 1})
-                    data_left = wb.add_format({"align": "left", "border": 1})
-                    total_fmt = wb.add_format({
-                        "bold": True, "align": "center", "border": 1,
-                        "bg_color": "#1F3864", "font_color": "white",
-                    })
-                    total_left = wb.add_format({
-                        "bold": True, "align": "left", "border": 1,
-                        "bg_color": "#1F3864", "font_color": "white",
-                    })
-                    green_fmt = wb.add_format({"align": "center", "border": 1, "bg_color": "#70AD47", "font_color": "white", "bold": True})
-                    yellow_fmt = wb.add_format({"align": "center", "border": 1, "bg_color": "#FFFF00", "bold": True})
-                    orange_fmt = wb.add_format({"align": "center", "border": 1, "bg_color": "#FFC000", "bold": True})
-                    red_fmt = wb.add_format({"align": "center", "border": 1, "bg_color": "#FF0000", "font_color": "white", "bold": True})
-        
-                    # Sheet 1: Daily Summary
-                    ws1 = wb.add_worksheet("Daily Summary")
-                    cols = list(summary_df.columns)
-                    title = f"POSB Accounts Daily Report dated {report_date.strftime('%d.%m.%Y')}"
-                    ws1.merge_range(0, 0, 0, len(cols) - 1, title, title_fmt)
-                    ws1.set_row(0, 30)
-                    ws1.set_row(1, 45)
-                    for ci, col in enumerate(cols):
-                        ws1.write(1, ci, col, hdr_fmt)
-                    ws1.set_column(0, 0, 24)
-                    ws1.set_column(1, len(cols) - 1, 14)
-                    pct_col_idx = cols.index("% achievement of proportionate Target")
-                    for ri, row in summary_df.iterrows():
-                        is_total = row["Division"] == "Total HQ Region"
-                        for ci, col in enumerate(cols):
-                            val = row[col]
-                            if is_total:
-                                fmt = total_left if ci == 0 else total_fmt
-                            elif ci == 0:
-                                fmt = data_left
-                            elif ci == pct_col_idx:
-                                try:
-                                    v = float(val)
-                                    fmt = green_fmt if v >= 100 else (yellow_fmt if v >= 75 else (orange_fmt if v >= 50 else red_fmt))
-                                except Exception:
-                                    fmt = data_fmt
-                            else:
-                                fmt = data_fmt
-                            ws1.write(ri + 2, ci, val, fmt)
-        
-                    # Sheet 2: Scheme wise
-                    ws2 = wb.add_worksheet("Scheme Wise Status")
-                    scheme_cols = list(scheme_df.columns)
-                    title2 = f"Scheme wise status – up to {report_date.strftime('%d.%m.%Y')}"
-                    ws2.merge_range(0, 0, 0, len(scheme_cols) - 1, title2, title_fmt)
-                    ws2.set_row(0, 28)
-                    ws2.set_row(1, 30)
-                    ws2.set_column(0, 0, 28)
-                    ws2.set_column(1, len(scheme_cols) - 1, 10)
-                    for ci, col in enumerate(scheme_cols):
-                        ws2.write(1, ci, col, hdr_fmt)
-                    for ri, row in scheme_df.iterrows():
-                        is_total = row["Division"] == "Total HQ Region"
-                        for ci, col in enumerate(scheme_cols):
-                            val = row[col]
-                            if is_total:
-                                fmt = total_left if ci == 0 else total_fmt
-                            else:
-                                fmt = data_left if ci == 0 else data_fmt
-                            ws2.write(ri + 2, ci, val, fmt)
-        
-                    wb.close()
-                    return output.getvalue()
-        
-                scheme_df_for_dl = scheme_df if 'scheme_df' in dir() else pd.DataFrame()
-                excel_bytes2 = build_summary_excel(summary_df, scheme_df_for_dl, report_date, report_month)
+
+                excel_bytes_div = build_summary_excel(
+                    summary_df, scheme_df, report_date, report_month,
+                    entity_col="Division", total_label="Total HQ Region",
+                )
                 st.download_button(
-                    label="⬇️ Download Summary Reports as Excel",
-                    data=excel_bytes2,
+                    label="⬇️ Download Division wise Report as Excel",
+                    data=excel_bytes_div,
                     file_name=f"Division_Summary_Report_{report_date.strftime('%d%m%Y')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="dl_division",
                 )
+
+            # ── TAB: Sub Division wise ─────────────────────────────────────
+            with tab_sub:
+                if summary_sub_df is None:
+                    st.warning(
+                        "Sub Division wise report needs the Master Office Mapping file "
+                        "(with a 'Sub Division' column). Upload it above, or make sure the "
+                        "default Master file is available on the server."
+                    )
+                else:
+                    st.caption(
+                        "ℹ️ Sub Division figures are **apportioned** from each Division's actual "
+                        "performance, in proportion to every Sub Division's baseline share of "
+                        "accounts (from the Master file) — since Sub Division level targets/"
+                        "actuals aren't separately reported in the uploaded summary files."
+                    )
+                    st.subheader(
+                        f"POSB Accounts Daily Report dated {report_date.strftime('%d.%m.%Y')} — Sub Division wise"
+                    )
+                    render_daily_summary_table(summary_sub_df, "Sub Division", report_date, report_month, "Total HQ Region")
+
+                    st.subheader(f"Scheme wise status – up to {report_date.strftime('%d.%m.%Y')} — Sub Division wise")
+                    render_scheme_wise_table(scheme_sub_df)
+
+                    with st.expander("ℹ️ Scheme Code Reference"):
+                        legend = pd.DataFrame([
+                            {"Code": k, "Full Name": v}
+                            for k, v in SCHEME_FULL.items()
+                        ])
+                        st.dataframe(legend, hide_index=True, use_container_width=False, key="legend_sub")
+
+                    excel_bytes_sub = build_summary_excel(
+                        summary_sub_df, scheme_sub_df, report_date, report_month,
+                        entity_col="Sub Division", total_label="Total HQ Region",
+                        sheet_suffix=" (Sub Divn)",
+                    )
+                    st.download_button(
+                        label="⬇️ Download Sub Division wise Report as Excel",
+                        data=excel_bytes_sub,
+                        file_name=f"SubDivision_Summary_Report_{report_date.strftime('%d%m%Y')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="dl_subdivision",
+                    )
 
 
 if __name__ == "__main__":
